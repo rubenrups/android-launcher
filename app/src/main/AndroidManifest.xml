@@ -1,13 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- Required for ACTION_DELETE (uninstall) on API 28+ -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
     <!-- Lets the swipe-down gesture open the notification shade -->
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
 
-    <!-- Package visibility: discover installed icon packs (ADW / Nova / Apex / GO) -->
+    <!-- A launcher must see every installed app (Android 11+ package visibility) -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
+    <!-- Package visibility: all launchable apps, plus installed icon packs (ADW / Nova / Apex / GO) -->
     <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
         <intent><action android:name="org.adw.launcher.THEMES" /></intent>
         <intent><action android:name="com.novalauncher.THEME" /></intent>
         <intent><action android:name="com.anddoes.launcher.THEME" /></intent>
