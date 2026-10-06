@@ -227,14 +227,18 @@ fun FolderDialog(entry: FolderEntry, viewModel: LauncherViewModel, onDismiss: ()
     if (sorting) FolderSortDialog(entry, viewModel, onDismiss = { sorting = false })
 }
 
-/** Rounded square standing in for a folder icon: shows how many apps it holds. */
+/** Rounded square standing in for a folder icon: shows its emoji, or how many apps it holds. */
 @Composable
-fun FolderGlyph(count: Int, modifier: Modifier = Modifier, size: Dp = 36.dp) {
+fun FolderGlyph(count: Int, icon: String? = null, modifier: Modifier = Modifier, size: Dp = 36.dp) {
     Box(
         modifier.size(size).background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(10.dp)),
         contentAlignment = Alignment.Center,
     ) {
-        Text(count.toString(), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        if (icon != null) {
+            Text(icon, fontSize = (size.value * 0.5f).sp)
+        } else {
+            Text(count.toString(), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        }
     }
 }
 
@@ -324,6 +328,78 @@ fun FolderSortDialog(entry: FolderEntry, viewModel: LauncherViewModel, onDismiss
                     fontSize = 12.sp,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 )
+            }
+        }
+    }
+}
+
+private val FOLDER_ICONS = listOf(
+    "📁", "⭐", "❤️", "🎮", "💬",
+    "🎵", "🎬", "📷", "🛒", "💰",
+    "🧰", "🌐", "📰", "🍔", "✈️",
+    "🔒", "🏠", "🤖", "📚", "⚡",
+)
+
+/** Pick a folder's icon from a preset set, type your own emoji, or go back to the app count. */
+@Composable
+fun FolderIconDialog(entry: FolderEntry, viewModel: LauncherViewModel, onDismiss: () -> Unit) {
+    var custom by remember { mutableStateOf("") }
+    val scroll = rememberScrollState()
+    val current = entry.folder.icon
+
+    fun choose(icon: String?) {
+        viewModel.setFolderIcon(entry.folder.id, icon)
+        onDismiss()
+    }
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(24.dp), color = Color(0xF21A1A1A)) {
+            Column(
+                Modifier.heightIn(max = 560.dp).verticalScrollbar(scroll).verticalScroll(scroll).padding(vertical = 16.dp),
+            ) {
+                Text(
+                    "Icon for ${entry.label}",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                )
+                Row(
+                    Modifier.fillMaxWidth().clickable { choose(null) }.padding(horizontal = 24.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("Show number of apps", color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                    if (current == null) Text("✓", color = Color.White, fontSize = 18.sp)
+                }
+                FOLDER_ICONS.chunked(5).forEach { rowIcons ->
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        rowIcons.forEach { icon ->
+                            Box(
+                                Modifier
+                                    .size(48.dp)
+                                    .background(
+                                        if (icon == current) Color.White.copy(alpha = 0.25f) else Color.Transparent,
+                                        RoundedCornerShape(12.dp),
+                                    )
+                                    .clickable { choose(icon) },
+                                contentAlignment = Alignment.Center,
+                            ) { Text(icon, fontSize = 26.sp) }
+                        }
+                    }
+                }
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextField(
+                        value = custom,
+                        onValueChange = { custom = it.take(8) },
+                        singleLine = true,
+                        placeholder = { Text("Your own emoji") },
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { if (custom.isNotBlank()) choose(custom.trim()) }) { Text("Set") }
+                }
             }
         }
     }

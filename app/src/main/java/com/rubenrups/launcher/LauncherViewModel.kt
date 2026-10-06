@@ -181,6 +181,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         })
     }
 
+    fun setFolderIcon(folderId: String, icon: String?) = update { s ->
+        s.copy(folders = s.folders.map { if (it.id == folderId) it.copy(icon = icon) else it })
+    }
+
     fun swapInFolder(folderId: String, keyA: String, keyB: String) = update { s ->
         s.copy(folders = s.folders.map { f ->
             val i = f.appKeys.indexOf(keyA)

@@ -20,8 +20,10 @@ data class LauncherSettings(
     val showNotifications: Boolean = true,
     val showMedia: Boolean = true,
     val favouriteTextSp: Int = 22,
-    /** Right-aligned lists sit at the bottom (thumb reach); left-aligned lists flow from the top, as on most minimal launchers. */
+    /** Horizontal: right-aligned text and icons. Independent of [anchorBottom]. */
     val alignEnd: Boolean = false,
+    /** Vertical: pin the favourites list to the bottom of the screen (thumb reach) instead of the top. */
+    val anchorBottom: Boolean = false,
     val showIcons: Boolean = true,
     val showSearchButton: Boolean = true,
     val swipeDown: SwipeAction = SwipeAction.NOTIFICATIONS,
@@ -51,6 +53,8 @@ class LauncherPrefs(context: Context) {
         showMedia = prefs.getBoolean(KEY_SHOW_MEDIA, true),
         favouriteTextSp = prefs.getInt(KEY_TEXT_SP, 22),
         alignEnd = prefs.getBoolean(KEY_ALIGN_END, false),
+        // Before this was its own setting, right-aligned lists were also bottom-anchored; keep that for existing users.
+        anchorBottom = prefs.getBoolean(KEY_ANCHOR_BOTTOM, prefs.getBoolean(KEY_ALIGN_END, false)),
         showIcons = prefs.getBoolean(KEY_SHOW_ICONS, true),
         showSearchButton = prefs.getBoolean(KEY_SHOW_SEARCH_BUTTON, true),
         swipeDown = runCatching { SwipeAction.valueOf(prefs.getString(KEY_SWIPE_DOWN, "").orEmpty()) }
@@ -68,6 +72,7 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_SHOW_MEDIA, s.showMedia)
             .putInt(KEY_TEXT_SP, s.favouriteTextSp)
             .putBoolean(KEY_ALIGN_END, s.alignEnd)
+            .putBoolean(KEY_ANCHOR_BOTTOM, s.anchorBottom)
             .putBoolean(KEY_SHOW_ICONS, s.showIcons)
             .putBoolean(KEY_SHOW_SEARCH_BUTTON, s.showSearchButton)
             .putString(KEY_SWIPE_DOWN, s.swipeDown.name)
@@ -80,7 +85,7 @@ class LauncherPrefs(context: Context) {
         JSONArray().apply {
             folders.forEach { f ->
                 put(
-                    JSONObject().put("id", f.id).put("name", f.name).put("apps", JSONArray(f.appKeys)).put("sort", f.sort.name),
+                    JSONObject().put("id", f.id).put("name", f.name).put("apps", JSONArray(f.appKeys)).put("sort", f.sort.name).put("icon", f.icon.orEmpty()),
                 )
             }
         }.toString()
@@ -97,6 +102,7 @@ class LauncherPrefs(context: Context) {
                     name = o.getString("name"),
                     appKeys = (0 until apps.length()).map { apps.getString(it) },
                     sort = runCatching { FolderSort.valueOf(o.optString("sort")) }.getOrDefault(FolderSort.A_Z),
+                    icon = o.optString("icon").takeIf { it.isNotBlank() },
                 )
             }
         }.getOrDefault(emptyList())
@@ -114,6 +120,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_SWIPE_DOWN = "swipe_down"
         const val KEY_ICON_PACK = "icon_pack"
         const val KEY_FOLDERS = "folders"
+        const val KEY_ANCHOR_BOTTOM = "anchor_bottom"
         const val KEY_SHOW_ICONS = "show_icons"
         const val KEY_SHOW_SEARCH_BUTTON = "show_search_button"
     }

@@ -14,6 +14,8 @@ data class AppFolder(
     /** Membership, and the display order when [sort] is [FolderSort.MANUAL]. */
     val appKeys: List<String>,
     val sort: FolderSort = FolderSort.A_Z,
+    /** An emoji or symbol shown instead of the app count; null means "show the count". */
+    val icon: String? = null,
 ) {
     /** Key used in the favourites list; app keys are component names so can never collide with this. */
     val key: String get() = FOLDER_PREFIX + id

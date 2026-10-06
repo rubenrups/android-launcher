@@ -352,6 +352,7 @@ private fun FolderRow(entry: FolderEntry, isFavourite: Boolean, viewModel: Launc
     var rename by remember { mutableStateOf(false) }
     var addApps by remember { mutableStateOf(false) }
     var sorting by remember { mutableStateOf(false) }
+    var pickingIcon by remember { mutableStateOf(false) }
 
     Box {
         Row(
@@ -365,7 +366,7 @@ private fun FolderRow(entry: FolderEntry, isFavourite: Boolean, viewModel: Launc
                 )
                 .padding(horizontal = 24.dp, vertical = 10.dp),
         ) {
-            FolderGlyph(entry.apps.size)
+            FolderGlyph(entry.apps.size, entry.folder.icon)
             Text(entry.label, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Light, maxLines = 1)
         }
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
@@ -384,6 +385,10 @@ private fun FolderRow(entry: FolderEntry, isFavourite: Boolean, viewModel: Launc
                 menuOpen = false
                 sorting = true
             })
+            DropdownMenuItem(text = { Text("Change icon…") }, onClick = {
+                menuOpen = false
+                pickingIcon = true
+            })
             DropdownMenuItem(text = { Text("Rename") }, onClick = {
                 menuOpen = false
                 rename = true
@@ -398,6 +403,7 @@ private fun FolderRow(entry: FolderEntry, isFavourite: Boolean, viewModel: Launc
     if (open) FolderDialog(entry, viewModel, onDismiss = { open = false })
     if (addApps) AppPickerDialog(entry.folder.id, viewModel, onDismiss = { addApps = false })
     if (sorting) FolderSortDialog(entry, viewModel, onDismiss = { sorting = false })
+    if (pickingIcon) FolderIconDialog(entry, viewModel, onDismiss = { pickingIcon = false })
     if (rename) {
         NameDialog(
             title = "Rename folder",

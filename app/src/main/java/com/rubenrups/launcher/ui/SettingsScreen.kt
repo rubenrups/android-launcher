@@ -62,10 +62,10 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
 
         Section("Layout")
         ChoiceRow("Left-aligned, with icons", selected = !settings.alignEnd && settings.showIcons) {
-            viewModel.update { it.copy(alignEnd = false, showIcons = true, favouriteTextSp = 22) }
+            viewModel.update { it.copy(alignEnd = false, anchorBottom = false, showIcons = true, favouriteTextSp = 22) }
         }
         ChoiceRow("Right-aligned, large text", selected = settings.alignEnd && !settings.showIcons) {
-            viewModel.update { it.copy(alignEnd = true, showIcons = false, favouriteTextSp = 34) }
+            viewModel.update { it.copy(alignEnd = true, anchorBottom = true, showIcons = false, favouriteTextSp = 34) }
         }
 
         Section("Home screen")
@@ -75,6 +75,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
         SwitchRow("Show app icons", settings.showIcons) { v -> viewModel.update { it.copy(showIcons = v) } }
         SwitchRow("Show search button", settings.showSearchButton) { v -> viewModel.update { it.copy(showSearchButton = v) } }
         SwitchRow("Align to the right", settings.alignEnd) { v -> viewModel.update { it.copy(alignEnd = v) } }
+        SwitchRow("Pin list to the bottom", settings.anchorBottom) { v -> viewModel.update { it.copy(anchorBottom = v) } }
         Label("Favourites text size: ${settings.favouriteTextSp}sp")
         Slider(
             value = settings.favouriteTextSp.toFloat(),

@@ -163,19 +163,8 @@ fun HomeScreen(
             }
             if (settings.showMedia) media?.let { MediaCard(it) }
 
-            // Right-aligned ("classic") lists hug the bottom; left-aligned ones flow from the top and scroll.
-            if (settings.alignEnd) Spacer(Modifier.weight(1f))
-
-            val listModifier = if (settings.alignEnd) {
-                Modifier
-            } else {
-                // Only intercept drags when the list actually overflows, so swipe-up still reaches the drawer.
-                Modifier
-                    .weight(1f, fill = false)
-                    .verticalScroll(listScroll, enabled = !editMode && listScroll.maxValue > 0)
-            }
-
-            Box(listModifier) {
+            // Top/bottom placement is its own setting, independent of left/right alignment.
+            val favouritesContent: @Composable () -> Unit = {
                 if (favourites.isEmpty()) {
                     Text(
                         "Swipe up and long-press an app\nto add it to your favourites",
@@ -193,12 +182,25 @@ fun HomeScreen(
                         viewModel = viewModel,
                         editMode = editMode,
                         onEditModeChange = { editMode = it },
-                        // Keep the last rows clear of the floating search button.
-                        bottomPadding = if (!settings.alignEnd && settings.showSearchButton) 88.dp else 0.dp,
+                        // A top-anchored list can run under the floating search button; keep the last rows clear of it.
+                        bottomPadding = if (!settings.anchorBottom && settings.showSearchButton) 88.dp else 0.dp,
                     )
                 }
             }
-            if (settings.alignEnd) Spacer(Modifier.height(8.dp))
+            // Only intercept drags when the list actually overflows, so swipe-up still reaches the drawer.
+            val scrollModifier = Modifier.verticalScroll(listScroll, enabled = !editMode && listScroll.maxValue > 0)
+
+            if (settings.anchorBottom) {
+                Box(
+                    Modifier.weight(1f).fillMaxWidth(),
+                    contentAlignment = if (settings.alignEnd) Alignment.BottomEnd else Alignment.BottomStart,
+                ) {
+                    Box(scrollModifier) { favouritesContent() }
+                }
+                Spacer(Modifier.height(8.dp))
+            } else {
+                Box(Modifier.weight(1f, fill = false).then(scrollModifier)) { favouritesContent() }
+            }
         }
 
         homeMenuAt?.let { at ->
@@ -331,6 +333,7 @@ private fun FavouritesList(
     var renameFolderKey by remember { mutableStateOf<String?>(null) }
     var addAppsFolderId by remember { mutableStateOf<String?>(null) }
     var sortFolderKey by remember { mutableStateOf<String?>(null) }
+    var iconFolderKey by remember { mutableStateOf<String?>(null) }
     val alignment = if (settings.alignEnd) Alignment.End else Alignment.Start
 
     Column(Modifier.fillMaxWidth(), horizontalAlignment = alignment) {
@@ -397,6 +400,7 @@ private fun FavouritesList(
                         onRenameFolder = { renameFolderKey = entry.key },
                         onAddApps = { (entry as? FolderEntry)?.let { addAppsFolderId = it.folder.id } },
                         onSortApps = { sortFolderKey = entry.key },
+                        onChangeIcon = { iconFolderKey = entry.key },
                     )
                     if (entry is FolderEntry && expanded) {
                         entry.apps.forEach { app ->
@@ -409,6 +413,9 @@ private fun FavouritesList(
         Spacer(Modifier.height(bottomPadding))
     }
 
+    favourites.filterIsInstance<FolderEntry>().firstOrNull { it.key == iconFolderKey }?.let { folder ->
+        FolderIconDialog(folder, viewModel, onDismiss = { iconFolderKey = null })
+    }
     favourites.filterIsInstance<FolderEntry>().firstOrNull { it.key == sortFolderKey }?.let { folder ->
         FolderSortDialog(folder, viewModel, onDismiss = { sortFolderKey = null })
     }
@@ -446,13 +453,14 @@ private fun FavouriteRow(
     onRenameFolder: () -> Unit,
     onAddApps: () -> Unit,
     onSortApps: () -> Unit,
+    onChangeIcon: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val alignEnd = settings.alignEnd
     val icon: @Composable () -> Unit = {
         when (entry) {
             is AppEntry -> AppIcon(entry.app, viewModel, iconSize)
-            is FolderEntry -> FolderGlyph(entry.apps.size, size = iconSize)
+            is FolderEntry -> FolderGlyph(entry.apps.size, entry.folder.icon, size = iconSize)
         }
     }
     val handle: @Composable () -> Unit = {
@@ -530,6 +538,10 @@ private fun FavouriteRow(
                     DropdownMenuItem(text = { Text("Sort apps…") }, onClick = {
                         menuOpen = false
                         onSortApps()
+                    })
+                    DropdownMenuItem(text = { Text("Change icon…") }, onClick = {
+                        menuOpen = false
+                        onChangeIcon()
                     })
                     DropdownMenuItem(text = { Text("Rename") }, onClick = {
                         menuOpen = false
