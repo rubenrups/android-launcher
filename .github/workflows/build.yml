@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # needed to publish the release below
     steps:
       - uses: actions/checkout@v4
 
@@ -25,3 +27,16 @@ jobs:
         with:
           name: rups-launcher-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+
+      # Each push becomes a pre-release "build-N" (N = the app's versionCode), which is what the in-app
+      # update check looks for. continue-on-error: a failed release must not turn a good build red.
+      - name: Publish release
+        if: github.event_name == 'push'
+        continue-on-error: true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: Build ${{ github.run_number }}
+          prerelease: true
+          files: app/build/outputs/apk/debug/app-debug.apk

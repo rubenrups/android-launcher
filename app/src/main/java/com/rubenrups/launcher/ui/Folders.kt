@@ -186,6 +186,7 @@ fun FolderDialog(entry: FolderEntry, viewModel: LauncherViewModel, onDismiss: ()
                             Text(app.label, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Light, maxLines = 1)
                         }
                         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            AppShortcutItems(app, viewModel) { menuOpen = false }
                             // Pin one app to the home screen without taking it out of its folder.
                             DropdownMenuItem(
                                 text = { Text(if (isFavourite) "Remove from favourites" else "Add to favourites") },

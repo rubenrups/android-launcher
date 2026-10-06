@@ -13,6 +13,23 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: LauncherViewModel by viewModels()
 
+    override fun onStart() {
+        super.onStart()
+        viewModel.widgets.startListening()
+    }
+
+    override fun onStop() {
+        viewModel.widgets.stopListening()
+        super.onStop()
+    }
+
+    // Widget binding and configuration answer through the classic result callback.
+    @Suppress("DEPRECATION")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        viewModel.widgets.handleResult(this, requestCode, resultCode)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()

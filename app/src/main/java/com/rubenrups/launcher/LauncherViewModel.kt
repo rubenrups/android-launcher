@@ -10,6 +10,9 @@ import com.rubenrups.launcher.data.Entry
 import com.rubenrups.launcher.data.FolderEntry
 import com.rubenrups.launcher.data.FolderSort
 import com.rubenrups.launcher.data.resolve
+import com.rubenrups.launcher.widgets.WidgetHostManager
+import android.app.Activity
+import android.appwidget.AppWidgetProviderInfo
 import com.rubenrups.launcher.data.AppRepository
 import com.rubenrups.launcher.data.IconPack
 import com.rubenrups.launcher.data.LauncherPrefs
@@ -28,6 +31,7 @@ import java.util.UUID
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
 
     val repository = AppRepository(application)
+    val widgets = WidgetHostManager(application)
     private val prefs = LauncherPrefs(application)
 
     val settings: StateFlow<LauncherSettings> = prefs.settings
@@ -211,8 +215,27 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun installedIconPacks(): List<IconPack> = repository.iconPacks.installedPacks()
 
+    fun beginAddWidget(activity: Activity, provider: AppWidgetProviderInfo) {
+        widgets.beginAdd(activity, provider) { id -> update { it.copy(widgetIds = it.widgetIds + id) } }
+    }
+
+    fun removeWidget(id: Int) {
+        widgets.delete(id)
+        update { it.copy(widgetIds = it.widgetIds - id) }
+    }
+
+    fun webSearch(query: String) {
+        repository.webSearch(query, settings.value.webSearch)
+        closeDrawer()
+    }
+
     fun launch(app: AppInfo) {
+        update { s -> s.copy(recents = (listOf(app.key) + (s.recents - app.key)).take(MAX_RECENTS)) }
         repository.launch(app)
         closeDrawer()
+    }
+
+    private companion object {
+        const val MAX_RECENTS = 8
     }
 }

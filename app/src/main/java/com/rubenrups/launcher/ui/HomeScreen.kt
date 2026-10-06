@@ -119,6 +119,9 @@ fun HomeScreen(
     var homeMenuAt by remember { mutableStateOf<Offset?>(null) }
     val listScroll = rememberScrollState()
     val favouriteKeys = remember(favourites) { favourites.mapTo(HashSet()) { it.key } }
+    val weather = rememberWeather(settings.showWeather, settings.weatherCity, settings.weatherFahrenheit)
+    val nextEvent = rememberNextEvent(settings.showCalendar)
+    var showWidgetPicker by remember { mutableStateOf(false) }
 
     val currentSettings by rememberUpdatedState(settings)
     val currentOpenDrawer by rememberUpdatedState(onOpenDrawer)
@@ -160,7 +163,7 @@ fun HomeScreen(
             horizontalAlignment = if (settings.alignEnd) Alignment.End else Alignment.Start,
         ) {
             if (settings.showClock) {
-                Box(SidePadding) { Clock(settings.alignEnd) }
+                Box(SidePadding) { Clock(settings.alignEnd, weather, nextEvent) }
                 Spacer(Modifier.height(16.dp))
             }
             if (settings.showNotifications) {
@@ -168,6 +171,9 @@ fun HomeScreen(
                 Box(SidePadding.fillMaxWidth()) { NotificationList(notifications.take(3)) }
             }
             if (settings.showMedia) media?.let { Box(SidePadding.fillMaxWidth()) { MediaCard(it) } }
+            settings.widgetIds.forEach { id ->
+                key(id) { WidgetView(id, viewModel.widgets, Modifier.padding(horizontal = 24.dp, vertical = 4.dp)) }
+            }
 
             // Top/bottom placement is its own setting, independent of left/right alignment.
             val favouritesContent: @Composable () -> Unit = {
@@ -210,6 +216,8 @@ fun HomeScreen(
             }
         }
 
+        if (showWidgetPicker) WidgetPickerDialog(viewModel, onDismiss = { showWidgetPicker = false })
+
         homeMenuAt?.let { at ->
             // A zero-size anchor at the finger, so the menu pops up where you pressed.
             Box(Modifier.offset { IntOffset(at.x.roundToInt(), at.y.roundToInt()) }) {
@@ -224,6 +232,10 @@ fun HomeScreen(
                             editMode = true
                         })
                     }
+                    DropdownMenuItem(text = { Text("Add widget") }, onClick = {
+                        homeMenuAt = null
+                        showWidgetPicker = true
+                    })
                     DropdownMenuItem(text = { Text("Change wallpaper") }, onClick = {
                         homeMenuAt = null
                         runCatching {
@@ -298,7 +310,7 @@ private fun rememberBatteryPercent(): Int {
 }
 
 @Composable
-private fun Clock(alignEnd: Boolean) {
+private fun Clock(alignEnd: Boolean, weather: String?, event: String?) {
     val now by produceState(Date()) {
         while (true) {
             value = Date()
@@ -311,10 +323,14 @@ private fun Clock(alignEnd: Boolean) {
     val dateLine = buildString {
         append(dateFormat.format(now))
         if (battery >= 0) append("  $battery%")
+        if (weather != null) append("  $weather")
     }
     Column(horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
         Text(timeFormat.format(now), color = Color.White, fontSize = 56.sp, fontWeight = FontWeight.Light, style = HomeTextStyle)
         Text(dateLine, color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp, style = HomeTextStyle)
+        if (event != null) {
+            Text(event, color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp, style = HomeTextStyle, maxLines = 1)
+        }
     }
 }
 
@@ -529,6 +545,9 @@ private fun FavouriteRow(
             if (editMode && alignEnd) handle()
         }
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            if (entry is AppEntry) {
+                AppShortcutItems(entry.app, viewModel) { menuOpen = false }
+            }
             DropdownMenuItem(text = { Text("Reorder") }, onClick = {
                 menuOpen = false
                 onReorder()

@@ -13,6 +13,13 @@ enum class SwipeAction(val label: String) {
     NONE("Nothing"),
 }
 
+enum class WebSearchEngine(val label: String, val urlTemplate: String?) {
+    OFF("Off", null),
+    SYSTEM("System default", null),
+    GOOGLE("Google", "https://www.google.com/search?q=%s"),
+    DUCKDUCKGO("DuckDuckGo", "https://duckduckgo.com/?q=%s"),
+}
+
 data class LauncherSettings(
     val favourites: List<String> = emptyList(),
     val hidden: Set<String> = emptySet(),
@@ -29,6 +36,17 @@ data class LauncherSettings(
     val swipeDown: SwipeAction = SwipeAction.NOTIFICATIONS,
     val iconPack: String? = null,
     val folders: List<AppFolder> = emptyList(),
+    val showCalendar: Boolean = false,
+    val showWeather: Boolean = false,
+    val weatherCity: String = "",
+    val weatherFahrenheit: Boolean = false,
+    val webSearch: WebSearchEngine = WebSearchEngine.SYSTEM,
+    val showRecents: Boolean = true,
+    /** Most recently launched app keys, newest first. */
+    val recents: List<String> = emptyList(),
+    val widgetIds: List<Int> = emptyList(),
+    /** Optional read-only GitHub token so the update check can see a private repository. */
+    val updateToken: String = "",
 )
 
 /** Persists favourites, hidden apps and user settings in SharedPreferences. */
@@ -61,6 +79,16 @@ class LauncherPrefs(context: Context) {
             .getOrDefault(SwipeAction.NOTIFICATIONS),
         iconPack = prefs.getString(KEY_ICON_PACK, null),
         folders = decodeFolders(prefs.getString(KEY_FOLDERS, null)),
+        showCalendar = prefs.getBoolean(KEY_SHOW_CALENDAR, false),
+        showWeather = prefs.getBoolean(KEY_SHOW_WEATHER, false),
+        weatherCity = prefs.getString(KEY_WEATHER_CITY, "").orEmpty(),
+        weatherFahrenheit = prefs.getBoolean(KEY_WEATHER_F, false),
+        webSearch = runCatching { WebSearchEngine.valueOf(prefs.getString(KEY_WEB_SEARCH, "").orEmpty()) }
+            .getOrDefault(WebSearchEngine.SYSTEM),
+        showRecents = prefs.getBoolean(KEY_SHOW_RECENTS, true),
+        recents = prefs.getString(KEY_RECENTS, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() },
+        widgetIds = prefs.getString(KEY_WIDGETS, "").orEmpty().split(SEPARATOR).mapNotNull { it.toIntOrNull() },
+        updateToken = prefs.getString(KEY_UPDATE_TOKEN, "").orEmpty(),
     )
 
     private fun save(s: LauncherSettings) {
@@ -78,6 +106,15 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_SWIPE_DOWN, s.swipeDown.name)
             .putString(KEY_ICON_PACK, s.iconPack)
             .putString(KEY_FOLDERS, encodeFolders(s.folders))
+            .putBoolean(KEY_SHOW_CALENDAR, s.showCalendar)
+            .putBoolean(KEY_SHOW_WEATHER, s.showWeather)
+            .putString(KEY_WEATHER_CITY, s.weatherCity)
+            .putBoolean(KEY_WEATHER_F, s.weatherFahrenheit)
+            .putString(KEY_WEB_SEARCH, s.webSearch.name)
+            .putBoolean(KEY_SHOW_RECENTS, s.showRecents)
+            .putString(KEY_RECENTS, s.recents.joinToString(SEPARATOR))
+            .putString(KEY_WIDGETS, s.widgetIds.joinToString(SEPARATOR))
+            .putString(KEY_UPDATE_TOKEN, s.updateToken)
             .apply()
     }
 
@@ -120,6 +157,15 @@ class LauncherPrefs(context: Context) {
         const val KEY_SWIPE_DOWN = "swipe_down"
         const val KEY_ICON_PACK = "icon_pack"
         const val KEY_FOLDERS = "folders"
+        const val KEY_SHOW_CALENDAR = "show_calendar"
+        const val KEY_SHOW_WEATHER = "show_weather"
+        const val KEY_WEATHER_CITY = "weather_city"
+        const val KEY_WEATHER_F = "weather_fahrenheit"
+        const val KEY_WEB_SEARCH = "web_search"
+        const val KEY_SHOW_RECENTS = "show_recents"
+        const val KEY_RECENTS = "recents"
+        const val KEY_WIDGETS = "widgets"
+        const val KEY_UPDATE_TOKEN = "update_token"
         const val KEY_ANCHOR_BOTTOM = "anchor_bottom"
         const val KEY_SHOW_ICONS = "show_icons"
         const val KEY_SHOW_SEARCH_BUTTON = "show_search_button"

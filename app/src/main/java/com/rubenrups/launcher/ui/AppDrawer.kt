@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -58,6 +59,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
@@ -69,10 +71,13 @@ import com.rubenrups.launcher.data.AppFolder
 import com.rubenrups.launcher.data.AppInfo
 import com.rubenrups.launcher.data.Entry
 import com.rubenrups.launcher.data.FolderEntry
+import com.rubenrups.launcher.data.WebSearchEngine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
+
+private const val RECENTS_SHOWN = 5
 
 private val SCRUBBER_LETTERS = listOf('#') + ('A'..'Z').toList()
 
@@ -142,8 +147,17 @@ fun AppDrawer(viewModel: LauncherViewModel) {
         }
     }
 
-    // One extra list row ('New folder') sits above the entries when not searching.
-    val headerRows = if (query.isBlank()) 1 else 0
+    // Rows above the entries when not searching: an optional recents row, then 'New folder'.
+    val recentApps = remember(allApps, settings.recents, settings.showRecents) {
+        if (!settings.showRecents) {
+            emptyList()
+        } else {
+            val byKey = allApps.associateBy { it.key }
+            settings.recents.mapNotNull { byKey[it] }.take(RECENTS_SHOWN)
+        }
+    }
+    val showRecentsRow = query.isBlank() && recentApps.isNotEmpty()
+    val headerRows = (if (query.isBlank()) 1 else 0) + (if (showRecentsRow) 1 else 0)
 
     fun jumpTo(letter: Char) {
         activeLetter = letter
@@ -171,6 +185,9 @@ fun AppDrawer(viewModel: LauncherViewModel) {
                     state = listState,
                     modifier = Modifier.weight(1f).nestedScroll(closeOnPullDown),
                 ) {
+                    if (showRecentsRow) {
+                        item(key = "recents") { RecentsRow(recentApps, viewModel) }
+                    }
                     if (query.isBlank()) {
                         item(key = "new-folder") { NewFolderRow(onClick = { newFolder = true }) }
                     }
@@ -188,6 +205,9 @@ fun AppDrawer(viewModel: LauncherViewModel) {
                                 viewModel = viewModel,
                             )
                         }
+                    }
+                    if (query.isNotBlank() && settings.webSearch != WebSearchEngine.OFF) {
+                        item(key = "web-search") { WebSearchRow(query) { viewModel.webSearch(query) } }
                     }
                 }
                 if (query.isBlank()) {
@@ -207,7 +227,13 @@ fun AppDrawer(viewModel: LauncherViewModel) {
                 placeholder = { Text("Search apps", color = Color.White.copy(alpha = 0.5f)) },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 keyboardActions = KeyboardActions(onSearch = {
-                    entries.filterIsInstance<AppEntry>().firstOrNull()?.let { viewModel.launch(it.app) }
+                    val firstApp = entries.filterIsInstance<AppEntry>().firstOrNull()
+                    // Nothing matched: hand the query to web search instead of doing nothing.
+                    if (firstApp != null) {
+                        viewModel.launch(firstApp.app)
+                    } else if (query.isNotBlank() && settings.webSearch != WebSearchEngine.OFF) {
+                        viewModel.webSearch(query)
+                    }
                 }),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.White.copy(alpha = 0.12f),
@@ -280,9 +306,16 @@ private fun DrawerRow(
                 .padding(horizontal = 24.dp, vertical = 10.dp),
         ) {
             AppIcon(app, viewModel)
-            Text(app.label, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Light, maxLines = 1)
+            Text(
+                app.label + if (app.isMainProfile) "" else "  💼",
+                color = Color.White,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Light,
+                maxLines = 1,
+            )
         }
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            AppShortcutItems(app, viewModel) { menuOpen = false }
             DropdownMenuItem(
                 text = { Text(if (isFavourite) "Remove from favourites" else "Add to favourites") },
                 onClick = {
@@ -308,10 +341,13 @@ private fun DrawerRow(
                 menuOpen = false
                 viewModel.repository.openAppInfo(app)
             })
-            DropdownMenuItem(text = { Text("Uninstall") }, onClick = {
-                menuOpen = false
-                viewModel.repository.uninstall(app)
-            })
+            // Uninstalling a work-profile app would hit the personal copy, so only offer it for the main profile.
+            if (app.isMainProfile) {
+                DropdownMenuItem(text = { Text("Uninstall") }, onClick = {
+                    menuOpen = false
+                    viewModel.repository.uninstall(app)
+                })
+            }
         }
     }
 
@@ -426,6 +462,52 @@ internal fun AppIcon(app: AppInfo, viewModel: LauncherViewModel, size: Dp = 36.d
     }
     Box(Modifier.size(size)) {
         icon?.let { Image(bitmap = it, contentDescription = null, modifier = Modifier.fillMaxSize()) }
+    }
+}
+
+/** The last few launched apps as a row of icons at the top of the drawer. */
+@Composable
+private fun RecentsRow(apps: List<AppInfo>, viewModel: LauncherViewModel) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+    ) {
+        apps.forEach { app ->
+            Column(
+                Modifier.weight(1f).clickable { viewModel.launch(app) }.padding(vertical = 6.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                AppIcon(app, viewModel, 44.dp)
+                Text(
+                    app.label,
+                    color = Color.White.copy(alpha = 0.8f),
+                    fontSize = 11.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        // Keep the icons the same width when fewer than five apps have been launched yet.
+        repeat(RECENTS_SHOWN - apps.size) { Spacer(Modifier.weight(1f)) }
+    }
+}
+
+/** Last row while typing: send the query to web search. */
+@Composable
+private fun WebSearchRow(query: String, onClick: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 24.dp, vertical = 12.dp),
+    ) {
+        Box(Modifier.size(36.dp), contentAlignment = Alignment.Center) { Text("🔍", fontSize = 20.sp) }
+        Text(
+            "Search the web for \"$query\"",
+            color = Color.White.copy(alpha = 0.8f),
+            fontSize = 16.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

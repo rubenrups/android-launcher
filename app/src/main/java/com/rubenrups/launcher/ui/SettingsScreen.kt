@@ -1,8 +1,14 @@
 package com.rubenrups.launcher.ui
 
+import android.Manifest
 import android.content.Intent
 import android.net.Uri
+import android.os.Build
+import android.os.Process
+import android.os.UserManager
 import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -21,8 +27,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,10 +42,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
+import com.rubenrups.launcher.data.CalendarReader
 import com.rubenrups.launcher.data.SwipeAction
+import com.rubenrups.launcher.data.UpdateChecker
+import com.rubenrups.launcher.data.WebSearchEngine
 import com.rubenrups.launcher.notifications.NotificationStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
@@ -42,6 +60,17 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
     val scroll = rememberScrollState()
     val context = LocalContext.current
     val listenerConnected by NotificationStore.listenerConnected.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
+    var pickWidget by remember { mutableStateOf(false) }
+    var updateStatus by remember { mutableStateOf<String?>(null) }
+    var updateUrl by remember { mutableStateOf<String?>(null) }
+    val installedBuild = remember { UpdateChecker.installedBuild(context) }
+    val calendarPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        viewModel.update { it.copy(showCalendar = granted) }
+    }
+    val userManager = remember { context.getSystemService(UserManager::class.java) }
+    var profileVersion by remember { mutableIntStateOf(0) }
+    val otherProfiles = remember(profileVersion) { userManager.userProfiles.filter { it != Process.myUserHandle() } }
     val hidden by viewModel.hiddenApps.collectAsStateWithLifecycle()
     // Queried once per open; installing a pack while settings are open needs a reopen.
     val iconPacks = remember { viewModel.installedIconPacks() }
@@ -72,6 +101,27 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
         SwitchRow("Show clock", settings.showClock) { v -> viewModel.update { it.copy(showClock = v) } }
         SwitchRow("Show notifications", settings.showNotifications) { v -> viewModel.update { it.copy(showNotifications = v) } }
         SwitchRow("Show media player", settings.showMedia) { v -> viewModel.update { it.copy(showMedia = v) } }
+        SwitchRow("Show next calendar event", settings.showCalendar) { v ->
+            if (v && !CalendarReader.hasPermission(context)) {
+                calendarPermission.launch(Manifest.permission.READ_CALENDAR)
+            } else {
+                viewModel.update { it.copy(showCalendar = v) }
+            }
+        }
+        SwitchRow("Show weather", settings.showWeather) { v -> viewModel.update { it.copy(showWeather = v) } }
+        if (settings.showWeather) {
+            TextField(
+                value = settings.weatherCity,
+                onValueChange = { v -> viewModel.update { it.copy(weatherCity = v) } },
+                singleLine = true,
+                placeholder = { Text("City, e.g. Amsterdam") },
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            )
+            SwitchRow("Use °F instead of °C", settings.weatherFahrenheit) { v ->
+                viewModel.update { it.copy(weatherFahrenheit = v) }
+            }
+            Hint("Weather is fetched from open-meteo.com using only the city name.")
+        }
         SwitchRow("Show app icons", settings.showIcons) { v -> viewModel.update { it.copy(showIcons = v) } }
         SwitchRow("Show search button", settings.showSearchButton) { v -> viewModel.update { it.copy(showSearchButton = v) } }
         SwitchRow("Align to the right", settings.alignEnd) { v -> viewModel.update { it.copy(alignEnd = v) } }
@@ -102,6 +152,83 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
         Hint(
             "The media player and notification list need notification access. If the switch is greyed out " +
                 "(common for apps installed from a file), open App info → ⋮ menu → Allow restricted settings, then try again."
+        )
+
+        Section("Drawer & search")
+        SwitchRow("Show recent apps", settings.showRecents) { v -> viewModel.update { it.copy(showRecents = v) } }
+        Label("Web search when typing in the drawer")
+        WebSearchEngine.entries.forEach { engine ->
+            ChoiceRow(engine.label, selected = settings.webSearch == engine) {
+                viewModel.update { it.copy(webSearch = engine) }
+            }
+        }
+
+        Section("Widgets")
+        settings.widgetIds.forEach { id ->
+            val label = viewModel.widgets.info(id)?.loadLabel(context.packageManager)?.toString() ?: "Unavailable widget"
+            Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(label, color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                Text("Remove", color = Color.White, fontSize = 14.sp, modifier = Modifier.clickable { viewModel.removeWidget(id) }.padding(8.dp))
+            }
+        }
+        ActionRow("Add widget") { pickWidget = true }
+        if (pickWidget) WidgetPickerDialog(viewModel, onDismiss = { pickWidget = false })
+
+        if (otherProfiles.isNotEmpty()) {
+            Section("Work profile")
+            otherProfiles.forEach { user ->
+                val paused = remember(profileVersion, user) { userManager.isQuietModeEnabled(user) }
+                Text(
+                    if (paused) "Work apps are paused" else "Work apps are active",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+                ActionRow(if (paused) "Resume work apps" else "Pause work apps") {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        runCatching { userManager.requestQuietModeEnabled(!paused, user) }
+                    }
+                    profileVersion++
+                }
+            }
+            Hint("Work apps appear in the drawer with a 💼 and a badge on their icon.")
+        }
+
+        Section("Updates")
+        Text("Installed: build $installedBuild", color = Color.White, fontSize = 16.sp, modifier = Modifier.padding(vertical = 8.dp))
+        ActionRow("Check for updates") {
+            updateStatus = "Checking…"
+            updateUrl = null
+            scope.launch {
+                val result = withContext(Dispatchers.IO) { UpdateChecker.check(context, settings.updateToken) }
+                when (result) {
+                    is UpdateChecker.Result.UpToDate -> updateStatus = "You are up to date (build ${result.installed})."
+                    is UpdateChecker.Result.Available -> {
+                        updateStatus = "Build ${result.update.build} is available."
+                        updateUrl = result.update.pageUrl
+                    }
+                    is UpdateChecker.Result.Failed -> updateStatus = result.reason
+                }
+            }
+        }
+        updateStatus?.let { Hint(it) }
+        updateUrl?.let { url ->
+            ActionRow("Open download page") {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+        }
+        Label("GitHub token (optional)")
+        TextField(
+            value = settings.updateToken,
+            onValueChange = { v -> viewModel.update { it.copy(updateToken = v) } },
+            singleLine = true,
+            visualTransformation = PasswordVisualTransformation(),
+            placeholder = { Text("Read-only token") },
+            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        )
+        Hint(
+            "Only needed while the repository is private. Create a fine-grained token with read-only " +
+                "access to this repository's contents. It is stored on this device only."
         )
 
         Section("Swipe down on home")

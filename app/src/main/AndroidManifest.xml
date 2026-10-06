@@ -7,6 +7,11 @@
     <!-- Lets the swipe-down gesture open the notification shade -->
     <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
 
+    <!-- Weather in the header and the update check (both optional, off by default) -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Next calendar event in the header (asked for at runtime when you switch it on) -->
+    <uses-permission android:name="android.permission.READ_CALENDAR" />
+
     <!-- A launcher must see every installed app (Android 11+ package visibility) -->
     <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
         tools:ignore="QueryAllPackagesPermission" />

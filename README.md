@@ -2,6 +2,15 @@
 
 A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 
+## Features (v0.6)
+
+- Next calendar event and weather in the home header (both optional, off by default)
+- App shortcuts ("New message", …) at the top of an app's long-press menu
+- Home-screen widgets (long-press the home screen → Add widget)
+- Web search from the drawer when nothing matches, and a row of recent apps at the top of the drawer
+- Work-profile apps in the drawer (💼, badged icons), with pause/resume in Settings
+- In-app update check against GitHub releases (CI publishes every build as a pre-release)
+
 ## Features (v0.5)
 
 - Search button on the home screen opens the app drawer with the search field focused and the keyboard up
