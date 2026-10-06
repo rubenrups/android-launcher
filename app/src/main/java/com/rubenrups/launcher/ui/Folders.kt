@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -76,7 +77,8 @@ fun FolderPickerDialog(
 ) {
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(24.dp), color = Color(0xFF1A1A1A)) {
-            Column(Modifier.padding(vertical = 16.dp)) {
+            val scroll = rememberScrollState()
+            Column(Modifier.heightIn(max = 560.dp).padding(top = 16.dp, bottom = 8.dp)) {
                 Text(
                     "Add ${app.label} to…",
                     color = Color.White,
@@ -84,9 +86,12 @@ fun FolderPickerDialog(
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 )
-                folders.forEach { folder ->
-                    PickerRow(folder.name) { onPick(folder) }
+                Column(Modifier.weight(1f, fill = false).verticalScrollbar(scroll).verticalScroll(scroll)) {
+                    folders.forEach { folder ->
+                        PickerRow(folder.name) { onPick(folder) }
+                    }
                 }
+                // Pinned below the scrolling list so it is reachable however many folders there are.
                 PickerRow("New folder…", onClick = onNew)
             }
         }
@@ -110,7 +115,10 @@ fun FolderDialog(entry: FolderEntry, viewModel: LauncherViewModel, onDismiss: ()
     var picking by remember { mutableStateOf(false) }
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(24.dp), color = Color(0xF21A1A1A)) {
-            Column(Modifier.padding(vertical = 16.dp).verticalScroll(rememberScrollState())) {
+            val scroll = rememberScrollState()
+            Column(
+                Modifier.heightIn(max = 560.dp).verticalScrollbar(scroll).verticalScroll(scroll).padding(vertical = 16.dp),
+            ) {
                 Text(
                     entry.label,
                     color = Color.White,
@@ -185,6 +193,7 @@ fun AppPickerDialog(folderId: String, viewModel: LauncherViewModel, onDismiss: (
     val apps by viewModel.visibleApps.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val folder = settings.folders.firstOrNull { it.id == folderId } ?: return
+    val listState = rememberLazyListState()
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(24.dp), color = Color(0xF21A1A1A)) {
@@ -196,7 +205,7 @@ fun AppPickerDialog(folderId: String, viewModel: LauncherViewModel, onDismiss: (
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 )
-                LazyColumn(Modifier.weight(1f, fill = false)) {
+                LazyColumn(state = listState, modifier = Modifier.weight(1f, fill = false).verticalScrollbar(listState)) {
                     items(apps, key = { it.key }) { app ->
                         val inThis = app.key in folder.appKeys
                         val elsewhere = settings.folders.firstOrNull { it.id != folderId && app.key in it.appKeys }

@@ -34,6 +34,7 @@ import com.rubenrups.launcher.data.SwipeAction
 @Composable
 fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val scroll = rememberScrollState()
     val hidden by viewModel.hiddenApps.collectAsStateWithLifecycle()
     // Queried once per open; installing a pack while settings are open needs a reopen.
     val iconPacks = remember { viewModel.installedIconPacks() }
@@ -43,7 +44,8 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
             .fillMaxSize()
             .background(Color.Black.copy(alpha = 0.94f))
             .windowInsetsPadding(WindowInsets.systemBars)
-            .verticalScroll(rememberScrollState())
+            .verticalScrollbar(scroll)
+            .verticalScroll(scroll)
             .padding(horizontal = 24.dp, vertical = 16.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
