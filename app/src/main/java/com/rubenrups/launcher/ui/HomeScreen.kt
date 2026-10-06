@@ -90,6 +90,12 @@ import kotlin.math.roundToInt
 
 private const val SWIPE_THRESHOLD_PX = 120f
 
+/**
+ * The screen has no side margin of its own, so favourite rows can be tappable edge to edge.
+ * Everything else (clock, cards, hints) applies this margin itself.
+ */
+private val SidePadding = Modifier.padding(horizontal = 24.dp)
+
 /** Soft shadow so white text stays readable on bright wallpapers. */
 private val HomeTextStyle = TextStyle(
     shadow = Shadow(color = Color.Black.copy(alpha = 0.55f), offset = Offset(0f, 2f), blurRadius = 8f),
@@ -150,18 +156,18 @@ fun HomeScreen(
                         },
                     )
                 }
-                .padding(horizontal = 24.dp, vertical = 16.dp),
+                .padding(vertical = 16.dp),
             horizontalAlignment = if (settings.alignEnd) Alignment.End else Alignment.Start,
         ) {
             if (settings.showClock) {
-                Clock(settings.alignEnd)
+                Box(SidePadding) { Clock(settings.alignEnd) }
                 Spacer(Modifier.height(16.dp))
             }
             if (settings.showNotifications) {
-                if (!listenerConnected) EnableNotificationsPrompt()
-                NotificationList(notifications.take(3))
+                if (!listenerConnected) Box(SidePadding) { EnableNotificationsPrompt() }
+                Box(SidePadding.fillMaxWidth()) { NotificationList(notifications.take(3)) }
             }
-            if (settings.showMedia) media?.let { MediaCard(it) }
+            if (settings.showMedia) media?.let { Box(SidePadding.fillMaxWidth()) { MediaCard(it) } }
 
             // Top/bottom placement is its own setting, independent of left/right alignment.
             val favouritesContent: @Composable () -> Unit = {
@@ -172,6 +178,7 @@ fun HomeScreen(
                         fontSize = 16.sp,
                         style = HomeTextStyle,
                         textAlign = if (settings.alignEnd) TextAlign.End else TextAlign.Start,
+                        modifier = SidePadding,
                     )
                 } else {
                     FavouritesList(
@@ -342,7 +349,7 @@ private fun FavouritesList(
                 "Drag to reorder  ·  Done",
                 color = Color.White,
                 fontSize = 14.sp,
-                modifier = Modifier
+                modifier = SidePadding
                     .background(Color.White.copy(alpha = 0.2f), RoundedCornerShape(12.dp))
                     .clickable { onEditModeChange(false) }
                     .padding(horizontal = 14.dp, vertical = 8.dp),
@@ -467,11 +474,13 @@ private fun FavouriteRow(
         Text("≡", color = Color.White.copy(alpha = 0.7f), fontSize = 24.sp, style = HomeTextStyle)
     }
 
-    Box(modifier) {
+    Box(modifier.fillMaxWidth()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp, if (alignEnd) Alignment.End else Alignment.Start),
+            // The whole row, margins included, is the touch target; the margin is padding *inside* it.
             modifier = Modifier
+                .fillMaxWidth()
                 .height(rowHeight)
                 .then(
                     if (editMode) Modifier else Modifier.combinedClickable(
@@ -483,7 +492,8 @@ private fun FavouriteRow(
                         },
                         onLongClick = { menuOpen = true },
                     )
-                ),
+                )
+                .padding(horizontal = 24.dp),
         ) {
             if (editMode && !alignEnd) handle()
             if (settings.showIcons && !alignEnd) icon()
@@ -511,6 +521,8 @@ private fun FavouriteRow(
             }
             if (badge > 0 && !alignEnd) Badge(badge)
             if (entry is FolderEntry && !editMode) {
+                // Left-aligned rows span the screen, so park the arrow at the far edge.
+                if (!alignEnd) Spacer(Modifier.weight(1f))
                 Text(if (expanded) "▾" else "▸", color = Color.White.copy(alpha = 0.8f), fontSize = 16.sp, style = HomeTextStyle)
             }
             if (settings.showIcons && alignEnd) icon()
@@ -576,14 +588,18 @@ private fun FolderChildRow(
     viewModel: LauncherViewModel,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
-    val indent = Modifier.padding(start = if (settings.alignEnd) 0.dp else 28.dp, end = if (settings.alignEnd) 28.dp else 0.dp)
-    Box(indent) {
+    // Indented under its folder; like the folder row, the full width is tappable.
+    val start = if (settings.alignEnd) 24.dp else 52.dp
+    val end = if (settings.alignEnd) 52.dp else 24.dp
+    Box(Modifier.fillMaxWidth()) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp, if (settings.alignEnd) Alignment.End else Alignment.Start),
             modifier = Modifier
+                .fillMaxWidth()
                 .height(rowHeight * 0.85f)
-                .combinedClickable(onClick = { viewModel.launch(app) }, onLongClick = { menuOpen = true }),
+                .combinedClickable(onClick = { viewModel.launch(app) }, onLongClick = { menuOpen = true })
+                .padding(start = start, end = end),
         ) {
             if (settings.showIcons && !settings.alignEnd) AppIcon(app, viewModel, iconSize * 0.8f)
             Text(
