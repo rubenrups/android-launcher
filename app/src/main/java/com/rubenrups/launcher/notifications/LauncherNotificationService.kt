@@ -71,6 +71,10 @@ class LauncherNotificationService : NotificationListenerService() {
     private fun activeSessions(): List<MediaController> =
         runCatching { sessionManager.getActiveSessions(listenerComponent) }.getOrNull().orEmpty()
 
+    private fun appLabel(packageName: String): String =
+        runCatching { packageManager.getApplicationLabel(packageManager.getApplicationInfo(packageName, 0)).toString() }
+            .getOrDefault(packageName)
+
     private fun refreshMedia(sessions: List<MediaController>) {
         val preferred = sessions.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
             ?: sessions.firstOrNull()
@@ -84,8 +88,17 @@ class LauncherNotificationService : NotificationListenerService() {
 
     private fun publishMedia() {
         val c = controller
-        val title = c?.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)
-        if (c == null || title.isNullOrBlank()) {
+        if (c == null) {
+            NotificationStore.setMedia(null)
+            return
+        }
+        val state = c.playbackState?.state
+        val active = state == PlaybackState.STATE_PLAYING || state == PlaybackState.STATE_PAUSED ||
+            state == PlaybackState.STATE_BUFFERING
+        // Some players publish no track title; fall back to the app's name rather than hiding the controls.
+        val title = c.metadata?.getString(MediaMetadata.METADATA_KEY_TITLE)?.takeIf { it.isNotBlank() }
+            ?: if (active) appLabel(c.packageName) else null
+        if (title == null) {
             NotificationStore.setMedia(null)
             return
         }

@@ -79,7 +79,9 @@ class LauncherPrefs(context: Context) {
     private fun encodeFolders(folders: List<AppFolder>): String =
         JSONArray().apply {
             folders.forEach { f ->
-                put(JSONObject().put("id", f.id).put("name", f.name).put("apps", JSONArray(f.appKeys)))
+                put(
+                    JSONObject().put("id", f.id).put("name", f.name).put("apps", JSONArray(f.appKeys)).put("sort", f.sort.name),
+                )
             }
         }.toString()
 
@@ -90,7 +92,12 @@ class LauncherPrefs(context: Context) {
             (0 until array.length()).map { i ->
                 val o = array.getJSONObject(i)
                 val apps = o.getJSONArray("apps")
-                AppFolder(o.getString("id"), o.getString("name"), (0 until apps.length()).map { apps.getString(it) })
+                AppFolder(
+                    id = o.getString("id"),
+                    name = o.getString("name"),
+                    appKeys = (0 until apps.length()).map { apps.getString(it) },
+                    sort = runCatching { FolderSort.valueOf(o.optString("sort")) }.getOrDefault(FolderSort.A_Z),
+                )
             }
         }.getOrDefault(emptyList())
     }

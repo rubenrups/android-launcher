@@ -351,6 +351,7 @@ private fun FolderRow(entry: FolderEntry, isFavourite: Boolean, viewModel: Launc
     var open by remember { mutableStateOf(false) }
     var rename by remember { mutableStateOf(false) }
     var addApps by remember { mutableStateOf(false) }
+    var sorting by remember { mutableStateOf(false) }
 
     Box {
         Row(
@@ -379,6 +380,10 @@ private fun FolderRow(entry: FolderEntry, isFavourite: Boolean, viewModel: Launc
                 menuOpen = false
                 addApps = true
             })
+            DropdownMenuItem(text = { Text("Sort apps…") }, onClick = {
+                menuOpen = false
+                sorting = true
+            })
             DropdownMenuItem(text = { Text("Rename") }, onClick = {
                 menuOpen = false
                 rename = true
@@ -392,6 +397,7 @@ private fun FolderRow(entry: FolderEntry, isFavourite: Boolean, viewModel: Launc
 
     if (open) FolderDialog(entry, viewModel, onDismiss = { open = false })
     if (addApps) AppPickerDialog(entry.folder.id, viewModel, onDismiss = { addApps = false })
+    if (sorting) FolderSortDialog(entry, viewModel, onDismiss = { sorting = false })
     if (rename) {
         NameDialog(
             title = "Rename folder",

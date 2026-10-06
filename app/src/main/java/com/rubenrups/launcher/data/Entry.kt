@@ -2,7 +2,19 @@ package com.rubenrups.launcher.data
 
 const val FOLDER_PREFIX = "folder:"
 
-data class AppFolder(val id: String, val name: String, val appKeys: List<String>) {
+enum class FolderSort(val label: String) {
+    A_Z("A–Z"),
+    Z_A("Z–A"),
+    MANUAL("Manual"),
+}
+
+data class AppFolder(
+    val id: String,
+    val name: String,
+    /** Membership, and the display order when [sort] is [FolderSort.MANUAL]. */
+    val appKeys: List<String>,
+    val sort: FolderSort = FolderSort.A_Z,
+) {
     /** Key used in the favourites list; app keys are component names so can never collide with this. */
     val key: String get() = FOLDER_PREFIX + id
 }
@@ -31,4 +43,15 @@ data class FolderEntry(val folder: AppFolder, val apps: List<AppInfo>) : Entry {
     override val key: String get() = folder.key
     override val label: String get() = folder.name
     override val letter: Char get() = letterOf(folder.name)
+}
+
+/** Builds the displayable folder: installed apps only, in the folder's chosen order. */
+fun AppFolder.resolve(byKey: Map<String, AppInfo>): FolderEntry {
+    val apps = appKeys.mapNotNull { byKey[it] }
+    val ordered = when (sort) {
+        FolderSort.A_Z -> apps.sortedBy { it.label.lowercase() }
+        FolderSort.Z_A -> apps.sortedByDescending { it.label.lowercase() }
+        FolderSort.MANUAL -> apps
+    }
+    return FolderEntry(this, ordered)
 }

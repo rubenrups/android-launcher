@@ -8,6 +8,8 @@ import com.rubenrups.launcher.data.AppFolder
 import com.rubenrups.launcher.data.AppInfo
 import com.rubenrups.launcher.data.Entry
 import com.rubenrups.launcher.data.FolderEntry
+import com.rubenrups.launcher.data.FolderSort
+import com.rubenrups.launcher.data.resolve
 import com.rubenrups.launcher.data.AppRepository
 import com.rubenrups.launcher.data.IconPack
 import com.rubenrups.launcher.data.LauncherPrefs
@@ -52,7 +54,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 val folder = folders[key]
                 val app = byKey[key]
                 if (folder != null) {
-                    result.add(FolderEntry(folder, folder.appKeys.mapNotNull { byKey[it] }))
+                    result.add(folder.resolve(byKey))
                 } else if (app != null) {
                     result.add(AppEntry(app))
                 }
@@ -66,7 +68,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             val byKey = apps.associateBy { it.key }
             val inFolder = folders.flatMapTo(HashSet()) { it.appKeys }
             val all = ArrayList<Entry>()
-            folders.forEach { f -> all.add(FolderEntry(f, f.appKeys.mapNotNull { byKey[it] })) }
+            folders.forEach { f -> all.add(f.resolve(byKey)) }
             apps.filter { it.key !in inFolder }.forEach { all.add(AppEntry(it)) }
             // Folders pin to the top (by name); loose apps follow in A-Z order.
             val sortedFolders = all.filterIsInstance<FolderEntry>().sortedBy { it.label.lowercase() }
@@ -160,6 +162,35 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun removeFromFolder(app: AppInfo) = update { s ->
         s.copy(folders = s.folders.map { it.copy(appKeys = it.appKeys - app.key) })
+    }
+
+    /**
+     * Switching to Manual freezes the order you currently see, so nothing jumps around;
+     * from there [swapInFolder] moves apps one step at a time.
+     */
+    fun setFolderSort(entry: FolderEntry, sort: FolderSort) = update { s ->
+        s.copy(folders = s.folders.map { f ->
+            when {
+                f.id != entry.folder.id -> f
+                sort == FolderSort.MANUAL -> {
+                    val shown = entry.apps.map { it.key }
+                    f.copy(sort = sort, appKeys = shown + (f.appKeys - shown.toSet()))
+                }
+                else -> f.copy(sort = sort)
+            }
+        })
+    }
+
+    fun swapInFolder(folderId: String, keyA: String, keyB: String) = update { s ->
+        s.copy(folders = s.folders.map { f ->
+            val i = f.appKeys.indexOf(keyA)
+            val j = f.appKeys.indexOf(keyB)
+            if (f.id != folderId || i < 0 || j < 0) {
+                f
+            } else {
+                f.copy(appKeys = f.appKeys.toMutableList().apply { this[i] = keyB; this[j] = keyA })
+            }
+        })
     }
 
     fun renameFolder(folderId: String, name: String) = update { s ->

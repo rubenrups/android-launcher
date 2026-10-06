@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
@@ -62,6 +63,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -107,7 +109,10 @@ fun HomeScreen(
     val listenerConnected by NotificationStore.listenerConnected.collectAsStateWithLifecycle()
     val badgeCounts = remember(notifications) { notifications.groupingBy { it.packageName }.eachCount() }
     var editMode by remember { mutableStateOf(false) }
+    // Where a long-press landed; non-null while the home-screen menu is showing.
+    var homeMenuAt by remember { mutableStateOf<Offset?>(null) }
     val listScroll = rememberScrollState()
+    val favouriteKeys = remember(favourites) { favourites.mapTo(HashSet()) { it.key } }
 
     val currentSettings by rememberUpdatedState(settings)
     val currentOpenDrawer by rememberUpdatedState(onOpenDrawer)
@@ -120,7 +125,7 @@ fun HomeScreen(
                 // Long-press on empty space opens settings (child rows consume their own presses).
                 .pointerInput(editMode) {
                     if (editMode) return@pointerInput
-                    detectTapGestures(onLongPress = { onOpenSettings() })
+                    detectTapGestures(onLongPress = { homeMenuAt = it })
                 }
                 // Swipe up -> drawer, swipe down -> configurable action.
                 .pointerInput(editMode) {
@@ -184,6 +189,7 @@ fun HomeScreen(
                         favourites = favourites,
                         badgeCounts = badgeCounts,
                         settings = settings,
+                        favouriteKeys = favouriteKeys,
                         viewModel = viewModel,
                         editMode = editMode,
                         onEditModeChange = { editMode = it },
@@ -193,6 +199,33 @@ fun HomeScreen(
                 }
             }
             if (settings.alignEnd) Spacer(Modifier.height(8.dp))
+        }
+
+        homeMenuAt?.let { at ->
+            // A zero-size anchor at the finger, so the menu pops up where you pressed.
+            Box(Modifier.offset { IntOffset(at.x.roundToInt(), at.y.roundToInt()) }) {
+                DropdownMenu(expanded = true, onDismissRequest = { homeMenuAt = null }) {
+                    DropdownMenuItem(text = { Text("Settings") }, onClick = {
+                        homeMenuAt = null
+                        onOpenSettings()
+                    })
+                    if (favourites.isNotEmpty()) {
+                        DropdownMenuItem(text = { Text("Reorder favourites") }, onClick = {
+                            homeMenuAt = null
+                            editMode = true
+                        })
+                    }
+                    DropdownMenuItem(text = { Text("Change wallpaper") }, onClick = {
+                        homeMenuAt = null
+                        runCatching {
+                            context.startActivity(
+                                Intent.createChooser(Intent(Intent.ACTION_SET_WALLPAPER), "Wallpaper")
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        }
+                    })
+                }
+            }
         }
 
         if (settings.showSearchButton && !editMode) {
@@ -281,6 +314,7 @@ private fun FavouritesList(
     favourites: List<Entry>,
     badgeCounts: Map<String, Int>,
     settings: LauncherSettings,
+    favouriteKeys: Set<String>,
     viewModel: LauncherViewModel,
     editMode: Boolean,
     onEditModeChange: (Boolean) -> Unit,
@@ -296,6 +330,7 @@ private fun FavouritesList(
     var expandedKeys by remember { mutableStateOf(setOf<String>()) }
     var renameFolderKey by remember { mutableStateOf<String?>(null) }
     var addAppsFolderId by remember { mutableStateOf<String?>(null) }
+    var sortFolderKey by remember { mutableStateOf<String?>(null) }
     val alignment = if (settings.alignEnd) Alignment.End else Alignment.Start
 
     Column(Modifier.fillMaxWidth(), horizontalAlignment = alignment) {
@@ -361,10 +396,11 @@ private fun FavouritesList(
                         },
                         onRenameFolder = { renameFolderKey = entry.key },
                         onAddApps = { (entry as? FolderEntry)?.let { addAppsFolderId = it.folder.id } },
+                        onSortApps = { sortFolderKey = entry.key },
                     )
                     if (entry is FolderEntry && expanded) {
                         entry.apps.forEach { app ->
-                            FolderChildRow(app, settings, iconSize, rowHeight, viewModel)
+                            FolderChildRow(app, app.key in favouriteKeys, settings, iconSize, rowHeight, viewModel)
                         }
                     }
                 }
@@ -373,6 +409,9 @@ private fun FavouritesList(
         Spacer(Modifier.height(bottomPadding))
     }
 
+    favourites.filterIsInstance<FolderEntry>().firstOrNull { it.key == sortFolderKey }?.let { folder ->
+        FolderSortDialog(folder, viewModel, onDismiss = { sortFolderKey = null })
+    }
     addAppsFolderId?.let { id ->
         AppPickerDialog(id, viewModel, onDismiss = { addAppsFolderId = null })
     }
@@ -406,6 +445,7 @@ private fun FavouriteRow(
     onToggleFolder: () -> Unit,
     onRenameFolder: () -> Unit,
     onAddApps: () -> Unit,
+    onSortApps: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val alignEnd = settings.alignEnd
@@ -487,6 +527,10 @@ private fun FavouriteRow(
                         menuOpen = false
                         onAddApps()
                     })
+                    DropdownMenuItem(text = { Text("Sort apps…") }, onClick = {
+                        menuOpen = false
+                        onSortApps()
+                    })
                     DropdownMenuItem(text = { Text("Rename") }, onClick = {
                         menuOpen = false
                         onRenameFolder()
@@ -513,6 +557,7 @@ private fun folderPreview(entry: FolderEntry): String {
 @Composable
 private fun FolderChildRow(
     app: AppInfo,
+    isFavourite: Boolean,
     settings: LauncherSettings,
     iconSize: androidx.compose.ui.unit.Dp,
     rowHeight: androidx.compose.ui.unit.Dp,
@@ -541,6 +586,13 @@ private fun FolderChildRow(
             if (settings.showIcons && settings.alignEnd) AppIcon(app, viewModel, iconSize * 0.8f)
         }
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                text = { Text(if (isFavourite) "Remove from favourites" else "Add to favourites") },
+                onClick = {
+                    menuOpen = false
+                    if (isFavourite) viewModel.removeFavourite(app) else viewModel.addFavourite(app)
+                },
+            )
             DropdownMenuItem(text = { Text("Remove from folder") }, onClick = {
                 menuOpen = false
                 viewModel.removeFromFolder(app)

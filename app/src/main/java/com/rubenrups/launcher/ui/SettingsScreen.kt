@@ -1,5 +1,8 @@
 package com.rubenrups.launcher.ui
 
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -27,14 +30,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.data.SwipeAction
+import com.rubenrups.launcher.notifications.NotificationStore
 
 @Composable
 fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val scroll = rememberScrollState()
+    val context = LocalContext.current
+    val listenerConnected by NotificationStore.listenerConnected.collectAsStateWithLifecycle()
     val hidden by viewModel.hiddenApps.collectAsStateWithLifecycle()
     // Queried once per open; installing a pack while settings are open needs a reopen.
     val iconPacks = remember { viewModel.installedIconPacks() }
@@ -73,6 +80,27 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
             value = settings.favouriteTextSp.toFloat(),
             onValueChange = { v -> viewModel.update { it.copy(favouriteTextSp = v.toInt()) } },
             valueRange = 24f..48f,
+        )
+
+        Section("Notifications & media")
+        Text(
+            if (listenerConnected) "Notification access: connected ✓" else "Notification access: not connected",
+            color = Color.White,
+            fontSize = 16.sp,
+            modifier = Modifier.padding(vertical = 8.dp),
+        )
+        ActionRow("Open notification access settings") {
+            context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+        ActionRow("Open app info") {
+            context.startActivity(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            )
+        }
+        Hint(
+            "The media player and notification list need notification access. If the switch is greyed out " +
+                "(common for apps installed from a file), open App info → ⋮ menu → Allow restricted settings, then try again."
         )
 
         Section("Swipe down on home")
@@ -118,6 +146,16 @@ private fun Section(title: String) {
 
 @Composable
 private fun Label(text: String) = Text(text, color = Color.White, fontSize = 16.sp, modifier = Modifier.padding(top = 8.dp))
+
+@Composable
+private fun ActionRow(label: String, onClick: () -> Unit) {
+    Text(
+        label,
+        color = Color.White,
+        fontSize = 16.sp,
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 12.dp),
+    )
+}
 
 @Composable
 private fun Hint(text: String) = Text(text, color = Color.White.copy(alpha = 0.55f), fontSize = 13.sp, modifier = Modifier.padding(vertical = 8.dp))
