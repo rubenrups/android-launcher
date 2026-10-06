@@ -12,8 +12,21 @@ android {
         applicationId = "com.rubenrups.launcher"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
+        // CI builds count upwards so each one is a valid update over the last.
+        versionCode = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
         versionName = "0.1.0"
+    }
+
+    // A fixed debug key. Without it every CI machine generates its own random one, and Android refuses
+    // to update an installed app with a build signed by a different key ("App not installed").
+    // This key is deliberately public: it only signs debug builds.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
     }
 
     buildTypes {
