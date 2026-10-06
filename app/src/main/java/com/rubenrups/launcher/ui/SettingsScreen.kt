@@ -51,10 +51,20 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
             Text("Done", color = Color.White, fontSize = 16.sp, modifier = Modifier.clickable(onClick = onClose).padding(8.dp))
         }
 
+        Section("Layout")
+        ChoiceRow("Niagara: left-aligned, with icons", selected = !settings.alignEnd && settings.showIcons) {
+            viewModel.update { it.copy(alignEnd = false, showIcons = true, favouriteTextSp = 22) }
+        }
+        ChoiceRow("Classic: right-aligned, large text", selected = settings.alignEnd && !settings.showIcons) {
+            viewModel.update { it.copy(alignEnd = true, showIcons = false, favouriteTextSp = 34) }
+        }
+
         Section("Home screen")
         SwitchRow("Show clock", settings.showClock) { v -> viewModel.update { it.copy(showClock = v) } }
         SwitchRow("Show notifications", settings.showNotifications) { v -> viewModel.update { it.copy(showNotifications = v) } }
         SwitchRow("Show media player", settings.showMedia) { v -> viewModel.update { it.copy(showMedia = v) } }
+        SwitchRow("Show app icons", settings.showIcons) { v -> viewModel.update { it.copy(showIcons = v) } }
+        SwitchRow("Show search button", settings.showSearchButton) { v -> viewModel.update { it.copy(showSearchButton = v) } }
         SwitchRow("Align to the right", settings.alignEnd) { v -> viewModel.update { it.copy(alignEnd = v) } }
         Label("Favourites text size: ${settings.favouriteTextSp}sp")
         Slider(

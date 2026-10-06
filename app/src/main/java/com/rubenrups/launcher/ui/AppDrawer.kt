@@ -32,7 +32,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -42,8 +41,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -56,6 +53,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -83,18 +81,12 @@ fun AppDrawer(viewModel: LauncherViewModel) {
     val drawerEntries by viewModel.drawerEntries.collectAsStateWithLifecycle()
     val favourites by viewModel.favourites.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
-    val focusSearch by viewModel.focusSearch.collectAsStateWithLifecycle()
     val favouriteKeys = remember(favourites) { favourites.mapTo(HashSet()) { it.key } }
     var query by remember { mutableStateOf("") }
     var activeLetter by remember { mutableStateOf<Char?>(null) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    val searchFocus = remember { FocusRequester() }
     val currentClose by rememberUpdatedState({ viewModel.closeDrawer() })
-
-    LaunchedEffect(focusSearch) {
-        if (focusSearch) searchFocus.requestFocus()
-    }
 
     // Swipe down to close, but only once the list has nothing left to scroll upwards:
     // the leftover ("unconsumed") downward drag is what we measure.
@@ -191,7 +183,7 @@ fun AppDrawer(viewModel: LauncherViewModel) {
                     cursorColor = Color.White,
                 ),
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth().padding(16.dp).focusRequester(searchFocus),
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
             )
         }
 
@@ -356,13 +348,13 @@ private fun FolderRow(entry: FolderEntry, isFavourite: Boolean, viewModel: Launc
 }
 
 @Composable
-internal fun AppIcon(app: AppInfo, viewModel: LauncherViewModel) {
-    val sizePx = with(LocalDensity.current) { 36.dp.roundToPx() }
+internal fun AppIcon(app: AppInfo, viewModel: LauncherViewModel, size: Dp = 36.dp) {
+    val sizePx = with(LocalDensity.current) { size.roundToPx() }
     val iconVersion by viewModel.iconVersion.collectAsStateWithLifecycle()
     val icon by produceState<ImageBitmap?>(null, app.key, iconVersion) {
         value = withContext(Dispatchers.Default) { viewModel.repository.loadIcon(app, sizePx) }
     }
-    Box(Modifier.size(36.dp)) {
+    Box(Modifier.size(size)) {
         icon?.let { Image(bitmap = it, contentDescription = null, modifier = Modifier.fillMaxSize()) }
     }
 }

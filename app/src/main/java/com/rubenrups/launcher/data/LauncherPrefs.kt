@@ -19,12 +19,18 @@ data class LauncherSettings(
     val showClock: Boolean = true,
     val showNotifications: Boolean = true,
     val showMedia: Boolean = true,
-    val favouriteTextSp: Int = 34,
-    val alignEnd: Boolean = true,
+    val favouriteTextSp: Int = 22,
+    /** Right-aligned lists sit at the bottom (thumb reach); left-aligned lists flow from the top, like Niagara. */
+    val alignEnd: Boolean = false,
+    val showIcons: Boolean = true,
+    val showSearchButton: Boolean = true,
     val swipeDown: SwipeAction = SwipeAction.NOTIFICATIONS,
     val iconPack: String? = null,
     val folders: List<AppFolder> = emptyList(),
 )
+
+/** How often each app was launched, plus the most recent one; feeds the search suggestions. */
+data class AppUsage(val counts: Map<String, Int> = emptyMap(), val last: String? = null)
 
 /** Persists favourites, hidden apps and user settings in SharedPreferences. */
 class LauncherPrefs(context: Context) {
@@ -33,6 +39,27 @@ class LauncherPrefs(context: Context) {
 
     private val _settings = MutableStateFlow(load())
     val settings: StateFlow<LauncherSettings> = _settings.asStateFlow()
+
+    private val _usage = MutableStateFlow(loadUsage())
+    val usage: StateFlow<AppUsage> = _usage.asStateFlow()
+
+    fun recordLaunch(key: String) {
+        val current = _usage.value
+        val next = AppUsage(current.counts + (key to ((current.counts[key] ?: 0) + 1)), key)
+        _usage.value = next
+        prefs.edit()
+            .putString(KEY_USAGE, JSONObject(next.counts).toString())
+            .putString(KEY_LAST_LAUNCHED, key)
+            .apply()
+    }
+
+    private fun loadUsage(): AppUsage {
+        val counts = runCatching {
+            val obj = JSONObject(prefs.getString(KEY_USAGE, null) ?: "{}")
+            obj.keys().asSequence().associateWith { obj.getInt(it) }
+        }.getOrDefault(emptyMap())
+        return AppUsage(counts, prefs.getString(KEY_LAST_LAUNCHED, null))
+    }
 
     fun update(transform: (LauncherSettings) -> LauncherSettings) {
         val next = transform(_settings.value)
@@ -46,8 +73,10 @@ class LauncherPrefs(context: Context) {
         showClock = prefs.getBoolean(KEY_SHOW_CLOCK, true),
         showNotifications = prefs.getBoolean(KEY_SHOW_NOTIFICATIONS, true),
         showMedia = prefs.getBoolean(KEY_SHOW_MEDIA, true),
-        favouriteTextSp = prefs.getInt(KEY_TEXT_SP, 34),
-        alignEnd = prefs.getBoolean(KEY_ALIGN_END, true),
+        favouriteTextSp = prefs.getInt(KEY_TEXT_SP, 22),
+        alignEnd = prefs.getBoolean(KEY_ALIGN_END, false),
+        showIcons = prefs.getBoolean(KEY_SHOW_ICONS, true),
+        showSearchButton = prefs.getBoolean(KEY_SHOW_SEARCH_BUTTON, true),
         swipeDown = runCatching { SwipeAction.valueOf(prefs.getString(KEY_SWIPE_DOWN, "").orEmpty()) }
             .getOrDefault(SwipeAction.NOTIFICATIONS),
         iconPack = prefs.getString(KEY_ICON_PACK, null),
@@ -63,6 +92,8 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_SHOW_MEDIA, s.showMedia)
             .putInt(KEY_TEXT_SP, s.favouriteTextSp)
             .putBoolean(KEY_ALIGN_END, s.alignEnd)
+            .putBoolean(KEY_SHOW_ICONS, s.showIcons)
+            .putBoolean(KEY_SHOW_SEARCH_BUTTON, s.showSearchButton)
             .putString(KEY_SWIPE_DOWN, s.swipeDown.name)
             .putString(KEY_ICON_PACK, s.iconPack)
             .putString(KEY_FOLDERS, encodeFolders(s.folders))
@@ -100,5 +131,9 @@ class LauncherPrefs(context: Context) {
         const val KEY_SWIPE_DOWN = "swipe_down"
         const val KEY_ICON_PACK = "icon_pack"
         const val KEY_FOLDERS = "folders"
+        const val KEY_SHOW_ICONS = "show_icons"
+        const val KEY_SHOW_SEARCH_BUTTON = "show_search_button"
+        const val KEY_USAGE = "usage_counts"
+        const val KEY_LAST_LAUNCHED = "last_launched"
     }
 }

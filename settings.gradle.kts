@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "NiagaraClone"
+rootProject.name = "RupsLauncher"
 include(":app")

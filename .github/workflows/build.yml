@@ -23,5 +23,5 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: niagara-clone-debug-apk
+          name: rups-launcher-debug-apk
           path: app/build/outputs/apk/debug/*.apk

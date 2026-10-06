@@ -30,6 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -158,9 +159,9 @@ fun FolderDialog(entry: FolderEntry, viewModel: LauncherViewModel, onDismiss: ()
 
 /** Rounded square standing in for a folder icon: shows how many apps it holds. */
 @Composable
-fun FolderGlyph(count: Int, modifier: Modifier = Modifier) {
+fun FolderGlyph(count: Int, modifier: Modifier = Modifier, size: Dp = 36.dp) {
     Box(
-        modifier.size(36.dp).background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(10.dp)),
+        modifier.size(size).background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(10.dp)),
         contentAlignment = Alignment.Center,
     ) {
         Text(count.toString(), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)

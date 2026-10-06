@@ -1,6 +1,11 @@
-# Niagara Clone
+# Rups Launcher
 
 A minimalist Android home-screen launcher inspired by Niagara Launcher, built with Kotlin and Jetpack Compose.
+
+## Features (v0.4)
+
+- Floating search button opens a dedicated search screen: pill bar, keyboard up, results with icons, and "Last opened" / "Frequently used" suggestions
+- Niagara-style layout by default: left-aligned list with app icons, battery % in the header, text shadows; folders expand in place. Settings → Layout switches back to the classic right-aligned look
 
 ## Features (v0.3)
 
@@ -27,7 +32,7 @@ A minimalist Android home-screen launcher inspired by Niagara Launcher, built wi
 ## Build
 
 CI builds a debug APK on every push. Open the repo's **Actions** tab, click the latest
-"Build debug APK" run, and download `niagara-clone-debug-apk` from the **Artifacts** section
+"Build debug APK" run, and download `rups-launcher-debug-apk` from the **Artifacts** section
 at the bottom of the run summary (a zip containing `app-debug.apk`).
 
 Locally, with Android Studio or the Android SDK installed:
@@ -37,7 +42,7 @@ Locally, with Android Studio or the Android SDK installed:
 adb install app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Then press Home and choose **Niagara Clone** as the default home app. For notifications and
+Then press Home and choose **Rups Launcher** as the default home app. For notifications and
 media, tap "Enable notification access" on the home screen and grant access.
 
 ## Layout

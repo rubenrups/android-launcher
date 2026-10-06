@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.rubenrups.launcher.data.AppEntry
 import com.rubenrups.launcher.data.AppFolder
+import com.rubenrups.launcher.data.AppUsage
 import com.rubenrups.launcher.data.AppInfo
 import com.rubenrups.launcher.data.Entry
 import com.rubenrups.launcher.data.FolderEntry
@@ -29,6 +30,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val prefs = LauncherPrefs(application)
 
     val settings: StateFlow<LauncherSettings> = prefs.settings
+    val usage: StateFlow<AppUsage> = prefs.usage
     val iconVersion: StateFlow<Int> = repository.iconVersion
 
     /** Apps the user hasn't hidden: what the drawer and search show. */
@@ -74,8 +76,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _drawerOpen = MutableStateFlow(false)
     val drawerOpen: StateFlow<Boolean> = _drawerOpen.asStateFlow()
 
-    private val _focusSearch = MutableStateFlow(false)
-    val focusSearch: StateFlow<Boolean> = _focusSearch.asStateFlow()
+    private val _searchOpen = MutableStateFlow(false)
+    val searchOpen: StateFlow<Boolean> = _searchOpen.asStateFlow()
 
     private val _settingsOpen = MutableStateFlow(false)
     val settingsOpen: StateFlow<Boolean> = _settingsOpen.asStateFlow()
@@ -86,21 +88,20 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun openDrawer(focusSearch: Boolean = false) {
-        _focusSearch.value = focusSearch
-        _drawerOpen.value = true
-    }
+    fun openDrawer() { _drawerOpen.value = true }
 
-    fun closeDrawer() {
-        _drawerOpen.value = false
-        _focusSearch.value = false
-    }
+    fun closeDrawer() { _drawerOpen.value = false }
+
+    fun openSearch() { _searchOpen.value = true }
+
+    fun closeSearch() { _searchOpen.value = false }
 
     fun setSettingsOpen(open: Boolean) { _settingsOpen.value = open }
 
     /** Back to the plain home screen (Home button pressed while we are already on top). */
     fun closeAll() {
         closeDrawer()
+        closeSearch()
         _settingsOpen.value = false
     }
 
@@ -169,7 +170,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun installedIconPacks(): List<IconPack> = repository.iconPacks.installedPacks()
 
     fun launch(app: AppInfo) {
+        prefs.recordLaunch(app.key)
         repository.launch(app)
         closeDrawer()
+        closeSearch()
     }
 }
