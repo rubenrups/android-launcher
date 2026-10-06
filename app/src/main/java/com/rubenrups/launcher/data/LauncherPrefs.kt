@@ -20,7 +20,7 @@ data class LauncherSettings(
     val showNotifications: Boolean = true,
     val showMedia: Boolean = true,
     val favouriteTextSp: Int = 22,
-    /** Right-aligned lists sit at the bottom (thumb reach); left-aligned lists flow from the top, like Niagara. */
+    /** Right-aligned lists sit at the bottom (thumb reach); left-aligned lists flow from the top, as on most minimal launchers. */
     val alignEnd: Boolean = false,
     val showIcons: Boolean = true,
     val showSearchButton: Boolean = true,
@@ -29,9 +29,6 @@ data class LauncherSettings(
     val folders: List<AppFolder> = emptyList(),
 )
 
-/** How often each app was launched, plus the most recent one; feeds the search suggestions. */
-data class AppUsage(val counts: Map<String, Int> = emptyMap(), val last: String? = null)
-
 /** Persists favourites, hidden apps and user settings in SharedPreferences. */
 class LauncherPrefs(context: Context) {
 
@@ -39,27 +36,6 @@ class LauncherPrefs(context: Context) {
 
     private val _settings = MutableStateFlow(load())
     val settings: StateFlow<LauncherSettings> = _settings.asStateFlow()
-
-    private val _usage = MutableStateFlow(loadUsage())
-    val usage: StateFlow<AppUsage> = _usage.asStateFlow()
-
-    fun recordLaunch(key: String) {
-        val current = _usage.value
-        val next = AppUsage(current.counts + (key to ((current.counts[key] ?: 0) + 1)), key)
-        _usage.value = next
-        prefs.edit()
-            .putString(KEY_USAGE, JSONObject(next.counts).toString())
-            .putString(KEY_LAST_LAUNCHED, key)
-            .apply()
-    }
-
-    private fun loadUsage(): AppUsage {
-        val counts = runCatching {
-            val obj = JSONObject(prefs.getString(KEY_USAGE, null) ?: "{}")
-            obj.keys().asSequence().associateWith { obj.getInt(it) }
-        }.getOrDefault(emptyMap())
-        return AppUsage(counts, prefs.getString(KEY_LAST_LAUNCHED, null))
-    }
 
     fun update(transform: (LauncherSettings) -> LauncherSettings) {
         val next = transform(_settings.value)
@@ -133,7 +109,5 @@ class LauncherPrefs(context: Context) {
         const val KEY_FOLDERS = "folders"
         const val KEY_SHOW_ICONS = "show_icons"
         const val KEY_SHOW_SEARCH_BUTTON = "show_search_button"
-        const val KEY_USAGE = "usage_counts"
-        const val KEY_LAST_LAUNCHED = "last_launched"
     }
 }

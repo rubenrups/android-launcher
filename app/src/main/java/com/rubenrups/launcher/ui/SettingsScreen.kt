@@ -52,10 +52,10 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
         }
 
         Section("Layout")
-        ChoiceRow("Niagara: left-aligned, with icons", selected = !settings.alignEnd && settings.showIcons) {
+        ChoiceRow("Left-aligned, with icons", selected = !settings.alignEnd && settings.showIcons) {
             viewModel.update { it.copy(alignEnd = false, showIcons = true, favouriteTextSp = 22) }
         }
-        ChoiceRow("Classic: right-aligned, large text", selected = settings.alignEnd && !settings.showIcons) {
+        ChoiceRow("Right-aligned, large text", selected = settings.alignEnd && !settings.showIcons) {
             viewModel.update { it.copy(alignEnd = true, showIcons = false, favouriteTextSp = 34) }
         }
 

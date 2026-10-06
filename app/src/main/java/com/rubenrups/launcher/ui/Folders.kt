@@ -9,12 +9,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Surface
@@ -34,6 +38,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.data.AppFolder
 import com.rubenrups.launcher.data.AppInfo
@@ -102,6 +107,7 @@ private fun PickerRow(label: String, onClick: () -> Unit) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun FolderDialog(entry: FolderEntry, viewModel: LauncherViewModel, onDismiss: () -> Unit) {
+    var picking by remember { mutableStateOf(false) }
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(24.dp), color = Color(0xF21A1A1A)) {
             Column(Modifier.padding(vertical = 16.dp).verticalScroll(rememberScrollState())) {
@@ -114,7 +120,7 @@ fun FolderDialog(entry: FolderEntry, viewModel: LauncherViewModel, onDismiss: ()
                 )
                 if (entry.apps.isEmpty()) {
                     Text(
-                        "Empty. Long-press an app in the drawer and choose \"Add to folder…\".",
+                        "This folder is empty.",
                         color = Color.White.copy(alpha = 0.6f),
                         fontSize = 14.sp,
                         modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
@@ -152,9 +158,11 @@ fun FolderDialog(entry: FolderEntry, viewModel: LauncherViewModel, onDismiss: ()
                         }
                     }
                 }
+                PickerRow("+ Add apps") { picking = true }
             }
         }
     }
+    if (picking) AppPickerDialog(entry.folder.id, viewModel, onDismiss = { picking = false })
 }
 
 /** Rounded square standing in for a folder icon: shows how many apps it holds. */
@@ -165,5 +173,56 @@ fun FolderGlyph(count: Int, modifier: Modifier = Modifier, size: Dp = 36.dp) {
         contentAlignment = Alignment.Center,
     ) {
         Text(count.toString(), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+/**
+ * Tick the apps that belong in a folder. Changes apply immediately, so "Done" just closes the dialog.
+ * An app lives in one folder, so ticking one that is elsewhere moves it (and says where it came from).
+ */
+@Composable
+fun AppPickerDialog(folderId: String, viewModel: LauncherViewModel, onDismiss: () -> Unit) {
+    val apps by viewModel.visibleApps.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val folder = settings.folders.firstOrNull { it.id == folderId } ?: return
+
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(24.dp), color = Color(0xF21A1A1A)) {
+            Column(Modifier.heightIn(max = 560.dp).padding(top = 16.dp)) {
+                Text(
+                    "Add apps to ${folder.name}",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                )
+                LazyColumn(Modifier.weight(1f, fill = false)) {
+                    items(apps, key = { it.key }) { app ->
+                        val inThis = app.key in folder.appKeys
+                        val elsewhere = settings.folders.firstOrNull { it.id != folderId && app.key in it.appKeys }
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (inThis) viewModel.removeFromFolder(app) else viewModel.addToFolder(app, folderId)
+                                }
+                                .padding(horizontal = 24.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        ) {
+                            AppIcon(app, viewModel, size = 32.dp)
+                            Column(Modifier.weight(1f)) {
+                                Text(app.label, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Light, maxLines = 1)
+                                elsewhere?.let {
+                                    Text("In ${it.name}", color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp)
+                                }
+                            }
+                            Checkbox(checked = inThis, onCheckedChange = null)
+                        }
+                    }
+                }
+                TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End).padding(8.dp)) { Text("Done") }
+            }
+        }
     }
 }

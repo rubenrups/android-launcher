@@ -16,13 +16,17 @@ import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlin.math.roundToInt
 
 /** Source of truth for installed, launchable apps. Keeps itself fresh via [LauncherApps.Callback]. */
 class AppRepository(private val context: Context) {
 
     private val launcherApps = context.getSystemService(LauncherApps::class.java)
     private val activityInfos = HashMap<String, LauncherActivityInfo>()
-    private val iconCache = LruCache<String, ImageBitmap>(256)
+    private val iconCache = LruCache<String, ImageBitmap>(1024)
+
+    /** Icons are rendered once at this size (48dp) and scaled down by the UI, so every screen can share the cache. */
+    private val iconPx = (48 * context.resources.displayMetrics.density).roundToInt()
 
     val iconPacks = IconPackManager(context)
     private var iconPack: String? = null
@@ -93,11 +97,11 @@ class AppRepository(private val context: Context) {
     }
 
     /** Blocking; call from a background dispatcher. */
-    fun loadIcon(app: AppInfo, sizePx: Int): ImageBitmap? {
+    fun loadIcon(app: AppInfo): ImageBitmap? {
         iconCache.get(app.key)?.let { return it }
         val info = synchronized(activityInfos) { activityInfos[app.key] } ?: return null
         val themed = iconPack?.let { iconPacks.iconFor(it, app.component) }
-        val bitmap: Bitmap = (themed ?: info.getIcon(0)).toBitmap(sizePx, sizePx)
+        val bitmap: Bitmap = (themed ?: info.getIcon(0)).toBitmap(iconPx, iconPx)
         return bitmap.asImageBitmap().also { iconCache.put(app.key, it) }
     }
 }

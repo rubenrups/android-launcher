@@ -96,8 +96,7 @@ private val HomeTextStyle = TextStyle(
 @Composable
 fun HomeScreen(
     viewModel: LauncherViewModel,
-    onOpenDrawer: () -> Unit,
-    onOpenSearch: () -> Unit,
+    onOpenDrawer: (focusSearch: Boolean) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -112,7 +111,6 @@ fun HomeScreen(
 
     val currentSettings by rememberUpdatedState(settings)
     val currentOpenDrawer by rememberUpdatedState(onOpenDrawer)
-    val currentOpenSearch by rememberUpdatedState(onOpenSearch)
 
     Box(Modifier.fillMaxSize()) {
         Column(
@@ -135,11 +133,11 @@ fun HomeScreen(
                         onDragEnd = {
                             if (abs(dy) > abs(dx) * 1.2f) {
                                 if (dy < -SWIPE_THRESHOLD_PX) {
-                                    currentOpenDrawer()
+                                    currentOpenDrawer(false)
                                 } else if (dy > SWIPE_THRESHOLD_PX) {
                                     when (currentSettings.swipeDown) {
                                         SwipeAction.NOTIFICATIONS -> expandNotificationShade(context)
-                                        SwipeAction.SEARCH -> currentOpenSearch()
+                                        SwipeAction.SEARCH -> currentOpenDrawer(true)
                                         SwipeAction.NONE -> Unit
                                     }
                                 }
@@ -199,7 +197,7 @@ fun HomeScreen(
 
         if (settings.showSearchButton && !editMode) {
             SearchButton(
-                onClick = onOpenSearch,
+                onClick = { onOpenDrawer(true) },
                 modifier = Modifier
                     .align(if (settings.alignEnd) Alignment.BottomStart else Alignment.BottomEnd)
                     .windowInsetsPadding(WindowInsets.systemBars)
@@ -297,6 +295,7 @@ private fun FavouritesList(
     var dragOffset by remember { mutableFloatStateOf(0f) }
     var expandedKeys by remember { mutableStateOf(setOf<String>()) }
     var renameFolderKey by remember { mutableStateOf<String?>(null) }
+    var addAppsFolderId by remember { mutableStateOf<String?>(null) }
     val alignment = if (settings.alignEnd) Alignment.End else Alignment.Start
 
     Column(Modifier.fillMaxWidth(), horizontalAlignment = alignment) {
@@ -361,6 +360,7 @@ private fun FavouritesList(
                             expandedKeys = if (entry.key in expandedKeys) expandedKeys - entry.key else expandedKeys + entry.key
                         },
                         onRenameFolder = { renameFolderKey = entry.key },
+                        onAddApps = { (entry as? FolderEntry)?.let { addAppsFolderId = it.folder.id } },
                     )
                     if (entry is FolderEntry && expanded) {
                         entry.apps.forEach { app ->
@@ -373,6 +373,9 @@ private fun FavouritesList(
         Spacer(Modifier.height(bottomPadding))
     }
 
+    addAppsFolderId?.let { id ->
+        AppPickerDialog(id, viewModel, onDismiss = { addAppsFolderId = null })
+    }
     favourites.filterIsInstance<FolderEntry>().firstOrNull { it.key == renameFolderKey }?.let { folder ->
         NameDialog(
             title = "Rename folder",
@@ -402,6 +405,7 @@ private fun FavouriteRow(
     onReorder: () -> Unit,
     onToggleFolder: () -> Unit,
     onRenameFolder: () -> Unit,
+    onAddApps: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     val alignEnd = settings.alignEnd
@@ -479,6 +483,10 @@ private fun FavouriteRow(
                     viewModel.repository.openAppInfo(entry.app)
                 })
                 is FolderEntry -> {
+                    DropdownMenuItem(text = { Text("Add apps") }, onClick = {
+                        menuOpen = false
+                        onAddApps()
+                    })
                     DropdownMenuItem(text = { Text("Rename") }, onClick = {
                         menuOpen = false
                         onRenameFolder()

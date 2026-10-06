@@ -1,11 +1,13 @@
 # Rups Launcher
 
-A minimalist Android home-screen launcher inspired by Niagara Launcher, built with Kotlin and Jetpack Compose.
+A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 
-## Features (v0.4)
+## Features (v0.5)
 
-- Floating search button opens a dedicated search screen: pill bar, keyboard up, results with icons, and "Last opened" / "Frequently used" suggestions
-- Niagara-style layout by default: left-aligned list with app icons, battery % in the header, text shadows; folders expand in place. Settings → Layout switches back to the classic right-aligned look
+- Search button on the home screen opens the app drawer with the search field focused and the keyboard up
+- Folders are pinned to the top of the drawer; a "New folder" row and an "Add apps" picker make filling them quick
+- Left-aligned list with app icons, battery % in the header, text shadows; folders expand in place. Settings → Layout switches to a right-aligned, large-text look
+- Faster alphabet scroller: reacts instantly on touch, with pre-loaded icons
 
 ## Features (v0.3)
 

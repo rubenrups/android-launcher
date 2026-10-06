@@ -5,7 +5,6 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.rubenrups.launcher.data.AppEntry
 import com.rubenrups.launcher.data.AppFolder
-import com.rubenrups.launcher.data.AppUsage
 import com.rubenrups.launcher.data.AppInfo
 import com.rubenrups.launcher.data.Entry
 import com.rubenrups.launcher.data.FolderEntry
@@ -30,7 +29,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val prefs = LauncherPrefs(application)
 
     val settings: StateFlow<LauncherSettings> = prefs.settings
-    val usage: StateFlow<AppUsage> = prefs.usage
     val iconVersion: StateFlow<Int> = repository.iconVersion
 
     /** Apps the user hasn't hidden: what the drawer and search show. */
@@ -70,14 +68,18 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             val all = ArrayList<Entry>()
             folders.forEach { f -> all.add(FolderEntry(f, f.appKeys.mapNotNull { byKey[it] })) }
             apps.filter { it.key !in inFolder }.forEach { all.add(AppEntry(it)) }
-            all.sortedWith(compareBy<Entry>({ it.letter }, { it.label.lowercase() }))
+            // Folders pin to the top (by name); loose apps follow in A-Z order.
+            val sortedFolders = all.filterIsInstance<FolderEntry>().sortedBy { it.label.lowercase() }
+            val sortedApps = all.filterIsInstance<AppEntry>().sortedWith(compareBy({ it.letter }, { it.label.lowercase() }))
+            sortedFolders + sortedApps
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _drawerOpen = MutableStateFlow(false)
     val drawerOpen: StateFlow<Boolean> = _drawerOpen.asStateFlow()
 
-    private val _searchOpen = MutableStateFlow(false)
-    val searchOpen: StateFlow<Boolean> = _searchOpen.asStateFlow()
+    /** True when the drawer should open with the search field focused (search button, swipe-down action). */
+    private val _focusSearch = MutableStateFlow(false)
+    val focusSearch: StateFlow<Boolean> = _focusSearch.asStateFlow()
 
     private val _settingsOpen = MutableStateFlow(false)
     val settingsOpen: StateFlow<Boolean> = _settingsOpen.asStateFlow()
@@ -88,20 +90,21 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun openDrawer() { _drawerOpen.value = true }
+    fun openDrawer(focusSearch: Boolean = false) {
+        _focusSearch.value = focusSearch
+        _drawerOpen.value = true
+    }
 
-    fun closeDrawer() { _drawerOpen.value = false }
-
-    fun openSearch() { _searchOpen.value = true }
-
-    fun closeSearch() { _searchOpen.value = false }
+    fun closeDrawer() {
+        _drawerOpen.value = false
+        _focusSearch.value = false
+    }
 
     fun setSettingsOpen(open: Boolean) { _settingsOpen.value = open }
 
     /** Back to the plain home screen (Home button pressed while we are already on top). */
     fun closeAll() {
         closeDrawer()
-        closeSearch()
         _settingsOpen.value = false
     }
 
@@ -137,9 +140,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun unhide(app: AppInfo) = update { it.copy(hidden = it.hidden - app.key) }
 
     /** Creates a folder, optionally seeded with [firstApp]. An app lives in at most one folder. */
-    fun createFolder(name: String, firstApp: AppInfo? = null) = update { s ->
-        val cleaned = s.folders.map { f -> f.copy(appKeys = f.appKeys - firstApp?.key.orEmpty()) }
-        s.copy(folders = cleaned + AppFolder(UUID.randomUUID().toString(), name, listOfNotNull(firstApp?.key)))
+    fun createFolder(name: String, firstApp: AppInfo? = null): String {
+        val id = UUID.randomUUID().toString()
+        update { s ->
+            val cleaned = s.folders.map { f -> f.copy(appKeys = f.appKeys - firstApp?.key.orEmpty()) }
+            s.copy(folders = cleaned + AppFolder(id, name, listOfNotNull(firstApp?.key)))
+        }
+        return id
     }
 
     fun addToFolder(app: AppInfo, folderId: String) = update { s ->
@@ -170,9 +177,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun installedIconPacks(): List<IconPack> = repository.iconPacks.installedPacks()
 
     fun launch(app: AppInfo) {
-        prefs.recordLaunch(app.key)
         repository.launch(app)
         closeDrawer()
-        closeSearch()
     }
 }
