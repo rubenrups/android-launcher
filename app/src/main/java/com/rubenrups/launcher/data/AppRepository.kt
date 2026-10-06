@@ -24,6 +24,13 @@ class AppRepository(private val context: Context) {
     private val activityInfos = HashMap<String, LauncherActivityInfo>()
     private val iconCache = LruCache<String, ImageBitmap>(256)
 
+    val iconPacks = IconPackManager(context)
+    private var iconPack: String? = null
+
+    /** Bumped whenever cached icons are invalidated, so the UI knows to reload them. */
+    private val _iconVersion = MutableStateFlow(0)
+    val iconVersion: StateFlow<Int> = _iconVersion.asStateFlow()
+
     private val _apps = MutableStateFlow<List<AppInfo>>(emptyList())
     val apps: StateFlow<List<AppInfo>> = _apps.asStateFlow()
 
@@ -47,10 +54,21 @@ class AppRepository(private val context: Context) {
             activityInfos.clear()
             infos.forEach { activityInfos[it.componentName.flattenToString()] = it }
         }
-        iconCache.evictAll()
+        invalidateIcons()
         _apps.value = infos
             .map { AppInfo(it.label.toString(), it.componentName, it.user) }
             .sortedWith(compareBy({ it.letter }, { it.label.lowercase() }))
+    }
+
+    fun setIconPack(packageName: String?) {
+        if (packageName == iconPack) return
+        iconPack = packageName
+        invalidateIcons()
+    }
+
+    private fun invalidateIcons() {
+        iconCache.evictAll()
+        _iconVersion.value += 1
     }
 
     fun launch(app: AppInfo) {
@@ -78,7 +96,8 @@ class AppRepository(private val context: Context) {
     fun loadIcon(app: AppInfo, sizePx: Int): ImageBitmap? {
         iconCache.get(app.key)?.let { return it }
         val info = synchronized(activityInfos) { activityInfos[app.key] } ?: return null
-        val bitmap: Bitmap = info.getIcon(0).toBitmap(sizePx, sizePx)
+        val themed = iconPack?.let { iconPacks.iconFor(it, app.component) }
+        val bitmap: Bitmap = (themed ?: info.getIcon(0)).toBitmap(sizePx, sizePx)
         return bitmap.asImageBitmap().also { iconCache.put(app.key, it) }
     }
 }

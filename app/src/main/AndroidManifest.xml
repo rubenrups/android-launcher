@@ -3,6 +3,16 @@
 
     <!-- Required for ACTION_DELETE (uninstall) on API 28+ -->
     <uses-permission android:name="android.permission.REQUEST_DELETE_PACKAGES" />
+    <!-- Lets the swipe-down gesture open the notification shade -->
+    <uses-permission android:name="android.permission.EXPAND_STATUS_BAR" />
+
+    <!-- Package visibility: discover installed icon packs (ADW / Nova / Apex / GO) -->
+    <queries>
+        <intent><action android:name="org.adw.launcher.THEMES" /></intent>
+        <intent><action android:name="com.novalauncher.THEME" /></intent>
+        <intent><action android:name="com.anddoes.launcher.THEME" /></intent>
+        <intent><action android:name="com.gau.go.launcherex.theme" /></intent>
+    </queries>
 
     <application
         android:allowBackup="false"

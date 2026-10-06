@@ -27,7 +27,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.action == Intent.ACTION_MAIN && Intent.CATEGORY_HOME in (intent.categories ?: emptySet())) {
-            viewModel.setDrawerOpen(false)
+            viewModel.closeAll()
         }
     }
 }

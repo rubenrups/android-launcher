@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
@@ -31,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -39,10 +41,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -53,18 +59,25 @@ import com.rubenrups.launcher.data.AppInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
 
 private val SCRUBBER_LETTERS = listOf('#') + ('A'..'Z').toList()
 
 @Composable
-fun AppDrawer(viewModel: LauncherViewModel, onClose: () -> Unit) {
-    val allApps by viewModel.allApps.collectAsStateWithLifecycle()
+fun AppDrawer(viewModel: LauncherViewModel) {
+    val allApps by viewModel.visibleApps.collectAsStateWithLifecycle()
     val favourites by viewModel.favourites.collectAsStateWithLifecycle()
+    val focusSearch by viewModel.focusSearch.collectAsStateWithLifecycle()
     val favouriteKeys = remember(favourites) { favourites.mapTo(HashSet()) { it.key } }
     var query by remember { mutableStateOf("") }
     var activeLetter by remember { mutableStateOf<Char?>(null) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
+    val searchFocus = remember { FocusRequester() }
+
+    LaunchedEffect(focusSearch) {
+        if (focusSearch) searchFocus.requestFocus()
+    }
 
     val apps = remember(allApps, query) {
         if (query.isBlank()) allApps else allApps.filter { it.label.contains(query, ignoreCase = true) }
@@ -86,11 +99,7 @@ fun AppDrawer(viewModel: LauncherViewModel, onClose: () -> Unit) {
     ) {
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.weight(1f)) {
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier.weight(1f),
-                    reverseLayout = false,
-                ) {
+                LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
                     items(apps, key = { it.key }) { app ->
                         DrawerRow(app, isFavourite = app.key in favouriteKeys, viewModel = viewModel)
                     }
@@ -98,6 +107,7 @@ fun AppDrawer(viewModel: LauncherViewModel, onClose: () -> Unit) {
                 if (query.isBlank()) {
                     AlphabetScrubber(
                         letters = SCRUBBER_LETTERS,
+                        activeLetter = activeLetter,
                         onLetter = ::jumpTo,
                         onRelease = { activeLetter = null },
                         modifier = Modifier.fillMaxHeight().padding(end = 6.dp),
@@ -121,7 +131,7 @@ fun AppDrawer(viewModel: LauncherViewModel, onClose: () -> Unit) {
                     cursorColor = Color.White,
                 ),
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                modifier = Modifier.fillMaxWidth().padding(16.dp).focusRequester(searchFocus),
             )
         }
 
@@ -167,6 +177,10 @@ private fun DrawerRow(app: AppInfo, isFavourite: Boolean, viewModel: LauncherVie
                     if (isFavourite) viewModel.removeFavourite(app) else viewModel.addFavourite(app)
                 },
             )
+            DropdownMenuItem(text = { Text("Hide app") }, onClick = {
+                menuOpen = false
+                viewModel.hide(app)
+            })
             DropdownMenuItem(text = { Text("App info") }, onClick = {
                 menuOpen = false
                 viewModel.repository.openAppInfo(app)
@@ -182,7 +196,8 @@ private fun DrawerRow(app: AppInfo, isFavourite: Boolean, viewModel: LauncherVie
 @Composable
 private fun AppIcon(app: AppInfo, viewModel: LauncherViewModel) {
     val sizePx = with(LocalDensity.current) { 36.dp.roundToPx() }
-    val icon by produceState<ImageBitmap?>(null, app.key) {
+    val iconVersion by viewModel.iconVersion.collectAsStateWithLifecycle()
+    val icon by produceState<ImageBitmap?>(null, app.key, iconVersion) {
         value = withContext(Dispatchers.Default) { viewModel.repository.loadIcon(app, sizePx) }
     }
     Box(Modifier.size(36.dp)) {
@@ -190,18 +205,36 @@ private fun AppIcon(app: AppInfo, viewModel: LauncherViewModel) {
     }
 }
 
-/** A–Z strip along the right edge: tap or drag to jump through the list. */
+/**
+ * A–Z strip along the right edge: tap or drag to jump through the list.
+ * Letters near your finger bulge out and grow, and each new letter gives a haptic tick.
+ */
 @Composable
 private fun AlphabetScrubber(
     letters: List<Char>,
+    activeLetter: Char?,
     onLetter: (Char) -> Unit,
     onRelease: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val haptics = LocalHapticFeedback.current
+    var lastLetter by remember { mutableStateOf<Char?>(null) }
+
     fun pick(y: Float, height: Int) {
-        val index = ((y / height) * letters.size).toInt().coerceIn(0, letters.lastIndex)
-        onLetter(letters[index])
+        val letter = letters[((y / height) * letters.size).toInt().coerceIn(0, letters.lastIndex)]
+        if (letter != lastLetter) {
+            lastLetter = letter
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            onLetter(letter)
+        }
     }
+
+    fun release() {
+        lastLetter = null
+        onRelease()
+    }
+
+    val activeIndex = activeLetter?.let { letters.indexOf(it) } ?: -1
 
     Column(
         modifier = modifier
@@ -209,26 +242,28 @@ private fun AlphabetScrubber(
                 detectTapGestures(onPress = { offset ->
                     pick(offset.y, size.height)
                     tryAwaitRelease()
-                    onRelease()
+                    release()
                 })
             }
             .pointerInput(letters) {
                 detectVerticalDragGestures(
                     onDragStart = { offset -> pick(offset.y, size.height) },
-                    onDragEnd = onRelease,
-                    onDragCancel = onRelease,
+                    onDragEnd = { release() },
+                    onDragCancel = { release() },
                     onVerticalDrag = { change, _ -> pick(change.position.y, size.height) },
                 )
             },
         verticalArrangement = Arrangement.SpaceEvenly,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        letters.forEach { letter ->
+        letters.forEachIndexed { index, letter ->
+            val distance = if (activeIndex < 0) Int.MAX_VALUE else abs(index - activeIndex)
+            val bulge = if (distance <= 3) (4 - distance) * 8 else 0
             Text(
                 letter.toString(),
-                color = Color.White.copy(alpha = 0.7f),
-                fontSize = 11.sp,
-                modifier = Modifier.padding(horizontal = 8.dp),
+                color = Color.White.copy(alpha = if (distance <= 3) 1f else 0.7f),
+                fontSize = (11 + (if (distance <= 3) (4 - distance) * 2 else 0)).sp,
+                modifier = Modifier.offset(x = (-bulge).dp).padding(horizontal = 8.dp),
             )
         }
     }

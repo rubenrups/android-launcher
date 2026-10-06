@@ -2,7 +2,14 @@
 
 A minimalist Android home-screen launcher inspired by Niagara Launcher, built with Kotlin and Jetpack Compose.
 
-## Features (v0.1)
+## Features (v0.2)
+
+- Settings (long-press empty space on the home screen): clock/notification/media toggles, left or right alignment, favourites text size
+- Drag-to-reorder favourites (long-press a favourite → Reorder)
+- Hide apps from the drawer (long-press → Hide app); unhide in Settings
+- Swipe down on home: notification shade, search, or nothing
+- ADW/Nova-compatible icon packs for drawer icons
+- Haptic, magnifying alphabet scrubber
 
 - Right-aligned favourites list, large text, one-handed friendly
 - Swipe up for the A–Z app drawer with a draggable alphabet scrubber
@@ -14,7 +21,9 @@ A minimalist Android home-screen launcher inspired by Niagara Launcher, built wi
 
 ## Build
 
-CI builds a debug APK on every push (Actions → latest run → `niagara-clone-debug-apk`).
+CI builds a debug APK on every push. Open the repo's **Actions** tab, click the latest
+"Build debug APK" run, and download `niagara-clone-debug-apk` from the **Artifacts** section
+at the bottom of the run summary (a zip containing `app-debug.apk`).
 
 Locally, with Android Studio or the Android SDK installed:
 
