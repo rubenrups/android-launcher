@@ -12,9 +12,5 @@ data class AppInfo(
     val key: String = component.flattenToString()
     val packageName: String get() = component.packageName
 
-    /** Section letter for the A-Z scrubber; anything that is not A-Z collapses into '#'. */
-    val letter: Char = label.firstOrNull { it.isLetterOrDigit() }
-        ?.uppercaseChar()
-        ?.takeIf { it in 'A'..'Z' }
-        ?: '#'
+    val letter: Char = letterOf(label)
 }

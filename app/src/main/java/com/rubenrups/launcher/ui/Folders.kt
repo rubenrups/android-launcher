@@ -1,0 +1,168 @@
+package com.rubenrups.launcher.ui
+
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import com.rubenrups.launcher.LauncherViewModel
+import com.rubenrups.launcher.data.AppFolder
+import com.rubenrups.launcher.data.AppInfo
+import com.rubenrups.launcher.data.FolderEntry
+
+/** Single-line text prompt, used for creating and renaming folders. */
+@Composable
+fun NameDialog(
+    title: String,
+    initial: String,
+    confirmLabel: String,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var text by remember { mutableStateOf(initial) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = { TextField(value = text, onValueChange = { text = it }, singleLine = true) },
+        confirmButton = {
+            TextButton(onClick = { if (text.isNotBlank()) onConfirm(text.trim()) }) { Text(confirmLabel) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+/** "Add to folder": pick an existing folder or start a new one. */
+@Composable
+fun FolderPickerDialog(
+    app: AppInfo,
+    folders: List<AppFolder>,
+    onPick: (AppFolder) -> Unit,
+    onNew: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(24.dp), color = Color(0xFF1A1A1A)) {
+            Column(Modifier.padding(vertical = 16.dp)) {
+                Text(
+                    "Add ${app.label} to…",
+                    color = Color.White,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                )
+                folders.forEach { folder ->
+                    PickerRow(folder.name) { onPick(folder) }
+                }
+                PickerRow("New folder…", onClick = onNew)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PickerRow(label: String, onClick: () -> Unit) {
+    Text(
+        label,
+        color = Color.White,
+        fontSize = 16.sp,
+        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 24.dp, vertical = 14.dp),
+    )
+}
+
+/** The contents of a folder as a popup. Long-press an app inside for "Remove from folder". */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun FolderDialog(entry: FolderEntry, viewModel: LauncherViewModel, onDismiss: () -> Unit) {
+    Dialog(onDismissRequest = onDismiss) {
+        Surface(shape = RoundedCornerShape(24.dp), color = Color(0xF21A1A1A)) {
+            Column(Modifier.padding(vertical = 16.dp).verticalScroll(rememberScrollState())) {
+                Text(
+                    entry.label,
+                    color = Color.White,
+                    fontSize = 22.sp,
+                    fontWeight = FontWeight.Light,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                )
+                if (entry.apps.isEmpty()) {
+                    Text(
+                        "Empty. Long-press an app in the drawer and choose \"Add to folder…\".",
+                        color = Color.White.copy(alpha = 0.6f),
+                        fontSize = 14.sp,
+                        modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                    )
+                }
+                entry.apps.forEach { app ->
+                    var menuOpen by remember { mutableStateOf(false) }
+                    Box {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .combinedClickable(
+                                    onClick = {
+                                        onDismiss()
+                                        viewModel.launch(app)
+                                    },
+                                    onLongClick = { menuOpen = true },
+                                )
+                                .padding(horizontal = 24.dp, vertical = 10.dp),
+                        ) {
+                            AppIcon(app, viewModel)
+                            Text(app.label, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Light, maxLines = 1)
+                        }
+                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            DropdownMenuItem(text = { Text("Remove from folder") }, onClick = {
+                                menuOpen = false
+                                viewModel.removeFromFolder(app)
+                            })
+                            DropdownMenuItem(text = { Text("App info") }, onClick = {
+                                menuOpen = false
+                                viewModel.repository.openAppInfo(app)
+                            })
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Rounded square standing in for a folder icon: shows how many apps it holds. */
+@Composable
+fun FolderGlyph(count: Int, modifier: Modifier = Modifier) {
+    Box(
+        modifier.size(36.dp).background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(10.dp)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(count.toString(), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+    }
+}

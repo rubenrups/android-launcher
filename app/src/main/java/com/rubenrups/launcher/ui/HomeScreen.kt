@@ -52,7 +52,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
-import com.rubenrups.launcher.data.AppInfo
+import com.rubenrups.launcher.data.AppEntry
+import com.rubenrups.launcher.data.Entry
+import com.rubenrups.launcher.data.FolderEntry
 import com.rubenrups.launcher.data.LauncherSettings
 import com.rubenrups.launcher.data.SwipeAction
 import com.rubenrups.launcher.expandNotificationShade
@@ -173,7 +175,7 @@ private fun Clock(alignEnd: Boolean) {
 
 @Composable
 private fun FavouritesList(
-    favourites: List<AppInfo>,
+    favourites: List<Entry>,
     badgeCounts: Map<String, Int>,
     settings: LauncherSettings,
     viewModel: LauncherViewModel,
@@ -186,6 +188,8 @@ private fun FavouritesList(
     val currentFavourites by rememberUpdatedState(favourites)
     var dragKey by remember { mutableStateOf<String?>(null) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
+    var openFolderKey by remember { mutableStateOf<String?>(null) }
+    var renameFolderKey by remember { mutableStateOf<String?>(null) }
 
     Column(Modifier.fillMaxWidth(), horizontalAlignment = if (settings.alignEnd) Alignment.End else Alignment.Start) {
         if (editMode) {
@@ -200,21 +204,21 @@ private fun FavouritesList(
             )
             Spacer(Modifier.height(8.dp))
         }
-        favourites.forEach { app ->
+        favourites.forEach { entry ->
             // key() keeps the row (and its in-flight drag gesture) alive while it changes position.
-            key(app.key) {
-                val dragging = dragKey == app.key
+            key(entry.key) {
+                val dragging = dragKey == entry.key
                 val dragModifier = if (editMode) {
-                    Modifier.pointerInput(app.key) {
+                    Modifier.pointerInput(entry.key) {
                         detectVerticalDragGestures(
-                            onDragStart = { dragKey = app.key; dragOffset = 0f },
+                            onDragStart = { dragKey = entry.key; dragOffset = 0f },
                             onDragEnd = { dragKey = null; dragOffset = 0f },
                             onDragCancel = { dragKey = null; dragOffset = 0f },
                             onVerticalDrag = { change, delta ->
                                 change.consume()
                                 dragOffset += delta
                                 val list = currentFavourites
-                                val from = list.indexOfFirst { it.key == app.key }
+                                val from = list.indexOfFirst { it.key == entry.key }
                                 val to = (from + (dragOffset / rowPx).roundToInt()).coerceIn(0, list.lastIndex)
                                 if (from >= 0 && to != from) {
                                     viewModel.moveFavourite(from, to)
@@ -227,8 +231,11 @@ private fun FavouritesList(
                     Modifier
                 }
                 FavouriteRow(
-                    app = app,
-                    badge = badgeCounts[app.packageName] ?: 0,
+                    entry = entry,
+                    badge = when (entry) {
+                        is AppEntry -> badgeCounts[entry.app.packageName] ?: 0
+                        is FolderEntry -> entry.apps.sumOf { badgeCounts[it.packageName] ?: 0 }
+                    },
                     textSp = settings.favouriteTextSp,
                     alignEnd = settings.alignEnd,
                     rowHeight = rowHeight,
@@ -239,16 +246,34 @@ private fun FavouritesList(
                         .alpha(if (dragging) 0.8f else 1f),
                     viewModel = viewModel,
                     onReorder = { onEditModeChange(true) },
+                    onOpenFolder = { openFolderKey = entry.key },
+                    onRenameFolder = { renameFolderKey = entry.key },
                 )
             }
         }
+    }
+
+    favourites.filterIsInstance<FolderEntry>().firstOrNull { it.key == openFolderKey }?.let {
+        FolderDialog(it, viewModel, onDismiss = { openFolderKey = null })
+    }
+    favourites.filterIsInstance<FolderEntry>().firstOrNull { it.key == renameFolderKey }?.let { folder ->
+        NameDialog(
+            title = "Rename folder",
+            initial = folder.label,
+            confirmLabel = "Save",
+            onConfirm = {
+                viewModel.renameFolder(folder.folder.id, it)
+                renameFolderKey = null
+            },
+            onDismiss = { renameFolderKey = null },
+        )
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun FavouriteRow(
-    app: AppInfo,
+    entry: Entry,
     badge: Int,
     textSp: Int,
     alignEnd: Boolean,
@@ -257,6 +282,8 @@ private fun FavouriteRow(
     modifier: Modifier,
     viewModel: LauncherViewModel,
     onReorder: () -> Unit,
+    onOpenFolder: () -> Unit,
+    onRenameFolder: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
 
@@ -268,7 +295,12 @@ private fun FavouriteRow(
                 .height(rowHeight)
                 .then(
                     if (editMode) Modifier else Modifier.combinedClickable(
-                        onClick = { viewModel.launch(app) },
+                        onClick = {
+                            when (entry) {
+                                is AppEntry -> viewModel.launch(entry.app)
+                                is FolderEntry -> onOpenFolder()
+                            }
+                        },
                         onLongClick = { menuOpen = true },
                     )
                 ),
@@ -276,7 +308,7 @@ private fun FavouriteRow(
             if (editMode && !alignEnd) Text("≡", color = Color.White.copy(alpha = 0.6f), fontSize = 24.sp)
             if (badge > 0 && alignEnd) Badge(badge)
             Text(
-                app.label,
+                entry.label,
                 color = Color.White,
                 fontSize = textSp.sp,
                 fontWeight = FontWeight.Light,
@@ -293,12 +325,24 @@ private fun FavouriteRow(
             })
             DropdownMenuItem(text = { Text("Remove from favourites") }, onClick = {
                 menuOpen = false
-                viewModel.removeFavourite(app)
+                viewModel.removeFavouriteKey(entry.key)
             })
-            DropdownMenuItem(text = { Text("App info") }, onClick = {
-                menuOpen = false
-                viewModel.repository.openAppInfo(app)
-            })
+            when (entry) {
+                is AppEntry -> DropdownMenuItem(text = { Text("App info") }, onClick = {
+                    menuOpen = false
+                    viewModel.repository.openAppInfo(entry.app)
+                })
+                is FolderEntry -> {
+                    DropdownMenuItem(text = { Text("Rename") }, onClick = {
+                        menuOpen = false
+                        onRenameFolder()
+                    })
+                    DropdownMenuItem(text = { Text("Delete folder") }, onClick = {
+                        menuOpen = false
+                        viewModel.deleteFolder(entry.folder)
+                    })
+                }
+            }
         }
     }
 }

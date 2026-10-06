@@ -4,6 +4,8 @@ import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import org.json.JSONArray
+import org.json.JSONObject
 
 enum class SwipeAction(val label: String) {
     NOTIFICATIONS("Notification shade"),
@@ -21,6 +23,7 @@ data class LauncherSettings(
     val alignEnd: Boolean = true,
     val swipeDown: SwipeAction = SwipeAction.NOTIFICATIONS,
     val iconPack: String? = null,
+    val folders: List<AppFolder> = emptyList(),
 )
 
 /** Persists favourites, hidden apps and user settings in SharedPreferences. */
@@ -48,6 +51,7 @@ class LauncherPrefs(context: Context) {
         swipeDown = runCatching { SwipeAction.valueOf(prefs.getString(KEY_SWIPE_DOWN, "").orEmpty()) }
             .getOrDefault(SwipeAction.NOTIFICATIONS),
         iconPack = prefs.getString(KEY_ICON_PACK, null),
+        folders = decodeFolders(prefs.getString(KEY_FOLDERS, null)),
     )
 
     private fun save(s: LauncherSettings) {
@@ -61,7 +65,27 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_ALIGN_END, s.alignEnd)
             .putString(KEY_SWIPE_DOWN, s.swipeDown.name)
             .putString(KEY_ICON_PACK, s.iconPack)
+            .putString(KEY_FOLDERS, encodeFolders(s.folders))
             .apply()
+    }
+
+    private fun encodeFolders(folders: List<AppFolder>): String =
+        JSONArray().apply {
+            folders.forEach { f ->
+                put(JSONObject().put("id", f.id).put("name", f.name).put("apps", JSONArray(f.appKeys)))
+            }
+        }.toString()
+
+    private fun decodeFolders(json: String?): List<AppFolder> {
+        if (json.isNullOrBlank()) return emptyList()
+        return runCatching {
+            val array = JSONArray(json)
+            (0 until array.length()).map { i ->
+                val o = array.getJSONObject(i)
+                val apps = o.getJSONArray("apps")
+                AppFolder(o.getString("id"), o.getString("name"), (0 until apps.length()).map { apps.getString(it) })
+            }
+        }.getOrDefault(emptyList())
     }
 
     private companion object {
@@ -75,5 +99,6 @@ class LauncherPrefs(context: Context) {
         const val KEY_ALIGN_END = "align_end"
         const val KEY_SWIPE_DOWN = "swipe_down"
         const val KEY_ICON_PACK = "icon_pack"
+        const val KEY_FOLDERS = "folders"
     }
 }

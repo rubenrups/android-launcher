@@ -38,24 +38,34 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
+import com.rubenrups.launcher.data.AppEntry
+import com.rubenrups.launcher.data.AppFolder
 import com.rubenrups.launcher.data.AppInfo
+import com.rubenrups.launcher.data.Entry
+import com.rubenrups.launcher.data.FolderEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -63,10 +73,16 @@ import kotlin.math.abs
 
 private val SCRUBBER_LETTERS = listOf('#') + ('A'..'Z').toList()
 
+/** Dragging down this far (px) past the top of the list, or flinging down fast enough, closes the drawer. */
+private const val CLOSE_DRAG_PX = 200f
+private const val CLOSE_FLING_VELOCITY = 1800f
+
 @Composable
 fun AppDrawer(viewModel: LauncherViewModel) {
     val allApps by viewModel.visibleApps.collectAsStateWithLifecycle()
+    val drawerEntries by viewModel.drawerEntries.collectAsStateWithLifecycle()
     val favourites by viewModel.favourites.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
     val focusSearch by viewModel.focusSearch.collectAsStateWithLifecycle()
     val favouriteKeys = remember(favourites) { favourites.mapTo(HashSet()) { it.key } }
     var query by remember { mutableStateOf("") }
@@ -74,19 +90,46 @@ fun AppDrawer(viewModel: LauncherViewModel) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val searchFocus = remember { FocusRequester() }
+    val currentClose by rememberUpdatedState({ viewModel.closeDrawer() })
 
     LaunchedEffect(focusSearch) {
         if (focusSearch) searchFocus.requestFocus()
     }
 
-    val apps = remember(allApps, query) {
-        if (query.isBlank()) allApps else allApps.filter { it.label.contains(query, ignoreCase = true) }
+    // Swipe down to close, but only once the list has nothing left to scroll upwards:
+    // the leftover ("unconsumed") downward drag is what we measure.
+    val closeOnPullDown = remember {
+        object : NestedScrollConnection {
+            private var pulled = 0f
+
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (source == NestedScrollSource.UserInput) {
+                    pulled = if (available.y > 0f) pulled + available.y else 0f
+                }
+                return Offset.Zero
+            }
+
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                if (pulled > CLOSE_DRAG_PX || available.y > CLOSE_FLING_VELOCITY) currentClose()
+                pulled = 0f
+                return Velocity.Zero
+            }
+        }
+    }
+
+    // While searching, results are flat apps (including ones inside folders); otherwise folders + loose apps.
+    val entries: List<Entry> = remember(drawerEntries, allApps, query) {
+        if (query.isBlank()) {
+            drawerEntries
+        } else {
+            allApps.filter { it.label.contains(query, ignoreCase = true) }.map { AppEntry(it) }
+        }
     }
 
     fun jumpTo(letter: Char) {
         activeLetter = letter
-        // Jump to the first app at or after the letter, so empty letters still land somewhere sensible.
-        val index = apps.indexOfFirst { it.letter >= letter }.takeIf { it >= 0 } ?: apps.lastIndex
+        // Jump to the first row at or after the letter, so empty letters still land somewhere sensible.
+        val index = entries.indexOfFirst { it.letter >= letter }.takeIf { it >= 0 } ?: entries.lastIndex
         if (index >= 0) scope.launch { listState.scrollToItem(index) }
     }
 
@@ -99,9 +142,24 @@ fun AppDrawer(viewModel: LauncherViewModel) {
     ) {
         Column(Modifier.fillMaxSize()) {
             Row(Modifier.weight(1f)) {
-                LazyColumn(state = listState, modifier = Modifier.weight(1f)) {
-                    items(apps, key = { it.key }) { app ->
-                        DrawerRow(app, isFavourite = app.key in favouriteKeys, viewModel = viewModel)
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.weight(1f).nestedScroll(closeOnPullDown),
+                ) {
+                    items(entries, key = { it.key }) { entry ->
+                        when (entry) {
+                            is AppEntry -> DrawerRow(
+                                app = entry.app,
+                                isFavourite = entry.key in favouriteKeys,
+                                folders = settings.folders,
+                                viewModel = viewModel,
+                            )
+                            is FolderEntry -> FolderRow(
+                                entry = entry,
+                                isFavourite = entry.key in favouriteKeys,
+                                viewModel = viewModel,
+                            )
+                        }
                     }
                 }
                 if (query.isBlank()) {
@@ -120,7 +178,9 @@ fun AppDrawer(viewModel: LauncherViewModel) {
                 singleLine = true,
                 placeholder = { Text("Search apps", color = Color.White.copy(alpha = 0.5f)) },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { apps.firstOrNull()?.let(viewModel::launch) }),
+                keyboardActions = KeyboardActions(onSearch = {
+                    entries.filterIsInstance<AppEntry>().firstOrNull()?.let { viewModel.launch(it.app) }
+                }),
                 colors = TextFieldDefaults.colors(
                     focusedContainerColor = Color.White.copy(alpha = 0.12f),
                     unfocusedContainerColor = Color.White.copy(alpha = 0.12f),
@@ -151,8 +211,16 @@ fun AppDrawer(viewModel: LauncherViewModel) {
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun DrawerRow(app: AppInfo, isFavourite: Boolean, viewModel: LauncherViewModel) {
+private fun DrawerRow(
+    app: AppInfo,
+    isFavourite: Boolean,
+    folders: List<AppFolder>,
+    viewModel: LauncherViewModel,
+) {
     var menuOpen by remember { mutableStateOf(false) }
+    var pickFolder by remember { mutableStateOf(false) }
+    var newFolder by remember { mutableStateOf(false) }
+    val currentFolder = folders.firstOrNull { app.key in it.appKeys }
 
     Box {
         Row(
@@ -177,6 +245,16 @@ private fun DrawerRow(app: AppInfo, isFavourite: Boolean, viewModel: LauncherVie
                     if (isFavourite) viewModel.removeFavourite(app) else viewModel.addFavourite(app)
                 },
             )
+            DropdownMenuItem(text = { Text("Add to folder…") }, onClick = {
+                menuOpen = false
+                pickFolder = true
+            })
+            if (currentFolder != null) {
+                DropdownMenuItem(text = { Text("Remove from ${currentFolder.name}") }, onClick = {
+                    menuOpen = false
+                    viewModel.removeFromFolder(app)
+                })
+            }
             DropdownMenuItem(text = { Text("Hide app") }, onClick = {
                 menuOpen = false
                 viewModel.hide(app)
@@ -191,10 +269,94 @@ private fun DrawerRow(app: AppInfo, isFavourite: Boolean, viewModel: LauncherVie
             })
         }
     }
+
+    if (pickFolder) {
+        FolderPickerDialog(
+            app = app,
+            folders = folders,
+            onPick = {
+                viewModel.addToFolder(app, it.id)
+                pickFolder = false
+            },
+            onNew = {
+                pickFolder = false
+                newFolder = true
+            },
+            onDismiss = { pickFolder = false },
+        )
+    }
+    if (newFolder) {
+        NameDialog(
+            title = "New folder",
+            initial = "",
+            confirmLabel = "Create",
+            onConfirm = {
+                viewModel.createFolder(it, app)
+                newFolder = false
+            },
+            onDismiss = { newFolder = false },
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FolderRow(entry: FolderEntry, isFavourite: Boolean, viewModel: LauncherViewModel) {
+    var menuOpen by remember { mutableStateOf(false) }
+    var open by remember { mutableStateOf(false) }
+    var rename by remember { mutableStateOf(false) }
+
+    Box {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .combinedClickable(
+                    onClick = { open = true },
+                    onLongClick = { menuOpen = true },
+                )
+                .padding(horizontal = 24.dp, vertical = 10.dp),
+        ) {
+            FolderGlyph(entry.apps.size)
+            Text(entry.label, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Light, maxLines = 1)
+        }
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            DropdownMenuItem(
+                text = { Text(if (isFavourite) "Remove from favourites" else "Add to favourites") },
+                onClick = {
+                    menuOpen = false
+                    if (isFavourite) viewModel.removeFavouriteKey(entry.key) else viewModel.addFavouriteKey(entry.key)
+                },
+            )
+            DropdownMenuItem(text = { Text("Rename") }, onClick = {
+                menuOpen = false
+                rename = true
+            })
+            DropdownMenuItem(text = { Text("Delete folder") }, onClick = {
+                menuOpen = false
+                viewModel.deleteFolder(entry.folder)
+            })
+        }
+    }
+
+    if (open) FolderDialog(entry, viewModel, onDismiss = { open = false })
+    if (rename) {
+        NameDialog(
+            title = "Rename folder",
+            initial = entry.label,
+            confirmLabel = "Save",
+            onConfirm = {
+                viewModel.renameFolder(entry.folder.id, it)
+                rename = false
+            },
+            onDismiss = { rename = false },
+        )
+    }
 }
 
 @Composable
-private fun AppIcon(app: AppInfo, viewModel: LauncherViewModel) {
+internal fun AppIcon(app: AppInfo, viewModel: LauncherViewModel) {
     val sizePx = with(LocalDensity.current) { 36.dp.roundToPx() }
     val iconVersion by viewModel.iconVersion.collectAsStateWithLifecycle()
     val icon by produceState<ImageBitmap?>(null, app.key, iconVersion) {

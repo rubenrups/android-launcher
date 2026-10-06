@@ -2,6 +2,11 @@
 
 A minimalist Android home-screen launcher inspired by Niagara Launcher, built with Kotlin and Jetpack Compose.
 
+## Features (v0.3)
+
+- Swipe down in the app drawer (from the top of the list) to close it
+- Folders in the drawer and in favourites: long-press an app → Add to folder…; tap a folder to open it; rename, delete, or favourite a folder with a long-press
+
 ## Features (v0.2)
 
 - Settings (long-press empty space on the home screen): clock/notification/media toggles, left or right alignment, favourites text size
