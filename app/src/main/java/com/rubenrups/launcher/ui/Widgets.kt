@@ -72,8 +72,10 @@ fun WidgetPickerDialog(viewModel: LauncherViewModel, onDismiss: () -> Unit) {
                 }
                 LazyColumn(state = listState, modifier = Modifier.weight(1f, fill = false).verticalScrollbar(listState)) {
                     items(providers, key = { it.provider.flattenToString() }) { provider ->
+                        // The provider's component names its package; look the app's display name up from that.
                         val app = runCatching {
-                            packageManager.getApplicationLabel(provider.providerInfo.applicationInfo).toString()
+                            val appInfo = packageManager.getApplicationInfo(provider.provider.packageName, 0)
+                            packageManager.getApplicationLabel(appInfo).toString()
                         }.getOrDefault("")
                         Column(
                             Modifier
