@@ -13,12 +13,16 @@ import android.os.BatteryManager
 import android.provider.AlarmClock
 import android.provider.CalendarContract
 import android.provider.Settings
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -43,7 +47,10 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
@@ -66,6 +73,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -75,6 +85,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
+import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.data.AppEntry
@@ -104,6 +115,10 @@ private const val SWIPE_THRESHOLD_PX = 120f
  */
 private val SidePadding = Modifier.padding(horizontal = 24.dp)
 
+/** The colour of text drawn straight on the wallpaper: white, or near-black on a light wallpaper (optional). */
+internal val LocalHomeInk = compositionLocalOf { Color.White }
+private val DarkInk = Color(0xFF14181B)
+
 /** Soft shadow so white text stays readable on bright wallpapers. */
 private val HomeTextStyle = TextStyle(
     shadow = Shadow(color = Color.Black.copy(alpha = 0.55f), offset = Offset(0f, 2f), blurRadius = 8f),
@@ -113,6 +128,35 @@ private val HomeTextStyle = TextStyle(
 fun HomeScreen(
     viewModel: LauncherViewModel,
     onOpenDrawer: (focusSearch: Boolean) -> Unit,
+    onDrawerDrag: (upPx: Float) -> Unit,
+    onDrawerRelease: (open: Boolean) -> Unit,
+    onOpenSettings: () -> Unit,
+) {
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val drawerOpen by viewModel.drawerOpen.collectAsStateWithLifecycle()
+    val settingsOpen by viewModel.settingsOpen.collectAsStateWithLifecycle()
+    // Dark ink only while the bare wallpaper is showing; the drawer and settings are dark overlays.
+    val darkInk = rememberLightWallpaper(settings.adaptiveText) && !drawerOpen && !settingsOpen
+    val view = LocalView.current
+    SideEffect {
+        // Status and navigation bar icons are drawn by the system: flip them with the text.
+        view.context.findActivity()?.window?.let { window ->
+            val controller = WindowCompat.getInsetsController(window, view)
+            controller.isAppearanceLightStatusBars = darkInk
+            controller.isAppearanceLightNavigationBars = darkInk
+        }
+    }
+    CompositionLocalProvider(LocalHomeInk provides if (darkInk) DarkInk else Color.White) {
+        HomeContent(viewModel, onOpenDrawer, onDrawerDrag, onDrawerRelease, onOpenSettings)
+    }
+}
+
+@Composable
+private fun HomeContent(
+    viewModel: LauncherViewModel,
+    onOpenDrawer: (focusSearch: Boolean) -> Unit,
+    onDrawerDrag: (upPx: Float) -> Unit,
+    onDrawerRelease: (open: Boolean) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -133,6 +177,8 @@ fun HomeScreen(
 
     val currentSettings by rememberUpdatedState(settings)
     val currentOpenDrawer by rememberUpdatedState(onOpenDrawer)
+    val currentDrawerDrag by rememberUpdatedState(onDrawerDrag)
+    val currentDrawerRelease by rememberUpdatedState(onDrawerRelease)
 
     Box(Modifier.fillMaxSize()) {
         Column(
@@ -144,27 +190,38 @@ fun HomeScreen(
                     if (editMode) return@pointerInput
                     detectTapGestures(onLongPress = { homeMenuAt = it })
                 }
-                // Swipe up -> drawer, swipe down -> configurable action.
+                // Swipe up pulls the drawer up under the finger; swipe down and sideways run your settings.
                 .pointerInput(editMode) {
                     if (editMode) return@pointerInput
                     var dx = 0f
                     var dy = 0f
                     detectDragGestures(
                         onDragStart = { dx = 0f; dy = 0f },
-                        onDrag = { _, amount -> dx += amount.x; dy += amount.y },
+                        onDrag = { _, amount ->
+                            dx += amount.x
+                            dy += amount.y
+                            if (dy < 0f && abs(dy) > abs(dx)) currentDrawerDrag(-dy)
+                        },
                         onDragEnd = {
-                            if (abs(dy) > abs(dx) * 1.2f) {
-                                if (dy < -SWIPE_THRESHOLD_PX) {
-                                    currentOpenDrawer(false)
-                                } else if (dy > SWIPE_THRESHOLD_PX) {
+                            val vertical = abs(dy) > abs(dx) * 1.2f
+                            val horizontal = abs(dx) > abs(dy) * 1.2f
+                            if (vertical && dy < -SWIPE_THRESHOLD_PX) {
+                                currentDrawerRelease(true)
+                            } else {
+                                currentDrawerRelease(false)
+                                if (vertical && dy > SWIPE_THRESHOLD_PX) {
                                     when (currentSettings.swipeDown) {
                                         SwipeAction.NOTIFICATIONS -> expandNotificationShade(context)
                                         SwipeAction.SEARCH -> currentOpenDrawer(true)
                                         SwipeAction.NONE -> Unit
                                     }
+                                } else if (horizontal && abs(dx) > SWIPE_THRESHOLD_PX) {
+                                    val key = if (dx < 0f) currentSettings.swipeLeftApp else currentSettings.swipeRightApp
+                                    if (key.isNotBlank()) viewModel.launchByKey(key)
                                 }
                             }
                         },
+                        onDragCancel = { currentDrawerRelease(false) },
                     )
                 }
                 .padding(vertical = 16.dp),
@@ -214,7 +271,7 @@ fun HomeScreen(
                 if (favourites.isEmpty()) {
                     Text(
                         "Swipe up and long-press an app\nto add it to your favourites",
-                        color = Color.White.copy(alpha = 0.7f),
+                        color = LocalHomeInk.current.copy(alpha = 0.7f),
                         fontSize = 16.sp,
                         style = HomeTextStyle,
                         textAlign = if (settings.alignEnd) TextAlign.End else TextAlign.Start,
@@ -231,6 +288,7 @@ fun HomeScreen(
                         onEditModeChange = { editMode = it },
                         // A top-anchored list can run under the floating search button; keep the last rows clear of it.
                         bottomPadding = if (!settings.anchorBottom && settings.showSearchButton) 88.dp else 0.dp,
+                        twoColumns = landscape && settings.twoColumnsLandscape,
                     )
                 }
             }
@@ -345,6 +403,7 @@ private fun rememberBatteryPercent(): Int {
 
 @Composable
 private fun Clock(alignEnd: Boolean, weather: String?, city: String, event: NextEvent?) {
+    val ink = LocalHomeInk.current
     val context = LocalContext.current
     val now by produceState(Date()) {
         while (true) {
@@ -360,7 +419,7 @@ private fun Clock(alignEnd: Boolean, weather: String?, city: String, event: Next
     Column(horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
         Text(
             timeFormat.format(now),
-            color = Color.White,
+            color = ink,
             fontSize = 56.sp,
             fontWeight = FontWeight.Light,
             style = HomeTextStyle,
@@ -406,7 +465,9 @@ private fun FavouritesList(
     editMode: Boolean,
     onEditModeChange: (Boolean) -> Unit,
     bottomPadding: androidx.compose.ui.unit.Dp,
+    twoColumns: Boolean,
 ) {
+    val haptics = LocalHapticFeedback.current
     val iconSize = (settings.favouriteTextSp * 1.5f).dp
     // Fixed row height so a drag offset maps cleanly onto "how many rows have I moved".
     val rowHeight = iconSize + 14.dp
@@ -434,7 +495,7 @@ private fun FavouritesList(
             )
             Spacer(Modifier.height(8.dp))
         }
-        favourites.forEach { entry ->
+        val renderEntry: @Composable (Entry) -> Unit = { entry ->
             // key() keeps the row (and its in-flight drag gesture) alive while it changes position.
             key(entry.key) {
                 val dragging = dragKey == entry.key
@@ -442,7 +503,11 @@ private fun FavouritesList(
                 val dragModifier = if (editMode) {
                     Modifier.pointerInput(entry.key) {
                         detectVerticalDragGestures(
-                            onDragStart = { dragKey = entry.key; dragOffset = 0f },
+                            onDragStart = {
+                                dragKey = entry.key
+                                dragOffset = 0f
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            },
                             onDragEnd = { dragKey = null; dragOffset = 0f },
                             onDragCancel = { dragKey = null; dragOffset = 0f },
                             onVerticalDrag = { change, delta ->
@@ -453,6 +518,7 @@ private fun FavouritesList(
                                 val to = (from + (dragOffset / rowPx).roundToInt()).coerceIn(0, list.lastIndex)
                                 if (from >= 0 && to != from) {
                                     viewModel.moveFavourite(from, to)
+                                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                     dragOffset -= (to - from) * rowPx
                                 }
                             },
@@ -494,6 +560,16 @@ private fun FavouritesList(
                     }
                 }
             }
+        }
+        // Two columns only while browsing: reordering needs one straight list to drag along.
+        if (twoColumns && !editMode && favourites.size > 1) {
+            val split = (favourites.size + 1) / 2
+            Row(Modifier.fillMaxWidth()) {
+                Column(Modifier.weight(1f)) { favourites.take(split).forEach { renderEntry(it) } }
+                Column(Modifier.weight(1f)) { favourites.drop(split).forEach { renderEntry(it) } }
+            }
+        } else {
+            favourites.forEach { renderEntry(it) }
         }
         Spacer(Modifier.height(bottomPadding))
     }
@@ -540,6 +616,7 @@ private fun FavouriteRow(
     onSortApps: () -> Unit,
     onChangeIcon: () -> Unit,
 ) {
+    val ink = LocalHomeInk.current
     var menuOpen by remember { mutableStateOf(false) }
     val alignEnd = settings.alignEnd
     val icon: @Composable () -> Unit = {
@@ -549,7 +626,7 @@ private fun FavouriteRow(
         }
     }
     val handle: @Composable () -> Unit = {
-        Text("≡", color = Color.White.copy(alpha = 0.7f), fontSize = 24.sp, style = HomeTextStyle)
+        Text("≡", color = ink.copy(alpha = 0.7f), fontSize = 24.sp, style = HomeTextStyle)
     }
 
     Box(modifier.fillMaxWidth()) {
@@ -561,7 +638,7 @@ private fun FavouriteRow(
                 .fillMaxWidth()
                 .height(rowHeight)
                 .then(
-                    if (editMode) Modifier else Modifier.combinedClickable(
+                    if (editMode) Modifier else Modifier.pressable(
                         onClick = {
                             when (entry) {
                                 is AppEntry -> viewModel.launch(entry.app)
@@ -579,7 +656,7 @@ private fun FavouriteRow(
             Column(horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
                 Text(
                     entry.label,
-                    color = Color.White,
+                    color = ink,
                     fontSize = settings.favouriteTextSp.sp,
                     fontWeight = FontWeight.Light,
                     style = HomeTextStyle,
@@ -589,7 +666,7 @@ private fun FavouriteRow(
                 if (entry is FolderEntry && entry.apps.isNotEmpty()) {
                     Text(
                         folderPreview(entry),
-                        color = Color.White.copy(alpha = 0.8f),
+                        color = ink.copy(alpha = 0.8f),
                         fontSize = (settings.favouriteTextSp * 0.6f).sp,
                         style = HomeTextStyle,
                         maxLines = 1,
@@ -601,7 +678,7 @@ private fun FavouriteRow(
             if (entry is FolderEntry && !editMode) {
                 // Left-aligned rows span the screen, so park the arrow at the far edge.
                 if (!alignEnd) Spacer(Modifier.weight(1f))
-                Text(if (expanded) "▾" else "▸", color = Color.White.copy(alpha = 0.8f), fontSize = 16.sp, style = HomeTextStyle)
+                Text(if (expanded) "▾" else "▸", color = ink.copy(alpha = 0.8f), fontSize = 16.sp, style = HomeTextStyle)
             }
             if (settings.showIcons && alignEnd) icon()
             if (editMode && alignEnd) handle()
@@ -668,6 +745,7 @@ private fun FolderChildRow(
     rowHeight: androidx.compose.ui.unit.Dp,
     viewModel: LauncherViewModel,
 ) {
+    val ink = LocalHomeInk.current
     var menuOpen by remember { mutableStateOf(false) }
     // Indented under its folder; like the folder row, the full width is tappable.
     val start = if (settings.alignEnd) 24.dp else 52.dp
@@ -679,13 +757,13 @@ private fun FolderChildRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(rowHeight * 0.85f)
-                .combinedClickable(onClick = { viewModel.launch(app) }, onLongClick = { menuOpen = true })
+                .pressable(onClick = { viewModel.launch(app) }, onLongClick = { menuOpen = true })
                 .padding(start = start, end = end),
         ) {
             if (settings.showIcons && !settings.alignEnd) AppIcon(app, viewModel, iconSize * 0.8f)
             Text(
                 app.label,
-                color = Color.White,
+                color = ink,
                 fontSize = (settings.favouriteTextSp * 0.85f).sp,
                 fontWeight = FontWeight.Light,
                 style = HomeTextStyle,
@@ -715,7 +793,7 @@ private fun FolderChildRow(
 }
 
 @Composable
-private fun Badge(count: Int) {
+internal fun Badge(count: Int) {
     Box(
         Modifier
             .background(Color.White, RoundedCornerShape(50))
@@ -748,6 +826,7 @@ private fun openNotificationAccessSettings(context: Context) {
 @Composable
 private fun NotificationList(items: List<NotificationItem>) {
     if (items.isEmpty()) return
+    val context = LocalContext.current
     Column(
         Modifier
             .fillMaxWidth()
@@ -755,17 +834,21 @@ private fun NotificationList(items: List<NotificationItem>) {
             .padding(vertical = 4.dp),
     ) {
         items.forEach { item ->
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .clickable { item.contentIntent?.sendSafely() }
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-            ) {
-                if (item.title.isNotBlank()) {
-                    Text(item.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                }
-                if (item.text.isNotBlank()) {
-                    Text(item.text, color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            key(item.key) {
+                SwipeAwayRow(onDismiss = { NotificationStore.dismiss(item.key) }) {
+                    Column(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { openNotification(context, item) }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                    ) {
+                        if (item.title.isNotBlank()) {
+                            Text(item.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        if (item.text.isNotBlank()) {
+                            Text(item.text, color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
                 }
             }
         }
@@ -773,12 +856,38 @@ private fun NotificationList(items: List<NotificationItem>) {
     Spacer(Modifier.height(8.dp))
 }
 
-private fun PendingIntent.sendSafely() {
-    try {
-        send()
-    } catch (_: PendingIntent.CanceledException) {
-        // The owning app cancelled it (e.g. notification already dismissed); nothing to do.
-    }
+/** Drag sideways past a threshold to dismiss; the row follows the finger and fades. Vertical drags pass through. */
+@Composable
+private fun SwipeAwayRow(onDismiss: () -> Unit, content: @Composable () -> Unit) {
+    val currentDismiss by rememberUpdatedState(onDismiss)
+    var offsetX by remember { mutableFloatStateOf(0f) }
+    var dragging by remember { mutableStateOf(false) }
+    val shown by animateFloatAsState(offsetX, if (dragging) snap() else spring(), label = "swipeAway")
+    val thresholdPx = with(LocalDensity.current) { 120.dp.toPx() }
+    Box(
+        Modifier
+            .pointerInput(Unit) {
+                detectHorizontalDragGestures(
+                    onDragStart = { dragging = true },
+                    onDragEnd = {
+                        dragging = false
+                        if (abs(offsetX) > thresholdPx) currentDismiss() else offsetX = 0f
+                    },
+                    onDragCancel = {
+                        dragging = false
+                        offsetX = 0f
+                    },
+                    onHorizontalDrag = { change, delta ->
+                        change.consume()
+                        offsetX += delta
+                    },
+                )
+            }
+            .graphicsLayer {
+                translationX = shown
+                alpha = 1f - (abs(shown) / (thresholdPx * 3f)).coerceIn(0f, 0.8f)
+            },
+    ) { content() }
 }
 
 @Composable
@@ -813,26 +922,21 @@ private fun MediaCard(media: MediaState, modifier: Modifier = Modifier) {
  * (usually "now playing"), or failing that the app's normal launcher entry.
  */
 private fun openMediaApp(context: Context, controller: MediaController) {
-    val sessionIntent = controller.sessionActivity
-    if (sessionIntent != null) {
-        try {
-            sessionIntent.send()
-            return
-        } catch (_: PendingIntent.CanceledException) {
-            // The app withdrew it; fall back to a plain launch below.
+    val opened = controller.sessionActivity?.sendAllowingLaunch(context) == true
+    if (!opened) {
+        context.packageManager.getLaunchIntentForPackage(controller.packageName)?.let {
+            runCatching { context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         }
-    }
-    context.packageManager.getLaunchIntentForPackage(controller.packageName)?.let {
-        context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 }
 
 /** One line of header text that opens something when tapped; the padding makes the target comfortable. */
 @Composable
 private fun HeaderText(text: String, onClick: () -> Unit) {
+    val ink = LocalHomeInk.current
     Text(
         text,
-        color = Color.White.copy(alpha = 0.9f),
+        color = ink.copy(alpha = 0.9f),
         fontSize = 16.sp,
         style = HomeTextStyle,
         maxLines = 1,

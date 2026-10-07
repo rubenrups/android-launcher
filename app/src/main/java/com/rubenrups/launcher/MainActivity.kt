@@ -2,6 +2,7 @@ package com.rubenrups.launcher
 
 import android.content.Intent
 import android.os.Bundle
+import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -21,6 +22,18 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         viewModel.widgets.stopListening()
         super.onStop()
+    }
+
+    /** With a hardware keyboard attached, typing on the home screen starts a search. */
+    override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
+        val typed = event.unicodeChar
+        if (viewModel.canTypeToSearch() && event.isPrintingKey && typed != 0 &&
+            !event.isCtrlPressed && !event.isAltPressed && !event.isMetaPressed
+        ) {
+            viewModel.openDrawer(focusSearch = true, initialQuery = typed.toChar().toString())
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
     }
 
     // Widget binding and configuration answer through the classic result callback.

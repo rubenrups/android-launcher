@@ -61,6 +61,30 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
     val context = LocalContext.current
     val listenerConnected by NotificationStore.listenerConnected.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
+    val visibleApps by viewModel.visibleApps.collectAsStateWithLifecycle()
+    var chooser by remember { mutableStateOf<String?>(null) } // "left" or "right" while the app chooser is open
+    var backupStatus by remember { mutableStateOf<String?>(null) }
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) {
+            val saved = runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { it.write(viewModel.backupJson().toByteArray()) }
+            }.isSuccess
+            backupStatus = if (saved) "Backup saved." else "Could not save the backup."
+        }
+    }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val text = runCatching {
+                context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
+            }.getOrNull()
+            backupStatus = if (text != null && viewModel.restoreBackup(text)) {
+                "Backup restored."
+            } else {
+                "That file is not a Rups Launcher backup."
+            }
+        }
+    }
+    fun swipeLabel(key: String) = visibleApps.firstOrNull { it.key == key }?.label ?: "Nothing"
     var pickWidget by remember { mutableStateOf(false) }
     var updateStatus by remember { mutableStateOf<String?>(null) }
     var updateUrl by remember { mutableStateOf<String?>(null) }
@@ -121,6 +145,12 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                 viewModel.update { it.copy(weatherFahrenheit = v) }
             }
             Hint("Weather is fetched from open-meteo.com using only the city name.")
+        }
+        SwitchRow("Two columns in landscape", settings.twoColumnsLandscape) { v ->
+            viewModel.update { it.copy(twoColumnsLandscape = v) }
+        }
+        SwitchRow("Adapt text colour to the wallpaper", settings.adaptiveText) { v ->
+            viewModel.update { it.copy(adaptiveText = v) }
         }
         SwitchRow("Show app icons", settings.showIcons) { v -> viewModel.update { it.copy(showIcons = v) } }
         SwitchRow("Show search button", settings.showSearchButton) { v -> viewModel.update { it.copy(showSearchButton = v) } }
@@ -194,6 +224,12 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
             Hint("Work apps appear in the drawer with a 💼 and a badge on their icon.")
         }
 
+        Section("Backup")
+        ActionRow("Save a backup file") { exportLauncher.launch("rups-launcher-backup.json") }
+        ActionRow("Restore from a backup file") { importLauncher.launch(arrayOf("*/*")) }
+        backupStatus?.let { Hint(it) }
+        Hint("Favourites, folders, hidden apps and settings. The GitHub token is never included.")
+
         Section("Updates")
         Text("Installed: build $installedBuild", color = Color.White, fontSize = 16.sp, modifier = Modifier.padding(vertical = 8.dp))
         ActionRow("Check for updates") {
@@ -236,6 +272,22 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
             ChoiceRow(action.label, selected = settings.swipeDown == action) {
                 viewModel.update { it.copy(swipeDown = action) }
             }
+        }
+
+        Section("Swipe left / right on home")
+        ActionRow("Swipe left opens: ${swipeLabel(settings.swipeLeftApp)}") { chooser = "left" }
+        ActionRow("Swipe right opens: ${swipeLabel(settings.swipeRightApp)}") { chooser = "right" }
+        chooser?.let { side ->
+            AppChooserDialog(
+                title = if (side == "left") "Swipe left opens" else "Swipe right opens",
+                viewModel = viewModel,
+                onPick = { app ->
+                    val key = app?.key.orEmpty()
+                    viewModel.update { if (side == "left") it.copy(swipeLeftApp = key) else it.copy(swipeRightApp = key) }
+                    chooser = null
+                },
+                onDismiss = { chooser = null },
+            )
         }
 
         Section("Icon pack")

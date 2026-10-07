@@ -58,7 +58,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.Velocity
@@ -72,6 +74,7 @@ import com.rubenrups.launcher.data.AppInfo
 import com.rubenrups.launcher.data.Entry
 import com.rubenrups.launcher.data.FolderEntry
 import com.rubenrups.launcher.data.WebSearchEngine
+import com.rubenrups.launcher.notifications.NotificationStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -86,18 +89,28 @@ private const val CLOSE_DRAG_PX = 200f
 private const val CLOSE_FLING_VELOCITY = 1800f
 
 @Composable
-fun AppDrawer(viewModel: LauncherViewModel) {
+fun AppDrawer(
+    viewModel: LauncherViewModel,
+    onPull: (pulledPx: Float) -> Unit,
+    onPullEnd: (close: Boolean) -> Unit,
+) {
     val allApps by viewModel.visibleApps.collectAsStateWithLifecycle()
     val drawerEntries by viewModel.drawerEntries.collectAsStateWithLifecycle()
     val favourites by viewModel.favourites.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val focusSearch by viewModel.focusSearch.collectAsStateWithLifecycle()
     val favouriteKeys = remember(favourites) { favourites.mapTo(HashSet()) { it.key } }
-    var query by remember { mutableStateOf("") }
+    val initialQuery by viewModel.initialQuery.collectAsStateWithLifecycle()
+    // A character typed on a hardware keyboard from the home screen arrives pre-filled, cursor after it.
+    var queryValue by remember { mutableStateOf(TextFieldValue(initialQuery, TextRange(initialQuery.length))) }
+    val query = queryValue.text
+    val notifications by NotificationStore.notifications.collectAsStateWithLifecycle()
+    val badgeCounts = remember(notifications) { notifications.groupingBy { it.packageName }.eachCount() }
     var activeLetter by remember { mutableStateOf<Char?>(null) }
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
-    val currentClose by rememberUpdatedState({ viewModel.closeDrawer() })
+    val currentPull by rememberUpdatedState(onPull)
+    val currentPullEnd by rememberUpdatedState(onPullEnd)
     val searchFocus = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     var newFolder by remember { mutableStateOf(false) }
@@ -126,12 +139,15 @@ fun AppDrawer(viewModel: LauncherViewModel) {
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
                 if (source == NestedScrollSource.UserInput) {
                     pulled = if (available.y > 0f) pulled + available.y else 0f
+                    // The drawer follows the finger while it is pulled down past the top of the list.
+                    currentPull(pulled)
                 }
                 return Offset.Zero
             }
 
             override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                if (pulled > CLOSE_DRAG_PX || available.y > CLOSE_FLING_VELOCITY) currentClose()
+                val close = pulled > CLOSE_DRAG_PX || available.y > CLOSE_FLING_VELOCITY
+                if (pulled > 0f || close) currentPullEnd(close)
                 pulled = 0f
                 return Velocity.Zero
             }
@@ -195,12 +211,14 @@ fun AppDrawer(viewModel: LauncherViewModel) {
                         when (entry) {
                             is AppEntry -> DrawerRow(
                                 app = entry.app,
+                                badge = badgeCounts[entry.app.packageName] ?: 0,
                                 isFavourite = entry.key in favouriteKeys,
                                 folders = settings.folders,
                                 viewModel = viewModel,
                             )
                             is FolderEntry -> FolderRow(
                                 entry = entry,
+                                badge = entry.apps.sumOf { badgeCounts[it.packageName] ?: 0 },
                                 isFavourite = entry.key in favouriteKeys,
                                 viewModel = viewModel,
                             )
@@ -221,8 +239,8 @@ fun AppDrawer(viewModel: LauncherViewModel) {
                 }
             }
             TextField(
-                value = query,
-                onValueChange = { query = it },
+                value = queryValue,
+                onValueChange = { queryValue = it },
                 singleLine = true,
                 placeholder = { Text("Search apps", color = Color.White.copy(alpha = 0.5f)) },
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -284,6 +302,7 @@ fun AppDrawer(viewModel: LauncherViewModel) {
 @Composable
 private fun DrawerRow(
     app: AppInfo,
+    badge: Int,
     isFavourite: Boolean,
     folders: List<AppFolder>,
     viewModel: LauncherViewModel,
@@ -299,7 +318,7 @@ private fun DrawerRow(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .combinedClickable(
+                .pressable(
                     onClick = { viewModel.launch(app) },
                     onLongClick = { menuOpen = true },
                 )
@@ -313,6 +332,7 @@ private fun DrawerRow(
                 fontWeight = FontWeight.Light,
                 maxLines = 1,
             )
+            if (badge > 0) Badge(badge)
         }
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
             AppShortcutItems(app, viewModel) { menuOpen = false }
@@ -382,7 +402,7 @@ private fun DrawerRow(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FolderRow(entry: FolderEntry, isFavourite: Boolean, viewModel: LauncherViewModel) {
+private fun FolderRow(entry: FolderEntry, badge: Int, isFavourite: Boolean, viewModel: LauncherViewModel) {
     var menuOpen by remember { mutableStateOf(false) }
     var open by remember { mutableStateOf(false) }
     var rename by remember { mutableStateOf(false) }
@@ -396,7 +416,7 @@ private fun FolderRow(entry: FolderEntry, isFavourite: Boolean, viewModel: Launc
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier
                 .fillMaxWidth()
-                .combinedClickable(
+                .pressable(
                     onClick = { open = true },
                     onLongClick = { menuOpen = true },
                 )
@@ -404,6 +424,7 @@ private fun FolderRow(entry: FolderEntry, isFavourite: Boolean, viewModel: Launc
         ) {
             FolderGlyph(entry.apps.size, entry.folder.icon)
             Text(entry.label, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Light, maxLines = 1)
+            if (badge > 0) Badge(badge)
         }
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
             DropdownMenuItem(

@@ -27,6 +27,7 @@ class LauncherNotificationService : NotificationListenerService() {
 
     override fun onListenerConnected() {
         NotificationStore.setConnected(true)
+        NotificationStore.dismisser = { key -> runCatching { cancelNotification(key) } }
         runCatching { sessionManager.addOnActiveSessionsChangedListener(sessionsListener, listenerComponent) }
         refreshMedia(activeSessions())
         refreshNotifications()
@@ -34,6 +35,7 @@ class LauncherNotificationService : NotificationListenerService() {
 
     override fun onListenerDisconnected() {
         NotificationStore.setConnected(false)
+        NotificationStore.dismisser = null
         runCatching { sessionManager.removeOnActiveSessionsChangedListener(sessionsListener) }
         controller?.unregisterCallback(controllerCallback)
         controller = null
@@ -65,7 +67,8 @@ class LauncherNotificationService : NotificationListenerService() {
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
         if (title.isBlank() && text.isBlank()) return null
-        return NotificationItem(key, packageName, title, text, notification.contentIntent, postTime)
+        val autoCancel = notification.flags and Notification.FLAG_AUTO_CANCEL != 0
+        return NotificationItem(key, packageName, title, text, notification.contentIntent, postTime, autoCancel)
     }
 
     private fun activeSessions(): List<MediaController> =

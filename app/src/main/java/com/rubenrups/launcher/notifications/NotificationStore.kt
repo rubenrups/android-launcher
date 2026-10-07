@@ -13,6 +13,8 @@ data class NotificationItem(
     val text: String,
     val contentIntent: PendingIntent?,
     val postTime: Long,
+    /** Tapping it should also clear it (the app asked for that). */
+    val autoCancel: Boolean,
 )
 
 data class MediaState(
@@ -36,6 +38,14 @@ object NotificationStore {
     /** False until the user grants notification access and the system binds our service. */
     private val _listenerConnected = MutableStateFlow(false)
     val listenerConnected: StateFlow<Boolean> = _listenerConnected.asStateFlow()
+
+    /** Set by the service while it is connected; lets the UI clear a notification by key. */
+    @Volatile
+    internal var dismisser: ((String) -> Unit)? = null
+
+    fun dismiss(key: String) {
+        dismisser?.invoke(key)
+    }
 
     internal fun setNotifications(items: List<NotificationItem>) { _notifications.value = items }
     internal fun setMedia(state: MediaState?) { _media.value = state }

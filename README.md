@@ -2,6 +2,15 @@
 
 A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 
+## Features (v0.7)
+
+- Backup and restore of favourites, folders, hidden apps and settings (Settings → Backup)
+- The drawer follows your finger when you swipe up (and down to close)
+- Notifications on the home card open when tapped (including Android 14+) and swipe away
+- Swipe left / right on the home screen to open apps of your choice
+- Two columns in landscape, press feedback and haptics on rows, notification badges in the drawer
+- Optional: dark text on light wallpapers; typing on a hardware keyboard starts a search
+
 ## Features (v0.6)
 
 - Next calendar event and weather in the home header (both optional, off by default)

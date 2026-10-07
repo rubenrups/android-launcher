@@ -47,6 +47,12 @@ data class LauncherSettings(
     val widgetIds: List<Int> = emptyList(),
     /** Optional read-only GitHub token so the update check can see a private repository. */
     val updateToken: String = "",
+    /** Dark text when the wallpaper is light. Off by default: white text with a shadow suits most wallpapers. */
+    val adaptiveText: Boolean = false,
+    val twoColumnsLandscape: Boolean = true,
+    /** App keys launched by a left / right swipe on the home screen; empty = nothing. */
+    val swipeLeftApp: String = "",
+    val swipeRightApp: String = "",
 )
 
 /** Persists favourites, hidden apps and user settings in SharedPreferences. */
@@ -56,6 +62,38 @@ class LauncherPrefs(context: Context) {
 
     private val _settings = MutableStateFlow(load())
     val settings: StateFlow<LauncherSettings> = _settings.asStateFlow()
+
+    /**
+     * Everything the user set up (favourites, folders, hidden apps, every setting), as JSON.
+     * The GitHub token is left out on purpose: a backup file is easy to share by accident.
+     */
+    fun exportJson(): String {
+        val out = JSONObject().put("_format", BACKUP_FORMAT)
+        prefs.all.forEach { (key, value) ->
+            if (key != KEY_UPDATE_TOKEN && value != null) out.put(key, value)
+        }
+        return out.toString(2)
+    }
+
+    /** Replaces the current setup with a backup. Returns false (changing nothing) if the file isn't one of ours. */
+    fun importJson(json: String): Boolean {
+        val data = runCatching { JSONObject(json) }.getOrNull() ?: return false
+        if (data.optInt("_format", -1) != BACKUP_FORMAT) return false
+        val editor = prefs.edit()
+        // Keep the token (never exported) and replace everything else.
+        prefs.all.keys.filter { it != KEY_UPDATE_TOKEN }.forEach { editor.remove(it) }
+        data.keys().forEach { key ->
+            if (key.startsWith("_") || key == KEY_UPDATE_TOKEN) return@forEach
+            when (val value = data.get(key)) {
+                is Boolean -> editor.putBoolean(key, value)
+                is Int -> editor.putInt(key, value)
+                is String -> editor.putString(key, value)
+            }
+        }
+        editor.apply()
+        _settings.value = load()
+        return true
+    }
 
     fun update(transform: (LauncherSettings) -> LauncherSettings) {
         val next = transform(_settings.value)
@@ -89,6 +127,10 @@ class LauncherPrefs(context: Context) {
         recents = prefs.getString(KEY_RECENTS, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() },
         widgetIds = prefs.getString(KEY_WIDGETS, "").orEmpty().split(SEPARATOR).mapNotNull { it.toIntOrNull() },
         updateToken = prefs.getString(KEY_UPDATE_TOKEN, "").orEmpty(),
+        adaptiveText = prefs.getBoolean(KEY_ADAPTIVE_TEXT, false),
+        twoColumnsLandscape = prefs.getBoolean(KEY_TWO_COLUMNS, true),
+        swipeLeftApp = prefs.getString(KEY_SWIPE_LEFT, "").orEmpty(),
+        swipeRightApp = prefs.getString(KEY_SWIPE_RIGHT, "").orEmpty(),
     )
 
     private fun save(s: LauncherSettings) {
@@ -115,6 +157,10 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_RECENTS, s.recents.joinToString(SEPARATOR))
             .putString(KEY_WIDGETS, s.widgetIds.joinToString(SEPARATOR))
             .putString(KEY_UPDATE_TOKEN, s.updateToken)
+            .putBoolean(KEY_ADAPTIVE_TEXT, s.adaptiveText)
+            .putBoolean(KEY_TWO_COLUMNS, s.twoColumnsLandscape)
+            .putString(KEY_SWIPE_LEFT, s.swipeLeftApp)
+            .putString(KEY_SWIPE_RIGHT, s.swipeRightApp)
             .apply()
     }
 
@@ -147,6 +193,7 @@ class LauncherPrefs(context: Context) {
 
     private companion object {
         const val SEPARATOR = "|"
+        const val BACKUP_FORMAT = 1
         const val KEY_FAVOURITES = "favourites"
         const val KEY_HIDDEN = "hidden"
         const val KEY_SHOW_CLOCK = "show_clock"
@@ -166,6 +213,10 @@ class LauncherPrefs(context: Context) {
         const val KEY_RECENTS = "recents"
         const val KEY_WIDGETS = "widgets"
         const val KEY_UPDATE_TOKEN = "update_token"
+        const val KEY_ADAPTIVE_TEXT = "adaptive_text"
+        const val KEY_TWO_COLUMNS = "two_columns_landscape"
+        const val KEY_SWIPE_LEFT = "swipe_left_app"
+        const val KEY_SWIPE_RIGHT = "swipe_right_app"
         const val KEY_ANCHOR_BOTTOM = "anchor_bottom"
         const val KEY_SHOW_ICONS = "show_icons"
         const val KEY_SHOW_SEARCH_BUTTON = "show_search_button"

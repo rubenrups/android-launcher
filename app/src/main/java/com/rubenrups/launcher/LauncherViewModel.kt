@@ -87,6 +87,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _focusSearch = MutableStateFlow(false)
     val focusSearch: StateFlow<Boolean> = _focusSearch.asStateFlow()
 
+    /** Text typed on a hardware keyboard from the home screen, handed to the drawer's search field. */
+    private val _initialQuery = MutableStateFlow("")
+    val initialQuery: StateFlow<String> = _initialQuery.asStateFlow()
+
     private val _settingsOpen = MutableStateFlow(false)
     val settingsOpen: StateFlow<Boolean> = _settingsOpen.asStateFlow()
 
@@ -96,15 +100,28 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun openDrawer(focusSearch: Boolean = false) {
+    fun openDrawer(focusSearch: Boolean = false, initialQuery: String = "") {
         _focusSearch.value = focusSearch
+        _initialQuery.value = initialQuery
         _drawerOpen.value = true
     }
 
     fun closeDrawer() {
         _drawerOpen.value = false
         _focusSearch.value = false
+        _initialQuery.value = ""
     }
+
+    /** True while nothing is covering the home screen, so a typed character should start a search. */
+    fun canTypeToSearch() = !_drawerOpen.value && !_settingsOpen.value
+
+    fun launchByKey(key: String) {
+        repository.apps.value.firstOrNull { it.key == key }?.let { launch(it) }
+    }
+
+    fun backupJson(): String = prefs.exportJson()
+
+    fun restoreBackup(json: String): Boolean = prefs.importJson(json)
 
     fun setSettingsOpen(open: Boolean) { _settingsOpen.value = open }
 
