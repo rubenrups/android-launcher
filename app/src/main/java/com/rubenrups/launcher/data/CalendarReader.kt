@@ -9,6 +9,9 @@ import androidx.core.content.ContextCompat
 import java.text.DateFormat
 import java.util.Date
 
+/** What the header shows, plus enough to open the event itself. */
+data class NextEvent(val text: String, val eventId: Long, val begin: Long, val end: Long)
+
 object CalendarReader {
 
     fun hasPermission(context: Context): Boolean =
@@ -18,7 +21,7 @@ object CalendarReader {
      * The next (or current) timed event within 24 hours as "Title · 10:00–17:30", or null.
      * All-day events are skipped: they would sit on the home screen all day. Blocking query.
      */
-    fun nextEvent(context: Context): String? {
+    fun nextEvent(context: Context): NextEvent? {
         if (!hasPermission(context)) return null
         val now = System.currentTimeMillis()
         val uri = CalendarContract.Instances.CONTENT_URI.buildUpon()
@@ -32,8 +35,9 @@ object CalendarReader {
             CalendarContract.Instances.BEGIN,
             CalendarContract.Instances.END,
             CalendarContract.Instances.ALL_DAY,
+            CalendarContract.Instances.EVENT_ID,
         )
-        var result: String? = null
+        var result: NextEvent? = null
         runCatching {
             context.contentResolver.query(uri, projection, null, null, "${CalendarContract.Instances.BEGIN} ASC")?.use { c ->
                 while (result == null && c.moveToNext()) {
@@ -42,7 +46,13 @@ object CalendarReader {
                     if (allDay || end <= now) continue
                     val format = DateFormat.getTimeInstance(DateFormat.SHORT)
                     val title = c.getString(0)?.takeIf { it.isNotBlank() } ?: "(No title)"
-                    result = "$title · ${format.format(Date(c.getLong(1)))}–${format.format(Date(end))}"
+                    val begin = c.getLong(1)
+                    result = NextEvent(
+                        text = "$title · ${format.format(Date(begin))}–${format.format(Date(end))}",
+                        eventId = c.getLong(4),
+                        begin = begin,
+                        end = end,
+                    )
                 }
             }
         }

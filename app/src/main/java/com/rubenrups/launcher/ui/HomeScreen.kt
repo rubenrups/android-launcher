@@ -2,11 +2,16 @@ package com.rubenrups.launcher.ui
 
 import android.app.PendingIntent
 import android.content.BroadcastReceiver
+import android.content.ContentUris
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.res.Configuration
+import android.net.Uri
 import android.media.session.MediaController
 import android.os.BatteryManager
+import android.provider.AlarmClock
+import android.provider.CalendarContract
 import android.provider.Settings
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -58,6 +63,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -76,6 +82,7 @@ import com.rubenrups.launcher.data.AppInfo
 import com.rubenrups.launcher.data.Entry
 import com.rubenrups.launcher.data.FolderEntry
 import com.rubenrups.launcher.data.LauncherSettings
+import com.rubenrups.launcher.data.NextEvent
 import com.rubenrups.launcher.data.SwipeAction
 import com.rubenrups.launcher.expandNotificationShade
 import com.rubenrups.launcher.notifications.MediaState
@@ -163,15 +170,41 @@ fun HomeScreen(
                 .padding(vertical = 16.dp),
             horizontalAlignment = if (settings.alignEnd) Alignment.End else Alignment.Start,
         ) {
+            // In landscape there is room beside the clock, so the media card moves up next to it.
+            val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+            val mediaState = if (settings.showMedia) media else null
+            val mediaBesideClock = landscape && settings.showClock && mediaState != null
             if (settings.showClock) {
-                Box(SidePadding) { Clock(settings.alignEnd, weather, nextEvent) }
+                if (mediaBesideClock) {
+                    Row(
+                        SidePadding.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    ) {
+                        val clock: @Composable () -> Unit = {
+                            Clock(settings.alignEnd, weather, settings.weatherCity, nextEvent)
+                        }
+                        val card: @Composable () -> Unit = {
+                            mediaState?.let { MediaCard(it, Modifier.weight(1f)) }
+                        }
+                        // Keep the clock on the side the list is aligned to.
+                        if (settings.alignEnd) { card(); clock() } else { clock(); card() }
+                    }
+                } else {
+                    Box(SidePadding) { Clock(settings.alignEnd, weather, settings.weatherCity, nextEvent) }
+                }
                 Spacer(Modifier.height(16.dp))
             }
             if (settings.showNotifications) {
                 if (!listenerConnected) Box(SidePadding) { EnableNotificationsPrompt() }
                 Box(SidePadding.fillMaxWidth()) { NotificationList(notifications.take(3)) }
             }
-            if (settings.showMedia) media?.let { Box(SidePadding.fillMaxWidth()) { MediaCard(it) } }
+            if (!mediaBesideClock) {
+                mediaState?.let {
+                    Box(SidePadding.fillMaxWidth()) { MediaCard(it) }
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
             settings.widgetIds.forEach { id ->
                 key(id) { WidgetView(id, viewModel.widgets, Modifier.padding(horizontal = 24.dp, vertical = 4.dp)) }
             }
@@ -311,7 +344,8 @@ private fun rememberBatteryPercent(): Int {
 }
 
 @Composable
-private fun Clock(alignEnd: Boolean, weather: String?, event: String?) {
+private fun Clock(alignEnd: Boolean, weather: String?, city: String, event: NextEvent?) {
+    val context = LocalContext.current
     val now by produceState(Date()) {
         while (true) {
             value = Date()
@@ -321,16 +355,43 @@ private fun Clock(alignEnd: Boolean, weather: String?, event: String?) {
     val battery = rememberBatteryPercent()
     val dateFormat = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
     val timeFormat = remember { DateFormat.getTimeInstance(DateFormat.SHORT) }
-    val dateLine = buildString {
-        append(dateFormat.format(now))
-        if (battery >= 0) append("  $battery%")
-        if (weather != null) append("  $weather")
-    }
+    // Each piece is its own tap target: time -> clock app, date -> calendar, battery -> battery usage,
+    // weather -> forecast, event -> that event.
     Column(horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
-        Text(timeFormat.format(now), color = Color.White, fontSize = 56.sp, fontWeight = FontWeight.Light, style = HomeTextStyle)
-        Text(dateLine, color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp, style = HomeTextStyle)
+        Text(
+            timeFormat.format(now),
+            color = Color.White,
+            fontSize = 56.sp,
+            fontWeight = FontWeight.Light,
+            style = HomeTextStyle,
+            modifier = Modifier.clickable { startSafely(context, Intent(AlarmClock.ACTION_SHOW_ALARMS)) },
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            HeaderText(dateFormat.format(now)) {
+                startSafely(context, Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_CALENDAR))
+            }
+            if (battery >= 0) {
+                HeaderText("$battery%") { startSafely(context, Intent(Intent.ACTION_POWER_USAGE_SUMMARY)) }
+            }
+            if (weather != null) {
+                HeaderText(weather) {
+                    startSafely(
+                        context,
+                        Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode("weather $city"))),
+                    )
+                }
+            }
+        }
         if (event != null) {
-            Text(event, color = Color.White.copy(alpha = 0.9f), fontSize = 16.sp, style = HomeTextStyle, maxLines = 1)
+            HeaderText(event.text) {
+                startSafely(
+                    context,
+                    Intent(Intent.ACTION_VIEW)
+                        .setData(ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, event.eventId))
+                        .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, event.begin)
+                        .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, event.end),
+                )
+            }
         }
     }
 }
@@ -721,11 +782,11 @@ private fun PendingIntent.sendSafely() {
 }
 
 @Composable
-private fun MediaCard(media: MediaState) {
+private fun MediaCard(media: MediaState, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val controls = media.controller.transportControls
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
             .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
             // Tapping the card opens the player; the transport buttons below handle their own taps.
@@ -745,7 +806,6 @@ private fun MediaCard(media: MediaState) {
         }
         MediaButton("▶|") { controls.skipToNext() }
     }
-    Spacer(Modifier.height(8.dp))
 }
 
 /**
@@ -765,6 +825,24 @@ private fun openMediaApp(context: Context, controller: MediaController) {
     context.packageManager.getLaunchIntentForPackage(controller.packageName)?.let {
         context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
+}
+
+/** One line of header text that opens something when tapped; the padding makes the target comfortable. */
+@Composable
+private fun HeaderText(text: String, onClick: () -> Unit) {
+    Text(
+        text,
+        color = Color.White.copy(alpha = 0.9f),
+        fontSize = 16.sp,
+        style = HomeTextStyle,
+        maxLines = 1,
+        modifier = Modifier.clickable(onClick = onClick).padding(vertical = 4.dp),
+    )
+}
+
+private fun startSafely(context: Context, intent: Intent) {
+    // Not every phone has every app (no calendar, no battery screen…); a tap should just do nothing then.
+    runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
 }
 
 @Composable
