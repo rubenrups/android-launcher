@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.media.session.MediaController
 import android.os.BatteryManager
 import android.provider.Settings
 import androidx.compose.foundation.Canvas
@@ -721,11 +722,14 @@ private fun PendingIntent.sendSafely() {
 
 @Composable
 private fun MediaCard(media: MediaState) {
+    val context = LocalContext.current
     val controls = media.controller.transportControls
     Row(
         Modifier
             .fillMaxWidth()
             .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
+            // Tapping the card opens the player; the transport buttons below handle their own taps.
+            .clickable { openMediaApp(context, media.controller) }
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -742,6 +746,25 @@ private fun MediaCard(media: MediaState) {
         MediaButton("▶|") { controls.skipToNext() }
     }
     Spacer(Modifier.height(8.dp))
+}
+
+/**
+ * Opens the player behind [controller]: the screen the app itself registered for its session
+ * (usually "now playing"), or failing that the app's normal launcher entry.
+ */
+private fun openMediaApp(context: Context, controller: MediaController) {
+    val sessionIntent = controller.sessionActivity
+    if (sessionIntent != null) {
+        try {
+            sessionIntent.send()
+            return
+        } catch (_: PendingIntent.CanceledException) {
+            // The app withdrew it; fall back to a plain launch below.
+        }
+    }
+    context.packageManager.getLaunchIntentForPackage(controller.packageName)?.let {
+        context.startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
 }
 
 @Composable
