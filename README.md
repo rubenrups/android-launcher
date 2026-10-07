@@ -2,6 +2,11 @@
 
 A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 
+## Features (v0.8)
+
+- Home-screen folders open as a see-through popup (Settings → "Open folders as a popup"; off = expand in place)
+- Pull the drawer down from the top of its list to close it: reliable from the first touch, no need to scroll first
+
 ## Features (v0.7)
 
 - Backup and restore of favourites, folders, hidden apps and settings (Settings → Backup)

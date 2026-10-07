@@ -146,6 +146,9 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
             }
             Hint("Weather is fetched from open-meteo.com using only the city name.")
         }
+        SwitchRow("Open folders as a popup (off: expand in place)", settings.folderPopupOnHome) { v ->
+            viewModel.update { it.copy(folderPopupOnHome = v) }
+        }
         SwitchRow("Two columns in landscape", settings.twoColumnsLandscape) { v ->
             viewModel.update { it.copy(twoColumnsLandscape = v) }
         }

@@ -84,9 +84,9 @@ private const val RECENTS_SHOWN = 5
 
 private val SCRUBBER_LETTERS = listOf('#') + ('A'..'Z').toList()
 
-/** Dragging down this far (px) past the top of the list, or flinging down fast enough, closes the drawer. */
-private const val CLOSE_DRAG_PX = 200f
-private const val CLOSE_FLING_VELOCITY = 1800f
+/** Pulling down this far (dp) from the top of the list, or flicking down this fast (px/s), closes the drawer. */
+private const val CLOSE_DRAG_DP = 72
+private const val CLOSE_FLING_VELOCITY = 1200f
 
 @Composable
 fun AppDrawer(
@@ -128,30 +128,6 @@ fun AppDrawer(
     // Warm the icon cache off the main thread so scrolling and letter jumps never wait on icon decoding.
     LaunchedEffect(allApps) {
         withContext(Dispatchers.Default) { allApps.forEach { viewModel.repository.loadIcon(it) } }
-    }
-
-    // Swipe down to close, but only once the list has nothing left to scroll upwards:
-    // the leftover ("unconsumed") downward drag is what we measure.
-    val closeOnPullDown = remember {
-        object : NestedScrollConnection {
-            private var pulled = 0f
-
-            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (source == NestedScrollSource.UserInput) {
-                    pulled = if (available.y > 0f) pulled + available.y else 0f
-                    // The drawer follows the finger while it is pulled down past the top of the list.
-                    currentPull(pulled)
-                }
-                return Offset.Zero
-            }
-
-            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                val close = pulled > CLOSE_DRAG_PX || available.y > CLOSE_FLING_VELOCITY
-                if (pulled > 0f || close) currentPullEnd(close)
-                pulled = 0f
-                return Velocity.Zero
-            }
-        }
     }
 
     // While searching, results are flat apps (including ones inside folders); otherwise folders + loose apps.
@@ -199,7 +175,13 @@ fun AppDrawer(
             Row(Modifier.weight(1f)) {
                 LazyColumn(
                     state = listState,
-                    modifier = Modifier.weight(1f).nestedScroll(closeOnPullDown),
+                    modifier = Modifier.weight(1f).pullDownToClose(
+                        listState = listState,
+                        closeDistance = CLOSE_DRAG_DP.dp,
+                        closeVelocity = CLOSE_FLING_VELOCITY,
+                        onPull = { currentPull(it) },
+                        onEnd = { currentPullEnd(it) },
+                    ),
                 ) {
                     if (showRecentsRow) {
                         item(key = "recents") { RecentsRow(recentApps, viewModel) }

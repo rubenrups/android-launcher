@@ -476,6 +476,7 @@ private fun FavouritesList(
     var dragKey by remember { mutableStateOf<String?>(null) }
     var dragOffset by remember { mutableFloatStateOf(0f) }
     var expandedKeys by remember { mutableStateOf(setOf<String>()) }
+    var popupFolderKey by remember { mutableStateOf<String?>(null) }
     var renameFolderKey by remember { mutableStateOf<String?>(null) }
     var addAppsFolderId by remember { mutableStateOf<String?>(null) }
     var sortFolderKey by remember { mutableStateOf<String?>(null) }
@@ -546,7 +547,11 @@ private fun FavouritesList(
                         viewModel = viewModel,
                         onReorder = { onEditModeChange(true) },
                         onToggleFolder = {
-                            expandedKeys = if (entry.key in expandedKeys) expandedKeys - entry.key else expandedKeys + entry.key
+                            if (settings.folderPopupOnHome) {
+                                popupFolderKey = entry.key
+                            } else {
+                                expandedKeys = if (entry.key in expandedKeys) expandedKeys - entry.key else expandedKeys + entry.key
+                            }
                         },
                         onRenameFolder = { renameFolderKey = entry.key },
                         onAddApps = { (entry as? FolderEntry)?.let { addAppsFolderId = it.folder.id } },
@@ -574,6 +579,9 @@ private fun FavouritesList(
         Spacer(Modifier.height(bottomPadding))
     }
 
+    favourites.filterIsInstance<FolderEntry>().firstOrNull { it.key == popupFolderKey }?.let { folder ->
+        FolderDialog(folder, viewModel, onDismiss = { popupFolderKey = null }, translucent = true)
+    }
     favourites.filterIsInstance<FolderEntry>().firstOrNull { it.key == iconFolderKey }?.let { folder ->
         FolderIconDialog(folder, viewModel, onDismiss = { iconFolderKey = null })
     }

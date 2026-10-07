@@ -28,6 +28,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,7 +44,9 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogWindowProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.data.AppFolder
@@ -127,13 +130,27 @@ private fun PickerRow(label: String, onClick: () -> Unit) {
 /** The contents of a folder as a popup. Long-press an app inside for "Remove from folder". */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun FolderDialog(entry: FolderEntry, viewModel: LauncherViewModel, onDismiss: () -> Unit) {
+fun FolderDialog(
+    entry: FolderEntry,
+    viewModel: LauncherViewModel,
+    onDismiss: () -> Unit,
+    /** See-through variant for the home screen, so the wallpaper stays visible behind it. */
+    translucent: Boolean = false,
+) {
     var picking by remember { mutableStateOf(false) }
     var sorting by remember { mutableStateOf(false) }
     val favourites by viewModel.favourites.collectAsStateWithLifecycle()
     val favouriteKeys = remember(favourites) { favourites.mapTo(HashSet()) { it.key } }
     Dialog(onDismissRequest = onDismiss) {
-        Surface(shape = RoundedCornerShape(24.dp), color = Color(0xF21A1A1A)) {
+        if (translucent) {
+            // The dialog window dims everything behind it by default; keep that light so the wallpaper shows.
+            val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
+            SideEffect { dialogWindow?.setDimAmount(0.12f) }
+        }
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = if (translucent) Color(0xFF1A1A1A).copy(alpha = 0.6f) else Color(0xF21A1A1A),
+        ) {
             val scroll = rememberScrollState()
             Column(
                 Modifier.heightIn(max = 560.dp).verticalScrollbar(scroll).verticalScroll(scroll).padding(vertical = 16.dp),
