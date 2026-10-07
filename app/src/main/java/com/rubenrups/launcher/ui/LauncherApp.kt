@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
 import kotlinx.coroutines.launch
@@ -34,9 +35,9 @@ fun LauncherApp(viewModel: LauncherViewModel) {
     // everything else (buttons, back, launching an app) animates it.
     val progress = remember { Animatable(0f) }
     val scope = rememberCoroutineScope()
-    val fullPullPx = with(LocalDensity.current) {
-        LocalConfiguration.current.screenHeightDp.dp.toPx() * FULL_PULL_FRACTION
-    }
+    val density = LocalDensity.current
+    val screenHeightDp = LocalConfiguration.current.screenHeightDp
+    val fullPullPx = with(density) { screenHeightDp.dp.toPx() } * FULL_PULL_FRACTION
     // Only recompose the drawer's host when it appears or disappears, not on every animation frame.
     val drawerVisible by remember { derivedStateOf { progress.value > 0f } }
 
