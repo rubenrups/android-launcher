@@ -40,6 +40,7 @@ class LauncherNotificationService : NotificationListenerService() {
         controller?.unregisterCallback(controllerCallback)
         controller = null
         NotificationStore.setMedia(null)
+        NotificationStore.setNavigation(null)
         NotificationStore.setNotifications(emptyList())
     }
 
@@ -48,12 +49,24 @@ class LauncherNotificationService : NotificationListenerService() {
 
     private fun refreshNotifications() {
         val active = runCatching { activeNotifications }.getOrNull().orEmpty()
+        NotificationStore.setNavigation(active.firstNotNullOfOrNull { it.toNavigation() })
         NotificationStore.setNotifications(
             active
                 .filter { it.packageName != packageName && !it.isOngoing && !it.isGroupSummary() && !it.isTransport() }
                 .mapNotNull { it.toItem() }
                 .sortedByDescending { it.postTime }
         )
+    }
+
+    /** Navigation apps keep one ongoing notification with the next instruction while a route is active. */
+    private fun StatusBarNotification.toNavigation(): NavigationState? {
+        if (packageName !in NAVIGATION_PACKAGES || !isOngoing) return null
+        val extras = notification.extras
+        val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+        val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
+        val summary = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString().orEmpty()
+        if (title.isBlank() && text.isBlank()) return null
+        return NavigationState(packageName, title, text, summary, notification.contentIntent)
     }
 
     private fun StatusBarNotification.isGroupSummary() =
@@ -113,5 +126,9 @@ class LauncherNotificationService : NotificationListenerService() {
                 controller = c,
             )
         )
+    }
+
+    private companion object {
+        val NAVIGATION_PACKAGES = setOf("com.google.android.apps.maps", "com.waze")
     }
 }

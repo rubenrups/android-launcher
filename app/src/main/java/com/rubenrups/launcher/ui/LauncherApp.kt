@@ -19,7 +19,11 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
 import com.rubenrups.launcher.LauncherViewModel
 import kotlinx.coroutines.launch
 
@@ -30,6 +34,21 @@ private const val FULL_PULL_FRACTION = 0.6f
 fun LauncherApp(viewModel: LauncherViewModel) {
     val drawerOpen by viewModel.drawerOpen.collectAsStateWithLifecycle()
     val settingsOpen by viewModel.settingsOpen.collectAsStateWithLifecycle()
+    val dashboardOpen by viewModel.dashboardOpen.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val lifecycleOwner = LocalLifecycleOwner.current
+
+    // Poll LibreLinkUp once a minute, only while the launcher is on screen; a login change polls straight away.
+    LaunchedEffect(settings.glucoseEnabled, settings.glucoseEmail, settings.glucosePassword) {
+        // Typing the login restarts this effect on every keystroke; the pause keeps half-typed logins off the server.
+        delay(1_500)
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            while (true) {
+                viewModel.refreshGlucose()
+                delay(60_000)
+            }
+        }
+    }
 
     // 0 = drawer closed, 1 = fully open. Gestures set it directly so the drawer tracks the finger;
     // everything else (buttons, back, launching an app) animates it.
@@ -47,6 +66,7 @@ fun LauncherApp(viewModel: LauncherViewModel) {
 
     // Registered last = highest priority: settings closes before the drawer.
     BackHandler(enabled = drawerOpen) { viewModel.closeDrawer() }
+    BackHandler(enabled = dashboardOpen) { viewModel.setDashboardOpen(false) }
     BackHandler(enabled = settingsOpen) { viewModel.setSettingsOpen(false) }
 
     Box(Modifier.fillMaxSize()) {
@@ -88,6 +108,14 @@ fun LauncherApp(viewModel: LauncherViewModel) {
                     },
                 )
             }
+        }
+
+        AnimatedVisibility(visible = dashboardOpen, enter = fadeIn(), exit = fadeOut()) {
+            DashboardScreen(
+                viewModel,
+                onClose = { viewModel.setDashboardOpen(false) },
+                onOpenSettings = { viewModel.setSettingsOpen(true) },
+            )
         }
 
         AnimatedVisibility(

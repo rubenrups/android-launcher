@@ -55,6 +55,15 @@ data class LauncherSettings(
     /** App keys launched by a left / right swipe on the home screen; empty = nothing. */
     val swipeLeftApp: String = "",
     val swipeRightApp: String = "",
+    val glucoseEnabled: Boolean = false,
+    /** LibreLinkUp follower login. Stored on this device only and never exported. */
+    val glucoseEmail: String = "",
+    val glucosePassword: String = "",
+    val glucoseMmol: Boolean = false,
+    /** Thresholds in mg/dL: below [glucoseLow] or above [glucoseHigh] the value is coloured. */
+    val glucoseLow: Int = 70,
+    val glucoseHigh: Int = 180,
+    val showNavigation: Boolean = true,
 )
 
 /** Persists favourites, hidden apps and user settings in SharedPreferences. */
@@ -72,7 +81,7 @@ class LauncherPrefs(context: Context) {
     fun exportJson(): String {
         val out = JSONObject().put("_format", BACKUP_FORMAT)
         prefs.all.forEach { (key, value) ->
-            if (key != KEY_UPDATE_TOKEN && value != null) out.put(key, value)
+            if (key !in SECRET_KEYS && value != null) out.put(key, value)
         }
         return out.toString(2)
     }
@@ -83,9 +92,9 @@ class LauncherPrefs(context: Context) {
         if (data.optInt("_format", -1) != BACKUP_FORMAT) return false
         val editor = prefs.edit()
         // Keep the token (never exported) and replace everything else.
-        prefs.all.keys.filter { it != KEY_UPDATE_TOKEN }.forEach { editor.remove(it) }
+        prefs.all.keys.filter { it !in SECRET_KEYS }.forEach { editor.remove(it) }
         data.keys().forEach { key ->
-            if (key.startsWith("_") || key == KEY_UPDATE_TOKEN) return@forEach
+            if (key.startsWith("_") || key in SECRET_KEYS) return@forEach
             when (val value = data.get(key)) {
                 is Boolean -> editor.putBoolean(key, value)
                 is Int -> editor.putInt(key, value)
@@ -134,6 +143,13 @@ class LauncherPrefs(context: Context) {
         folderPopupOnHome = prefs.getBoolean(KEY_FOLDER_POPUP, true),
         swipeLeftApp = prefs.getString(KEY_SWIPE_LEFT, "").orEmpty(),
         swipeRightApp = prefs.getString(KEY_SWIPE_RIGHT, "").orEmpty(),
+        glucoseEnabled = prefs.getBoolean(KEY_GLUCOSE_ON, false),
+        glucoseEmail = prefs.getString(KEY_GLUCOSE_EMAIL, "").orEmpty(),
+        glucosePassword = prefs.getString(KEY_GLUCOSE_PASSWORD, "").orEmpty(),
+        glucoseMmol = prefs.getBoolean(KEY_GLUCOSE_MMOL, false),
+        glucoseLow = prefs.getInt(KEY_GLUCOSE_LOW, 70),
+        glucoseHigh = prefs.getInt(KEY_GLUCOSE_HIGH, 180),
+        showNavigation = prefs.getBoolean(KEY_SHOW_NAVIGATION, true),
     )
 
     private fun save(s: LauncherSettings) {
@@ -165,6 +181,13 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_FOLDER_POPUP, s.folderPopupOnHome)
             .putString(KEY_SWIPE_LEFT, s.swipeLeftApp)
             .putString(KEY_SWIPE_RIGHT, s.swipeRightApp)
+            .putBoolean(KEY_GLUCOSE_ON, s.glucoseEnabled)
+            .putString(KEY_GLUCOSE_EMAIL, s.glucoseEmail)
+            .putString(KEY_GLUCOSE_PASSWORD, s.glucosePassword)
+            .putBoolean(KEY_GLUCOSE_MMOL, s.glucoseMmol)
+            .putInt(KEY_GLUCOSE_LOW, s.glucoseLow)
+            .putInt(KEY_GLUCOSE_HIGH, s.glucoseHigh)
+            .putBoolean(KEY_SHOW_NAVIGATION, s.showNavigation)
             .apply()
     }
 
@@ -222,6 +245,15 @@ class LauncherPrefs(context: Context) {
         const val KEY_FOLDER_POPUP = "folder_popup_on_home"
         const val KEY_SWIPE_LEFT = "swipe_left_app"
         const val KEY_SWIPE_RIGHT = "swipe_right_app"
+        const val KEY_GLUCOSE_ON = "glucose_enabled"
+        const val KEY_GLUCOSE_EMAIL = "glucose_email"
+        const val KEY_GLUCOSE_PASSWORD = "glucose_password"
+        const val KEY_GLUCOSE_MMOL = "glucose_mmol"
+        const val KEY_GLUCOSE_LOW = "glucose_low"
+        const val KEY_GLUCOSE_HIGH = "glucose_high"
+        const val KEY_SHOW_NAVIGATION = "show_navigation"
+        /** Credentials: never written to a backup file, and a restore leaves them alone. */
+        val SECRET_KEYS = setOf(KEY_UPDATE_TOKEN, KEY_GLUCOSE_EMAIL, KEY_GLUCOSE_PASSWORD)
         const val KEY_ANCHOR_BOTTOM = "anchor_bottom"
         const val KEY_SHOW_ICONS = "show_icons"
         const val KEY_SHOW_SEARCH_BUTTON = "show_search_button"

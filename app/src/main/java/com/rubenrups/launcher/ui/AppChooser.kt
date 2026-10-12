@@ -34,6 +34,9 @@ fun AppChooserDialog(
     viewModel: LauncherViewModel,
     onPick: (AppInfo?) -> Unit,
     onDismiss: () -> Unit,
+    /** Extra non-app choices (label to key), such as the dashboard, listed above the apps. */
+    extras: List<Pair<String, String>> = emptyList(),
+    onPickExtra: (String) -> Unit = {},
 ) {
     val apps by viewModel.visibleApps.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
@@ -55,6 +58,14 @@ fun AppChooserDialog(
                             color = Color.White,
                             fontSize = 17.sp,
                             modifier = Modifier.fillMaxWidth().clickable { onPick(null) }.padding(horizontal = 24.dp, vertical = 14.dp),
+                        )
+                    }
+                    items(extras, key = { it.second }) { (label, key) ->
+                        Text(
+                            label,
+                            color = Color.White,
+                            fontSize = 17.sp,
+                            modifier = Modifier.fillMaxWidth().clickable { onPickExtra(key) }.padding(horizontal = 24.dp, vertical = 14.dp),
                         )
                     }
                     items(apps, key = { it.key }) { app ->

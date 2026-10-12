@@ -16,6 +16,8 @@ import android.appwidget.AppWidgetProviderInfo
 import com.rubenrups.launcher.data.AppRepository
 import com.rubenrups.launcher.data.IconPack
 import com.rubenrups.launcher.data.LauncherPrefsHolder
+import com.rubenrups.launcher.data.GlucoseState
+import com.rubenrups.launcher.data.GlucoseStore
 import com.rubenrups.launcher.data.LauncherSettings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -94,6 +96,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _settingsOpen = MutableStateFlow(false)
     val settingsOpen: StateFlow<Boolean> = _settingsOpen.asStateFlow()
 
+    private val _dashboardOpen = MutableStateFlow(false)
+    val dashboardOpen: StateFlow<Boolean> = _dashboardOpen.asStateFlow()
+
+    private val glucoseStore = GlucoseStore()
+    val glucose: StateFlow<GlucoseState> = glucoseStore.state
+
     init {
         viewModelScope.launch {
             settings.map { it.iconPack }.distinctUntilChanged().collect { repository.setIconPack(it) }
@@ -113,9 +121,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     /** True while nothing is covering the home screen, so a typed character should start a search. */
-    fun canTypeToSearch() = !_drawerOpen.value && !_settingsOpen.value
+    fun canTypeToSearch() = !_drawerOpen.value && !_settingsOpen.value && !_dashboardOpen.value
 
     fun launchByKey(key: String) {
+        if (key == ACTION_DASHBOARD) {
+            setDashboardOpen(true)
+            return
+        }
         repository.apps.value.firstOrNull { it.key == key }?.let { launch(it) }
     }
 
@@ -125,10 +137,26 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun setSettingsOpen(open: Boolean) { _settingsOpen.value = open }
 
+    fun setDashboardOpen(open: Boolean) {
+        if (open) closeDrawer()
+        _dashboardOpen.value = open
+    }
+
+    /** One poll of LibreLinkUp; the caller decides the rhythm (see LauncherApp). No-op while the feature is off. */
+    suspend fun refreshGlucose() {
+        val s = settings.value
+        if (!s.glucoseEnabled || s.glucoseEmail.isBlank() || s.glucosePassword.isBlank()) {
+            glucoseStore.clear()
+            return
+        }
+        glucoseStore.refresh(s.glucoseEmail.trim(), s.glucosePassword)
+    }
+
     /** Back to the plain home screen (Home button pressed while we are already on top). */
     fun closeAll() {
         closeDrawer()
         _settingsOpen.value = false
+        _dashboardOpen.value = false
     }
 
     fun update(transform: (LauncherSettings) -> LauncherSettings) = prefs.update(transform)
@@ -252,7 +280,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         closeDrawer()
     }
 
-    private companion object {
-        const val MAX_RECENTS = 8
+    companion object {
+        /** Swipe-gesture target that opens the dashboard instead of an app. */
+        const val ACTION_DASHBOARD = "action:dashboard"
+        private const val MAX_RECENTS = 8
     }
 }

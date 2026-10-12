@@ -84,7 +84,10 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
             }
         }
     }
-    fun swipeLabel(key: String) = visibleApps.firstOrNull { it.key == key }?.label ?: "Nothing"
+    fun swipeLabel(key: String) = when (key) {
+        LauncherViewModel.ACTION_DASHBOARD -> "Dashboard"
+        else -> visibleApps.firstOrNull { it.key == key }?.label ?: "Nothing"
+    }
     var pickWidget by remember { mutableStateOf(false) }
     var updateStatus by remember { mutableStateOf<String?>(null) }
     var updateUrl by remember { mutableStateOf<String?>(null) }
@@ -227,6 +230,51 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
             Hint("Work apps appear in the drawer with a 💼 and a badge on their icon.")
         }
 
+        Section("Dashboard & glucose")
+        Hint("Open the dashboard from the long-press menu, by tapping the glucose line, or by choosing it under Swipe left / right below.")
+        SwitchRow("Show navigation on home", settings.showNavigation) { v -> viewModel.update { it.copy(showNavigation = v) } }
+        Hint(
+            "While Google Maps or Waze is navigating, its next-turn notification is shown here. " +
+                "Needs notification access (see Notifications & media)."
+        )
+        SwitchRow("Show glucose (LibreLinkUp)", settings.glucoseEnabled) { v -> viewModel.update { it.copy(glucoseEnabled = v) } }
+        if (settings.glucoseEnabled) {
+            TextField(
+                value = settings.glucoseEmail,
+                onValueChange = { v -> viewModel.update { it.copy(glucoseEmail = v) } },
+                singleLine = true,
+                placeholder = { Text("LibreLinkUp email") },
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            )
+            TextField(
+                value = settings.glucosePassword,
+                onValueChange = { v -> viewModel.update { it.copy(glucosePassword = v) } },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                placeholder = { Text("LibreLinkUp password") },
+                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            )
+            SwitchRow("Use mmol/L instead of mg/dL", settings.glucoseMmol) { v -> viewModel.update { it.copy(glucoseMmol = v) } }
+            Label("Low below ${formatGlucose(settings.glucoseLow, settings.glucoseMmol)} ${glucoseUnit(settings.glucoseMmol)}")
+            Slider(
+                value = settings.glucoseLow.toFloat(),
+                onValueChange = { v -> viewModel.update { it.copy(glucoseLow = v.toInt()) } },
+                valueRange = 50f..110f,
+            )
+            Label("High above ${formatGlucose(settings.glucoseHigh, settings.glucoseMmol)} ${glucoseUnit(settings.glucoseMmol)}")
+            Slider(
+                value = settings.glucoseHigh.toFloat(),
+                onValueChange = { v -> viewModel.update { it.copy(glucoseHigh = v.toInt()) } },
+                valueRange = 120f..300f,
+            )
+            Hint(
+                "Use the login of a LibreLinkUp follower account that your Libre sensor is shared with " +
+                    "(not the LibreLink account itself). It is stored on this device only and never included in backups. " +
+                    "This uses an unofficial service that can change without notice. A reading older than 10 minutes is greyed out. " +
+                    "For display only: never use it for treatment decisions."
+            )
+        }
+
         Section("Backup")
         ActionRow("Save a backup file") { exportLauncher.launch("rups-launcher-backup.json") }
         ActionRow("Restore from a backup file") { importLauncher.launch(arrayOf("*/*")) }
@@ -290,6 +338,11 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                     chooser = null
                 },
                 onDismiss = { chooser = null },
+                extras = listOf("Dashboard" to LauncherViewModel.ACTION_DASHBOARD),
+                onPickExtra = { key ->
+                    viewModel.update { if (side == "left") it.copy(swipeLeftApp = key) else it.copy(swipeRightApp = key) }
+                    chooser = null
+                },
             )
         }
 

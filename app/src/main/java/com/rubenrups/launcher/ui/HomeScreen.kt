@@ -135,8 +135,9 @@ fun HomeScreen(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val drawerOpen by viewModel.drawerOpen.collectAsStateWithLifecycle()
     val settingsOpen by viewModel.settingsOpen.collectAsStateWithLifecycle()
-    // Dark ink only while the bare wallpaper is showing; the drawer and settings are dark overlays.
-    val darkInk = rememberLightWallpaper(settings.adaptiveText) && !drawerOpen && !settingsOpen
+    val dashboardOpen by viewModel.dashboardOpen.collectAsStateWithLifecycle()
+    // Dark ink only while the bare wallpaper is showing; the drawer, settings and dashboard are dark overlays.
+    val darkInk = rememberLightWallpaper(settings.adaptiveText) && !drawerOpen && !settingsOpen && !dashboardOpen
     val view = LocalView.current
     SideEffect {
         // Status and navigation bar icons are drawn by the system: flip them with the text.
@@ -165,6 +166,8 @@ private fun HomeContent(
     val notifications by NotificationStore.notifications.collectAsStateWithLifecycle()
     val media by NotificationStore.media.collectAsStateWithLifecycle()
     val listenerConnected by NotificationStore.listenerConnected.collectAsStateWithLifecycle()
+    val navigation by NotificationStore.navigation.collectAsStateWithLifecycle()
+    val glucose by viewModel.glucose.collectAsStateWithLifecycle()
     val badgeCounts = remember(notifications) { notifications.groupingBy { it.packageName }.eachCount() }
     var editMode by remember { mutableStateOf(false) }
     // Where a long-press landed; non-null while the home-screen menu is showing.
@@ -230,6 +233,11 @@ private fun HomeContent(
             // In landscape there is room beside the clock, so the media card moves up next to it.
             val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
             val mediaState = if (settings.showMedia) media else null
+            val glucoseLine: @Composable () -> Unit = {
+                if (settings.glucoseEnabled) {
+                    GlucoseChip(glucose, settings, LocalHomeInk.current) { viewModel.setDashboardOpen(true) }
+                }
+            }
             val mediaBesideClock = landscape && settings.showClock && mediaState != null
             if (settings.showClock) {
                 if (mediaBesideClock) {
@@ -239,7 +247,7 @@ private fun HomeContent(
                         horizontalArrangement = Arrangement.spacedBy(24.dp),
                     ) {
                         val clock: @Composable () -> Unit = {
-                            Clock(settings.alignEnd, weather, settings.weatherCity, nextEvent)
+                            Clock(settings.alignEnd, weather, settings.weatherCity, nextEvent, glucoseLine)
                         }
                         val card: @Composable () -> Unit = {
                             mediaState?.let { MediaCard(it, Modifier.weight(1f)) }
@@ -248,9 +256,12 @@ private fun HomeContent(
                         if (settings.alignEnd) { card(); clock() } else { clock(); card() }
                     }
                 } else {
-                    Box(SidePadding) { Clock(settings.alignEnd, weather, settings.weatherCity, nextEvent) }
+                    Box(SidePadding) { Clock(settings.alignEnd, weather, settings.weatherCity, nextEvent, glucoseLine) }
                 }
                 Spacer(Modifier.height(16.dp))
+            }
+            if (settings.showNavigation) {
+                navigation?.let { Box(SidePadding.fillMaxWidth()) { NavigationCard(it) }; Spacer(Modifier.height(8.dp)) }
             }
             if (settings.showNotifications) {
                 if (!listenerConnected) Box(SidePadding) { EnableNotificationsPrompt() }
@@ -324,6 +335,10 @@ private fun HomeContent(
                             editMode = true
                         })
                     }
+                    DropdownMenuItem(text = { Text("Dashboard") }, onClick = {
+                        homeMenuAt = null
+                        viewModel.setDashboardOpen(true)
+                    })
                     DropdownMenuItem(text = { Text("Add widget") }, onClick = {
                         homeMenuAt = null
                         showWidgetPicker = true
@@ -381,7 +396,7 @@ private fun SearchButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun rememberBatteryPercent(): Int {
+internal fun rememberBatteryPercent(): Int {
     val context = LocalContext.current
     var percent by remember { mutableIntStateOf(-1) }
     DisposableEffect(context) {
@@ -402,7 +417,7 @@ private fun rememberBatteryPercent(): Int {
 }
 
 @Composable
-private fun Clock(alignEnd: Boolean, weather: String?, city: String, event: NextEvent?) {
+private fun Clock(alignEnd: Boolean, weather: String?, city: String, event: NextEvent?, glucoseLine: @Composable () -> Unit) {
     val ink = LocalHomeInk.current
     val context = LocalContext.current
     val now by produceState(Date()) {
@@ -441,6 +456,7 @@ private fun Clock(alignEnd: Boolean, weather: String?, city: String, event: Next
                 }
             }
         }
+        glucoseLine()
         if (event != null) {
             HeaderText(event.text) {
                 startSafely(
@@ -899,7 +915,7 @@ private fun SwipeAwayRow(onDismiss: () -> Unit, content: @Composable () -> Unit)
 }
 
 @Composable
-private fun MediaCard(media: MediaState, modifier: Modifier = Modifier) {
+internal fun MediaCard(media: MediaState, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val controls = media.controller.transportControls
     Row(

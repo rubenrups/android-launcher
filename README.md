@@ -2,7 +2,11 @@
 
 A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 
-## Features (v0.8)
+## Features (v0.9)
+
+- **Dashboard**: a second screen with glucose (graph, in-range %), navigation, media controls and quick stats. Open it from the long-press menu, by tapping the glucose line, or assign it to a left/right swipe
+- **Glucose on home**: FreeStyle Libre value, trend and age under the clock, via a LibreLinkUp follower account (display only; greyed out when older than 10 min)
+- **Navigation card**: the Google Maps / Waze next-turn notification shown on home
 
 - **Pinned shortcuts**: "Add to home screen" from Chrome (and other apps) lands in the drawer, and can be favourited, foldered or removed. Needs Rups to be the default home app.
 

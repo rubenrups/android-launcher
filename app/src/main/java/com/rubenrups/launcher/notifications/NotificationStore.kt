@@ -17,6 +17,18 @@ data class NotificationItem(
     val autoCancel: Boolean,
 )
 
+/** The ongoing turn-by-turn notification of a navigation app (Google Maps, Waze). */
+data class NavigationState(
+    val packageName: String,
+    /** Usually the distance to the next turn, or the street. */
+    val title: String,
+    /** The instruction, e.g. "Turn left onto Main St". */
+    val text: String,
+    /** Trip summary such as "12 min · 5.3 km · 15:42". */
+    val summary: String,
+    val contentIntent: PendingIntent?,
+)
+
 data class MediaState(
     val title: String,
     val artist: String,
@@ -35,6 +47,9 @@ object NotificationStore {
     private val _media = MutableStateFlow<MediaState?>(null)
     val media: StateFlow<MediaState?> = _media.asStateFlow()
 
+    private val _navigation = MutableStateFlow<NavigationState?>(null)
+    val navigation: StateFlow<NavigationState?> = _navigation.asStateFlow()
+
     /** False until the user grants notification access and the system binds our service. */
     private val _listenerConnected = MutableStateFlow(false)
     val listenerConnected: StateFlow<Boolean> = _listenerConnected.asStateFlow()
@@ -48,6 +63,7 @@ object NotificationStore {
     }
 
     internal fun setNotifications(items: List<NotificationItem>) { _notifications.value = items }
+    internal fun setNavigation(state: NavigationState?) { _navigation.value = state }
     internal fun setMedia(state: MediaState?) { _media.value = state }
     internal fun setConnected(connected: Boolean) { _listenerConnected.value = connected }
 }
