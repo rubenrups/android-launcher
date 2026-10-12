@@ -55,6 +55,18 @@
             </intent-filter>
         </activity>
 
+        <!-- "Add to home screen" requests (Chrome shortcuts, contacts, …) -->
+        <activity
+            android:name=".PinShortcutActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@style/Theme.Launcher">
+            <intent-filter>
+                <action android:name="android.content.pm.action.CONFIRM_PIN_SHORTCUT" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".notifications.LauncherNotificationService"
             android:exported="true"

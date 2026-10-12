@@ -343,8 +343,13 @@ private fun DrawerRow(
                 menuOpen = false
                 viewModel.repository.openAppInfo(app)
             })
-            // Uninstalling a work-profile app would hit the personal copy, so only offer it for the main profile.
-            if (app.isMainProfile) {
+            if (app.shortcutId != null) {
+                DropdownMenuItem(text = { Text("Remove shortcut") }, onClick = {
+                    menuOpen = false
+                    viewModel.repository.unpinShortcut(app)
+                })
+            } else if (app.isMainProfile) {
+                // Uninstalling a work-profile app would hit the personal copy, so only offer it for the main profile.
                 DropdownMenuItem(text = { Text("Uninstall") }, onClick = {
                     menuOpen = false
                     viewModel.repository.uninstall(app)

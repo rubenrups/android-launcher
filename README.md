@@ -4,6 +4,8 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 
 ## Features (v0.8)
 
+- **Pinned shortcuts**: "Add to home screen" from Chrome (and other apps) lands in the drawer, and can be favourited, foldered or removed. Needs Rups to be the default home app.
+
 - Home-screen folders open as a see-through popup (Settings → "Open folders as a popup"; off = expand in place)
 - Pull the drawer down from the top of its list to close it: reliable from the first touch, no need to scroll first
 

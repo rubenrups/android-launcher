@@ -15,7 +15,7 @@ import android.app.Activity
 import android.appwidget.AppWidgetProviderInfo
 import com.rubenrups.launcher.data.AppRepository
 import com.rubenrups.launcher.data.IconPack
-import com.rubenrups.launcher.data.LauncherPrefs
+import com.rubenrups.launcher.data.LauncherPrefsHolder
 import com.rubenrups.launcher.data.LauncherSettings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -32,7 +32,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     val repository = AppRepository(application)
     val widgets = WidgetHostManager(application)
-    private val prefs = LauncherPrefs(application)
+    private val prefs = LauncherPrefsHolder.get(application)
 
     val settings: StateFlow<LauncherSettings> = prefs.settings
     val iconVersion: StateFlow<Int> = repository.iconVersion

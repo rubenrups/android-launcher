@@ -227,3 +227,17 @@ class LauncherPrefs(context: Context) {
         const val KEY_SHOW_SEARCH_BUTTON = "show_search_button"
     }
 }
+
+/**
+ * One [LauncherPrefs] per process. The activity that confirms a pinned shortcut and the main screen both write
+ * favourites; two separate copies would each overwrite the other's changes with their own stale state.
+ */
+object LauncherPrefsHolder {
+    @Volatile
+    private var instance: LauncherPrefs? = null
+
+    fun get(context: Context): LauncherPrefs =
+        instance ?: synchronized(this) {
+            instance ?: LauncherPrefs(context.applicationContext).also { instance = it }
+        }
+}

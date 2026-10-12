@@ -39,6 +39,7 @@ class AppRepository(private val context: Context) {
     private val launcherApps = context.getSystemService(LauncherApps::class.java)
     private val userManager = context.getSystemService(UserManager::class.java)
     private val activityInfos = HashMap<String, LauncherActivityInfo>()
+    private val shortcutInfos = HashMap<String, ShortcutInfo>()
     private val iconCache = LruCache<String, ImageBitmap>(1024)
 
     // Everything that talks to the system runs here, never on the main thread.
@@ -70,6 +71,10 @@ class AppRepository(private val context: Context) {
             packagesChanged(packageNames)
         override fun onPackagesUnavailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) =
             packagesChanged(packageNames)
+
+        // A pinned shortcut was added, changed (new icon, new title) or removed.
+        override fun onShortcutsChanged(packageName: String, shortcuts: MutableList<ShortcutInfo>, user: UserHandle) =
+            packagesChanged(arrayOf(packageName))
     }
 
     init {
@@ -118,9 +123,35 @@ class AppRepository(private val context: Context) {
             activityInfos.clear()
             entries.forEach { (info, app) -> activityInfos[app.key] = info }
         }
-        val sorted = entries.map { it.second }.sortedWith(compareBy({ it.letter }, { it.label.lowercase() }))
+        val pinned = loadPinnedShortcuts(me)
+        synchronized(shortcutInfos) {
+            shortcutInfos.clear()
+            pinned.forEach { (info, app) -> shortcutInfos[app.key] = info }
+        }
+        val sorted = (entries.map { it.second } + pinned.map { it.second })
+            .sortedWith(compareBy({ it.letter }, { it.label.lowercase() }))
         _apps.value = sorted
         saveCachedApps(sorted)
+    }
+
+    /**
+     * Shortcuts the user pinned to this launcher (Chrome's "Add to Home screen", a contact, a chat…).
+     * Android keeps them for us; we only ask. Needs the default-home role, so otherwise there are none.
+     */
+    private fun loadPinnedShortcuts(me: UserHandle): List<Pair<ShortcutInfo, AppInfo>> {
+        if (!runCatching { launcherApps.hasShortcutHostPermission() }.getOrDefault(false)) return emptyList()
+        return userManager.userProfiles.flatMap { user ->
+            val main = user == me
+            val serial = if (main) 0L else userManager.getSerialNumberForUser(user)
+            val query = LauncherApps.ShortcutQuery().setQueryFlags(LauncherApps.ShortcutQuery.FLAG_MATCH_PINNED)
+            runCatching { launcherApps.getShortcuts(query, user) }.getOrNull().orEmpty()
+                .filter { it.isEnabled }
+                .map { info ->
+                    val label = (info.shortLabel ?: info.longLabel ?: info.id).toString()
+                    val component = ComponentName(info.getPackage(), PINNED_SHORTCUT_CLASS)
+                    info to AppInfo(label, component, user, main, serial, shortcutId = info.id)
+                }
+        }
     }
 
     private fun saveCachedApps(apps: List<AppInfo>) {
@@ -133,6 +164,7 @@ class AppRepository(private val context: Context) {
                     .put("c", app.component.className)
                     .put("m", app.isMainProfile)
                     .put("s", app.profileId)
+                    .put("i", app.shortcutId.orEmpty())
             )
         }
         cachePrefs.edit().putString(KEY_APPS, array.toString()).apply()
@@ -147,7 +179,14 @@ class AppRepository(private val context: Context) {
                 val main = o.getBoolean("m")
                 val serial = o.getLong("s")
                 val user = if (main) me() else userManager.getUserForSerialNumber(serial) ?: return@mapNotNull null
-                AppInfo(o.getString("l"), ComponentName(o.getString("p"), o.getString("c")), user, main, serial)
+                AppInfo(
+                    o.getString("l"),
+                    ComponentName(o.getString("p"), o.getString("c")),
+                    user,
+                    main,
+                    serial,
+                    o.optString("i").takeIf { it.isNotEmpty() },
+                )
             }
         }.getOrDefault(emptyList())
     }
@@ -173,7 +212,7 @@ class AppRepository(private val context: Context) {
     /** Drops one package's icons from memory and disk. Returns true if anything was cached for it. */
     private fun evictIcons(packageName: String): Boolean {
         var evicted = false
-        iconCache.snapshot().keys.filter { it.startsWith("$packageName/") }.forEach {
+        iconCache.snapshot().keys.filter { it.startsWith("$packageName/") || it.startsWith("shortcut:$packageName/") }.forEach {
             iconCache.remove(it)
             evicted = true
         }
@@ -193,7 +232,24 @@ class AppRepository(private val context: Context) {
         File(iconDir, "${sanitize(app.packageName)}__${sanitize(app.key)}__${packTag()}.png")
 
     fun launch(app: AppInfo) {
-        runCatching { launcherApps.startMainActivity(app.component, app.user, null, null) }
+        val shortcutId = app.shortcutId
+        if (shortcutId != null) {
+            runCatching { launcherApps.startShortcut(app.packageName, shortcutId, null, null, app.user) }
+        } else {
+            runCatching { launcherApps.startMainActivity(app.component, app.user, null, null) }
+        }
+    }
+
+    /** Un-pins a shortcut: it disappears from the launcher but the app keeps its own shortcuts. */
+    fun unpinShortcut(app: AppInfo) {
+        val id = app.shortcutId ?: return
+        val stillPinned = synchronized(shortcutInfos) {
+            shortcutInfos.values
+                .filter { it.getPackage() == app.packageName && it.userHandle == app.user && it.id != id }
+                .map { it.id }
+        }
+        runCatching { launcherApps.pinShortcuts(app.packageName, stillPinned, app.user) }
+        scheduleRefresh()
     }
 
     fun openAppInfo(app: AppInfo) {
@@ -264,6 +320,17 @@ class AppRepository(private val context: Context) {
             }
         }
 
+        if (app.shortcutId != null) {
+            val shortcut = synchronized(shortcutInfos) { shortcutInfos[app.key] } ?: return null
+            // The shortcut's own picture (a site's icon); if it has none, fall back to its app's icon.
+            val drawable = runCatching { launcherApps.getShortcutIconDrawable(shortcut, 0) }.getOrNull()
+                ?: runCatching { context.packageManager.getApplicationIcon(app.packageName) }.getOrNull()
+                ?: return null
+            val bitmap: Bitmap = drawable.toBitmap(iconPx, iconPx)
+            writeIconFile(file, bitmap)
+            return bitmap.asImageBitmap().also { iconCache.put(app.key, it) }
+        }
+
         val info = synchronized(activityInfos) { activityInfos[app.key] } ?: return null
         val themed = iconPack?.let { iconPacks.iconFor(it, app.component) }
         val raw = themed ?: info.getIcon(0)
@@ -287,5 +354,7 @@ class AppRepository(private val context: Context) {
         const val MAX_SHORTCUTS = 4
         const val REFRESH_DEBOUNCE_MS = 300L
         const val KEY_APPS = "apps"
+        /** Stand-in class name for pinned shortcuts, which have a package but no launcher activity. */
+        const val PINNED_SHORTCUT_CLASS = "pinned.shortcut"
     }
 }

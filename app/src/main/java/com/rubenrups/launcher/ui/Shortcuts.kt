@@ -20,6 +20,8 @@ import kotlinx.coroutines.withContext
  */
 @Composable
 fun AppShortcutItems(app: AppInfo, viewModel: LauncherViewModel, onDone: () -> Unit) {
+    // A pinned shortcut is not an app: it has no quick actions of its own.
+    if (app.shortcutId != null) return
     var shortcuts by remember(app.key) { mutableStateOf(emptyList<AppShortcut>()) }
     LaunchedEffect(app.key) {
         shortcuts = withContext(Dispatchers.Default) { viewModel.repository.shortcutsFor(app) }
