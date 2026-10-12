@@ -5,6 +5,7 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 ## Features (v0.9)
 
 - **Dashboard**: a second screen with glucose (graph, in-range %), navigation, media controls and quick stats. Open it from the long-press menu or assign it to any swipe (down, left, right). Tapping the glucose value opens the Libre app
+- **Backgrounds and buttons**: adjustable background opacity for the drawer and dashboard, and "App drawer" / "Dashboard" buttons you can add to the favourites list
 - **Swipe gestures**: swipe up, down, left and right can each open the drawer, search, the notification shade, the dashboard or any app, with a short label showing what the swipe will do
 - **Attached drawer** (optional): the drawer slides up beneath the home screen as one tall page
 - **Auto-update**: checks for new builds in the background (every 3 h), downloads them on Wi-Fi, and shows an "Install" banner on home; installs through Android's installer (you confirm). Needs "Install unknown apps" allowed once, and the GitHub token while the repo is private

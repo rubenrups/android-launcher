@@ -99,6 +99,7 @@ import com.rubenrups.launcher.data.LauncherSettings
 import com.rubenrups.launcher.data.NextEvent
 import com.rubenrups.launcher.data.GestureActions
 import com.rubenrups.launcher.data.UpdateState
+import com.rubenrups.launcher.data.VirtualApps
 import com.rubenrups.launcher.expandNotificationShade
 import com.rubenrups.launcher.notifications.MediaState
 import com.rubenrups.launcher.notifications.NotificationItem
@@ -446,6 +447,12 @@ private fun HomeContent(
                         homeMenuAt = null
                         viewModel.setDashboardOpen(true)
                     })
+                    VirtualApps.all.filter { it.key !in favouriteKeys }.forEach { button ->
+                        DropdownMenuItem(text = { Text("Add ${button.label} button") }, onClick = {
+                            homeMenuAt = null
+                            viewModel.addFavourite(button)
+                        })
+                    }
                     DropdownMenuItem(text = { Text("Add widget") }, onClick = {
                         homeMenuAt = null
                         showWidgetPicker = true
@@ -827,10 +834,12 @@ private fun FavouriteRow(
                 viewModel.removeFavouriteKey(entry.key)
             })
             when (entry) {
-                is AppEntry -> DropdownMenuItem(text = { Text("App info") }, onClick = {
-                    menuOpen = false
-                    viewModel.repository.openAppInfo(entry.app)
-                })
+                is AppEntry -> if (!VirtualApps.isVirtual(entry.app)) {
+                    DropdownMenuItem(text = { Text("App info") }, onClick = {
+                        menuOpen = false
+                        viewModel.repository.openAppInfo(entry.app)
+                    })
+                }
                 is FolderEntry -> {
                     DropdownMenuItem(text = { Text("Add apps") }, onClick = {
                         menuOpen = false

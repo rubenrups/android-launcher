@@ -19,6 +19,7 @@ import com.rubenrups.launcher.data.LauncherPrefsHolder
 import com.rubenrups.launcher.data.GestureActions
 import com.rubenrups.launcher.data.GlucoseState
 import com.rubenrups.launcher.data.UpdateManager
+import com.rubenrups.launcher.data.VirtualApps
 import com.rubenrups.launcher.data.UpdateState
 import com.rubenrups.launcher.data.GlucoseStore
 import com.rubenrups.launcher.data.LauncherSettings
@@ -64,7 +65,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             val result = ArrayList<Entry>()
             for (key in s.favourites) {
                 val folder = folders[key]
-                val app = byKey[key]
+                val app = byKey[key] ?: VirtualApps.byKey(key)
                 if (folder != null) {
                     result.add(folder.resolve(byKey))
                 } else if (app != null) {
@@ -324,6 +325,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun launch(app: AppInfo) {
+        if (VirtualApps.isVirtual(app)) {
+            // A launcher function in the favourites list rather than a real app: run it, record nothing.
+            if (app.key == VirtualApps.drawer.key) openDrawer(false) else setDashboardOpen(true)
+            return
+        }
         update { s -> s.copy(recents = (listOf(app.key) + (s.recents - app.key)).take(MAX_RECENTS)) }
         repository.launch(app)
         closeDrawer()

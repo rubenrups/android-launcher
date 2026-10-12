@@ -72,7 +72,7 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
             .fillMaxSize()
             // Solid, so nothing of the home screen shows through. Tapping empty space closes it
             // (cards swallow their own taps, see Card).
-            .background(Color(0xFF0F1215))
+            .background(Color(0xFF0F1215).copy(alpha = settings.dashboardOpacity / 100f))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)
             .windowInsetsPadding(WindowInsets.systemBars)
             .verticalScroll(rememberScrollState())

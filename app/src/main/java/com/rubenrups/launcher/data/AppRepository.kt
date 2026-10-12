@@ -273,6 +273,7 @@ class AppRepository(private val context: Context) {
 
     /** The app's own quick actions ("New message", "Scan"…). Empty unless we are the default home app. */
     fun shortcutsFor(app: AppInfo): List<AppShortcut> {
+        if (VirtualApps.isVirtual(app)) return emptyList()
         if (!launcherApps.hasShortcutHostPermission()) return emptyList()
         val query = LauncherApps.ShortcutQuery()
             .setPackage(app.packageName)
@@ -312,6 +313,7 @@ class AppRepository(private val context: Context) {
     /** Blocking; call from a background dispatcher. Memory first, then disk, then ask the system. */
     fun loadIcon(app: AppInfo): ImageBitmap? {
         iconCache.get(app.key)?.let { return it }
+        if (VirtualApps.isVirtual(app)) return VirtualApps.icon(app).also { iconCache.put(app.key, it) }
 
         val file = iconFile(app)
         if (file.exists()) {

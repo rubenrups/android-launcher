@@ -64,6 +64,9 @@ data class LauncherSettings(
     val glucoseApp: String = "",
     /** The drawer slides up attached beneath the home screen (both move together) instead of fading over it. */
     val drawerAttached: Boolean = false,
+    /** How solid the background behind the drawer / dashboard is, in percent. */
+    val drawerOpacity: Int = 90,
+    val dashboardOpacity: Int = 100,
     val autoCheckUpdates: Boolean = true,
     /** Fetch a new build in the background on Wi-Fi so installing is one tap. */
     val autoDownloadUpdates: Boolean = true,
@@ -161,6 +164,8 @@ class LauncherPrefs(context: Context) {
         showNavigation = prefs.getBoolean(KEY_SHOW_NAVIGATION, true),
         glucoseApp = prefs.getString(KEY_GLUCOSE_APP, "").orEmpty(),
         drawerAttached = prefs.getBoolean(KEY_DRAWER_ATTACHED, false),
+        drawerOpacity = prefs.getInt(KEY_DRAWER_OPACITY, 90),
+        dashboardOpacity = prefs.getInt(KEY_DASHBOARD_OPACITY, 100),
         autoCheckUpdates = prefs.getBoolean(KEY_AUTO_CHECK, true),
         autoDownloadUpdates = prefs.getBoolean(KEY_AUTO_DOWNLOAD, true),
         dismissedUpdate = prefs.getInt(KEY_DISMISSED_UPDATE, 0),
@@ -205,6 +210,8 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_SHOW_NAVIGATION, s.showNavigation)
             .putString(KEY_GLUCOSE_APP, s.glucoseApp)
             .putBoolean(KEY_DRAWER_ATTACHED, s.drawerAttached)
+            .putInt(KEY_DRAWER_OPACITY, s.drawerOpacity)
+            .putInt(KEY_DASHBOARD_OPACITY, s.dashboardOpacity)
             .putBoolean(KEY_AUTO_CHECK, s.autoCheckUpdates)
             .putBoolean(KEY_AUTO_DOWNLOAD, s.autoDownloadUpdates)
             .putInt(KEY_DISMISSED_UPDATE, s.dismissedUpdate)
@@ -251,6 +258,8 @@ class LauncherPrefs(context: Context) {
         const val KEY_SWIPE_DOWN = "swipe_down"
         const val KEY_SWIPE_UP = "swipe_up"
         const val KEY_DRAWER_ATTACHED = "drawer_attached"
+        const val KEY_DRAWER_OPACITY = "drawer_opacity"
+        const val KEY_DASHBOARD_OPACITY = "dashboard_opacity"
         const val KEY_ICON_PACK = "icon_pack"
         const val KEY_FOLDERS = "folders"
         const val KEY_SHOW_CALENDAR = "show_calendar"

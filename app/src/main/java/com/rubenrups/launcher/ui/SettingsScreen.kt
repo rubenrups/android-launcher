@@ -49,6 +49,7 @@ import com.rubenrups.launcher.data.CalendarReader
 import com.rubenrups.launcher.data.GestureActions
 import com.rubenrups.launcher.data.UpdateChecker
 import com.rubenrups.launcher.data.UpdateState
+import com.rubenrups.launcher.data.VirtualApps
 import com.rubenrups.launcher.data.WebSearchEngine
 import com.rubenrups.launcher.notifications.NotificationStore
 import kotlinx.coroutines.Dispatchers
@@ -189,6 +190,12 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
 
         Section("Drawer & search")
         SwitchRow("Attach the drawer below the home screen", settings.drawerAttached) { v -> viewModel.update { it.copy(drawerAttached = v) } }
+        Label("Drawer background: ${settings.drawerOpacity}% solid")
+        Slider(
+            value = settings.drawerOpacity.toFloat(),
+            onValueChange = { v -> viewModel.update { it.copy(drawerOpacity = v.toInt()) } },
+            valueRange = 0f..100f,
+        )
         Hint("On: the home screen and drawer are one tall page that slide together. Off: the drawer fades in over the home screen.")
         SwitchRow("Show recent apps", settings.showRecents) { v -> viewModel.update { it.copy(showRecents = v) } }
         Label("Web search when typing in the drawer")
@@ -231,6 +238,17 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
 
         Section("Dashboard & glucose")
         Hint("Open the dashboard from the long-press menu, by tapping the glucose line, or by choosing it under Swipe left / right below.")
+        Label("Dashboard background: ${settings.dashboardOpacity}% solid")
+        Slider(
+            value = settings.dashboardOpacity.toFloat(),
+            onValueChange = { v -> viewModel.update { it.copy(dashboardOpacity = v.toInt()) } },
+            valueRange = 0f..100f,
+        )
+        VirtualApps.all.forEach { button ->
+            SwitchRow("${button.label} button in favourites", button.key in settings.favourites) { on ->
+                if (on) viewModel.addFavourite(button) else viewModel.removeFavourite(button)
+            }
+        }
         SwitchRow("Show navigation on home", settings.showNavigation) { v -> viewModel.update { it.copy(showNavigation = v) } }
         Hint(
             "While Google Maps or Waze is navigating, its next-turn notification is shown here. " +
