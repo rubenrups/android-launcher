@@ -47,6 +47,14 @@ fun LauncherApp(viewModel: LauncherViewModel) {
     val dashboardEdge by viewModel.dashboardEdge.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
 
+    // Look for a new build whenever the launcher comes to the front (throttled inside to every 3 hours).
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            delay(3_000)
+            viewModel.checkForUpdate()
+        }
+    }
+
     // Poll LibreLinkUp once a minute, only while the launcher is on screen; a login change polls straight away.
     LaunchedEffect(settings.glucoseEnabled, settings.glucoseEmail, settings.glucosePassword) {
         // Typing the login restarts this effect on every keystroke; the pause keeps half-typed logins off the server.

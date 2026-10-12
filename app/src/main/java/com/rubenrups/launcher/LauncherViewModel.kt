@@ -17,6 +17,8 @@ import com.rubenrups.launcher.data.AppRepository
 import com.rubenrups.launcher.data.IconPack
 import com.rubenrups.launcher.data.LauncherPrefsHolder
 import com.rubenrups.launcher.data.GlucoseState
+import com.rubenrups.launcher.data.UpdateManager
+import com.rubenrups.launcher.data.UpdateState
 import com.rubenrups.launcher.data.GlucoseStore
 import com.rubenrups.launcher.data.LauncherSettings
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -105,6 +107,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _dashboardEdge = MutableStateFlow(DashboardEdge.NONE)
     val dashboardEdge: StateFlow<DashboardEdge> = _dashboardEdge.asStateFlow()
 
+    val updateState: StateFlow<UpdateState> = UpdateManager.state
+
     private val glucoseStore = GlucoseStore()
     val glucose: StateFlow<GlucoseState> = glucoseStore.state
 
@@ -142,6 +146,19 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             ?: apps.firstOrNull { it.label.contains("librelink", ignoreCase = true) && !it.label.contains("up", ignoreCase = true) }
         if (app != null) launch(app) else setDashboardOpen(true)
     }
+
+    /** Background checks respect the setting and a 3-hour throttle; [force] is the user's own "check now". */
+    fun checkForUpdate(force: Boolean = false) {
+        val s = settings.value
+        if (!force && !s.autoCheckUpdates) return
+        viewModelScope.launch { UpdateManager.check(getApplication(), s.updateToken, force, s.autoDownloadUpdates) }
+    }
+
+    fun installUpdate() {
+        viewModelScope.launch { UpdateManager.installNow(getApplication(), settings.value.updateToken) }
+    }
+
+    fun dismissUpdate(build: Int) = update { it.copy(dismissedUpdate = build) }
 
     fun launchByKey(key: String, from: DashboardEdge = DashboardEdge.NONE) {
         if (key == ACTION_DASHBOARD) {

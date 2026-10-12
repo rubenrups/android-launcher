@@ -48,6 +48,7 @@ import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.data.CalendarReader
 import com.rubenrups.launcher.data.SwipeAction
 import com.rubenrups.launcher.data.UpdateChecker
+import com.rubenrups.launcher.data.UpdateState
 import com.rubenrups.launcher.data.WebSearchEngine
 import com.rubenrups.launcher.notifications.NotificationStore
 import kotlinx.coroutines.Dispatchers
@@ -89,8 +90,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
         else -> visibleApps.firstOrNull { it.key == key }?.label ?: "Nothing"
     }
     var pickWidget by remember { mutableStateOf(false) }
-    var updateStatus by remember { mutableStateOf<String?>(null) }
-    var updateUrl by remember { mutableStateOf<String?>(null) }
+    val updateState by viewModel.updateState.collectAsStateWithLifecycle()
     val installedBuild = remember { UpdateChecker.installedBuild(context) }
     val calendarPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         viewModel.update { it.copy(showCalendar = granted) }
@@ -286,27 +286,29 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
 
         Section("Updates")
         Text("Installed: build $installedBuild", color = Color.White, fontSize = 16.sp, modifier = Modifier.padding(vertical = 8.dp))
-        ActionRow("Check for updates") {
-            updateStatus = "Checking…"
-            updateUrl = null
-            scope.launch {
-                val result = withContext(Dispatchers.IO) { UpdateChecker.check(context, settings.updateToken) }
-                when (result) {
-                    is UpdateChecker.Result.UpToDate -> updateStatus = "You are up to date (build ${result.installed})."
-                    is UpdateChecker.Result.Available -> {
-                        updateStatus = "Build ${result.update.build} is available."
-                        updateUrl = result.update.pageUrl
-                    }
-                    is UpdateChecker.Result.Failed -> updateStatus = result.reason
-                }
-            }
+        SwitchRow("Check for updates automatically", settings.autoCheckUpdates) { v -> viewModel.update { it.copy(autoCheckUpdates = v) } }
+        if (settings.autoCheckUpdates) {
+            SwitchRow("Download new builds on Wi-Fi", settings.autoDownloadUpdates) { v -> viewModel.update { it.copy(autoDownloadUpdates = v) } }
         }
-        updateStatus?.let { Hint(it) }
-        updateUrl?.let { url ->
-            ActionRow("Open download page") {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            }
+        val update = updateState
+        ActionRow("Check for updates now") { viewModel.checkForUpdate(force = true) }
+        when (update) {
+            is UpdateState.Checking -> Hint("Checking…")
+            is UpdateState.UpToDate -> Hint("You are up to date (build ${update.installed}).")
+            is UpdateState.Available -> Hint("Build ${update.info.build} is available.")
+            is UpdateState.Downloading -> Hint("Downloading build ${update.info.build}… ${update.percent}%")
+            is UpdateState.Ready -> Hint("Build ${update.info.build} is downloaded and ready.")
+            is UpdateState.Installing -> Hint("Installing build ${update.info.build}…")
+            is UpdateState.Failed -> Hint(update.reason)
+            UpdateState.Idle -> Unit
         }
+        if (update is UpdateState.Available || update is UpdateState.Ready || (update is UpdateState.Failed && update.info != null)) {
+            ActionRow("Install update") { viewModel.installUpdate() }
+        }
+        Hint(
+            "Android always asks you to confirm an install, and the first time asks you to allow " +
+                "\"Install unknown apps\" for this launcher."
+        )
         Label("GitHub token (optional)")
         TextField(
             value = settings.updateToken,

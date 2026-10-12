@@ -3,10 +3,13 @@ package com.rubenrups.launcher.data
 import android.content.Context
 import androidx.core.content.pm.PackageInfoCompat
 import org.json.JSONArray
+import java.io.File
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
-data class UpdateInfo(val build: Int, val pageUrl: String)
+/** [assetUrl] is the GitHub API URL of the APK file (works for private repositories with a token). */
+data class UpdateInfo(val build: Int, val pageUrl: String, val assetUrl: String?, val size: Long)
 
 /**
  * Looks at the newest GitHub release. CI publishes each build as a release tagged "build-N", where N
@@ -56,12 +59,76 @@ object UpdateChecker {
         val build = release.optString("tag_name").removePrefix("build-").toIntOrNull()
             ?: return Result.Failed("Latest release has an unexpected tag.")
         return if (build > installed) {
-            Result.Available(installed, UpdateInfo(build, release.getString("html_url")))
+            val apk = release.optJSONArray("assets")?.let { assets ->
+                (0 until assets.length()).map { assets.getJSONObject(it) }.firstOrNull { it.optString("name").endsWith(".apk") }
+            }
+            Result.Available(
+                installed,
+                UpdateInfo(build, release.getString("html_url"), apk?.optString("url")?.ifBlank { null }, apk?.optLong("size") ?: 0L),
+            )
         } else {
             Result.UpToDate(installed)
         }
     }
 
+    /**
+     * Downloads the release APK to [target]. GitHub answers the API URL with a redirect to a signed storage
+     * URL; the token must not travel there (storage rejects it), so redirects are followed by hand.
+     * Blocking; throws on any failure.
+     */
+    fun download(info: UpdateInfo, token: String, target: File, onProgress: (Int) -> Unit) {
+        var url = info.assetUrl ?: throw IOException("This release has no APK file.")
+        target.parentFile?.mkdirs()
+        repeat(MAX_REDIRECTS) {
+            val connection = URL(url).openConnection() as HttpURLConnection
+            connection.instanceFollowRedirects = false
+            connection.connectTimeout = TIMEOUT_MS
+            connection.readTimeout = DOWNLOAD_TIMEOUT_MS
+            connection.setRequestProperty("Accept", "application/octet-stream")
+            connection.setRequestProperty("User-Agent", "RupsLauncher")
+            if (token.isNotBlank() && URL(url).host == "api.github.com") {
+                connection.setRequestProperty("Authorization", "Bearer ${token.trim()}")
+            }
+            try {
+                when (val code = connection.responseCode) {
+                    200 -> {
+                        val total = connection.contentLengthLong.takeIf { it > 0 } ?: info.size
+                        var done = 0L
+                        var lastPercent = -1
+                        connection.inputStream.use { input ->
+                            target.outputStream().use { out ->
+                                val buffer = ByteArray(64 * 1024)
+                                while (true) {
+                                    val n = input.read(buffer)
+                                    if (n < 0) break
+                                    out.write(buffer, 0, n)
+                                    done += n
+                                    val percent = if (total > 0) (done * 100 / total).toInt().coerceIn(0, 100) else 0
+                                    if (percent != lastPercent) {
+                                        lastPercent = percent
+                                        onProgress(percent)
+                                    }
+                                }
+                            }
+                        }
+                        if (total > 0 && done != total) throw IOException("incomplete download")
+                        return
+                    }
+                    301, 302, 303, 307, 308 ->
+                        url = connection.getHeaderField("Location") ?: throw IOException("bad redirect")
+                    404 -> throw IOException(if (token.isBlank()) "not found (private repository? add a token)" else "not found")
+                    401, 403 -> throw IOException("GitHub refused the token (HTTP $code)")
+                    else -> throw IOException("HTTP $code")
+                }
+            } finally {
+                connection.disconnect()
+            }
+        }
+        throw IOException("too many redirects")
+    }
+
+    private const val MAX_REDIRECTS = 5
+    private const val DOWNLOAD_TIMEOUT_MS = 30_000
     private const val REPO = "rubenrups/android-launcher"
     private const val TIMEOUT_MS = 8_000
 }

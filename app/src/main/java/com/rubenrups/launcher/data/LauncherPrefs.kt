@@ -67,6 +67,11 @@ data class LauncherSettings(
     val showNavigation: Boolean = true,
     /** App opened by tapping the glucose value; empty = find the LibreLink app automatically. */
     val glucoseApp: String = "",
+    val autoCheckUpdates: Boolean = true,
+    /** Fetch a new build in the background on Wi-Fi so installing is one tap. */
+    val autoDownloadUpdates: Boolean = true,
+    /** The build whose banner was dismissed; a newer build shows it again. */
+    val dismissedUpdate: Int = 0,
 )
 
 /** Persists favourites, hidden apps and user settings in SharedPreferences. */
@@ -154,6 +159,9 @@ class LauncherPrefs(context: Context) {
         glucoseHigh = prefs.getInt(KEY_GLUCOSE_HIGH, 180),
         showNavigation = prefs.getBoolean(KEY_SHOW_NAVIGATION, true),
         glucoseApp = prefs.getString(KEY_GLUCOSE_APP, "").orEmpty(),
+        autoCheckUpdates = prefs.getBoolean(KEY_AUTO_CHECK, true),
+        autoDownloadUpdates = prefs.getBoolean(KEY_AUTO_DOWNLOAD, true),
+        dismissedUpdate = prefs.getInt(KEY_DISMISSED_UPDATE, 0),
     )
 
     private fun save(s: LauncherSettings) {
@@ -193,6 +201,9 @@ class LauncherPrefs(context: Context) {
             .putInt(KEY_GLUCOSE_HIGH, s.glucoseHigh)
             .putBoolean(KEY_SHOW_NAVIGATION, s.showNavigation)
             .putString(KEY_GLUCOSE_APP, s.glucoseApp)
+            .putBoolean(KEY_AUTO_CHECK, s.autoCheckUpdates)
+            .putBoolean(KEY_AUTO_DOWNLOAD, s.autoDownloadUpdates)
+            .putInt(KEY_DISMISSED_UPDATE, s.dismissedUpdate)
             .apply()
     }
 
@@ -258,6 +269,9 @@ class LauncherPrefs(context: Context) {
         const val KEY_GLUCOSE_HIGH = "glucose_high"
         const val KEY_SHOW_NAVIGATION = "show_navigation"
         const val KEY_GLUCOSE_APP = "glucose_app"
+        const val KEY_AUTO_CHECK = "auto_check_updates"
+        const val KEY_AUTO_DOWNLOAD = "auto_download_updates"
+        const val KEY_DISMISSED_UPDATE = "dismissed_update"
         /** Credentials: never written to a backup file, and a restore leaves them alone. */
         val SECRET_KEYS = setOf(KEY_UPDATE_TOKEN, KEY_GLUCOSE_EMAIL, KEY_GLUCOSE_PASSWORD)
         const val KEY_ANCHOR_BOTTOM = "anchor_bottom"

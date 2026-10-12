@@ -98,6 +98,7 @@ import com.rubenrups.launcher.data.FolderEntry
 import com.rubenrups.launcher.data.LauncherSettings
 import com.rubenrups.launcher.data.NextEvent
 import com.rubenrups.launcher.data.SwipeAction
+import com.rubenrups.launcher.data.UpdateState
 import com.rubenrups.launcher.expandNotificationShade
 import com.rubenrups.launcher.notifications.MediaState
 import com.rubenrups.launcher.notifications.NotificationItem
@@ -174,6 +175,7 @@ private fun HomeContent(
     val listenerConnected by NotificationStore.listenerConnected.collectAsStateWithLifecycle()
     val navigation by NotificationStore.navigation.collectAsStateWithLifecycle()
     val glucose by viewModel.glucose.collectAsStateWithLifecycle()
+    val updateState by viewModel.updateState.collectAsStateWithLifecycle()
     val badgeCounts = remember(notifications) { notifications.groupingBy { it.packageName }.eachCount() }
     var editMode by remember { mutableStateOf(false) }
     // Where a long-press landed; non-null while the home-screen menu is showing.
@@ -301,6 +303,7 @@ private fun HomeContent(
             if (settings.showNavigation) {
                 navigation?.let { Box(SidePadding.fillMaxWidth()) { NavigationCard(it) }; Spacer(Modifier.height(8.dp)) }
             }
+            UpdateChip(updateState, settings.dismissedUpdate, onInstall = viewModel::installUpdate, onDismiss = viewModel::dismissUpdate)
             if (settings.showNotifications) {
                 if (!listenerConnected) Box(SidePadding) { EnableNotificationsPrompt() }
                 Box(SidePadding.fillMaxWidth()) { NotificationList(notifications.take(3)) }
@@ -1046,4 +1049,38 @@ private fun CustomActionButton(packageName: String, action: android.media.sessio
     } else {
         MediaButton(action.name.toString().take(10), onClick)
     }
+}
+
+/** A small banner for a new build: "Build 27 ready · Install". Hidden when nothing is pending or it was dismissed. */
+@Composable
+private fun UpdateChip(state: UpdateState, dismissedBuild: Int, onInstall: () -> Unit, onDismiss: (Int) -> Unit) {
+    val (text, build, action) = when (state) {
+        is UpdateState.Ready -> Triple("Build ${state.info.build} is ready · Install", state.info.build, true)
+        is UpdateState.Available -> Triple("Build ${state.info.build} is available · Install", state.info.build, true)
+        is UpdateState.Downloading -> Triple("Downloading build ${state.info.build}… ${state.percent}%", state.info.build, false)
+        is UpdateState.Installing -> Triple("Installing build ${state.info.build}…", state.info.build, false)
+        is UpdateState.Failed -> if (state.info != null) Triple(state.reason, state.info.build, true) else return
+        else -> return
+    }
+    if (build <= dismissedBuild && state !is UpdateState.Downloading && state !is UpdateState.Installing) return
+    Row(
+        SidePadding
+            .background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(12.dp))
+            .padding(start = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "⬆ $text",
+            color = Color.White,
+            fontSize = 14.sp,
+            maxLines = 2,
+            modifier = Modifier.weight(1f, fill = false).clickable(enabled = action, onClick = onInstall).padding(vertical = 10.dp),
+        )
+        if (action) {
+            Text("✕", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp, modifier = Modifier.clickable { onDismiss(build) }.padding(12.dp))
+        } else {
+            Spacer(Modifier.size(14.dp))
+        }
+    }
+    Spacer(Modifier.height(8.dp))
 }
