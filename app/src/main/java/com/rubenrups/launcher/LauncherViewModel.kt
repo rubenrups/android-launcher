@@ -16,6 +16,7 @@ import android.appwidget.AppWidgetProviderInfo
 import com.rubenrups.launcher.data.AppRepository
 import com.rubenrups.launcher.data.IconPack
 import com.rubenrups.launcher.data.LauncherPrefsHolder
+import com.rubenrups.launcher.data.GestureActions
 import com.rubenrups.launcher.data.GlucoseState
 import com.rubenrups.launcher.data.UpdateManager
 import com.rubenrups.launcher.data.UpdateState
@@ -33,7 +34,7 @@ import kotlinx.coroutines.launch
 import java.util.UUID
 
 /** Which screen edge the dashboard slides in from (and back out to); NONE = fade and scale. */
-enum class DashboardEdge { NONE, LEFT, RIGHT, TOP }
+enum class DashboardEdge { NONE, LEFT, RIGHT, TOP, BOTTOM }
 
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -159,6 +160,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun dismissUpdate(build: Int) = update { it.copy(dismissedUpdate = build) }
+
+    /** Short text for what a swipe will do, shown while swiping; null when the swipe is set to do nothing. */
+    fun actionHint(key: String): String? {
+        if (key.isBlank()) return null
+        GestureActions.builtInLabel(key)?.let { return it }
+        return repository.apps.value.firstOrNull { it.key == key }?.let { "Open ${it.label}" }
+    }
 
     fun launchByKey(key: String, from: DashboardEdge = DashboardEdge.NONE) {
         if (key == ACTION_DASHBOARD) {
@@ -323,7 +331,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     companion object {
         /** Swipe-gesture target that opens the dashboard instead of an app. */
-        const val ACTION_DASHBOARD = "action:dashboard"
+        const val ACTION_DASHBOARD = GestureActions.DASHBOARD
         private const val MAX_RECENTS = 8
     }
 }

@@ -73,7 +73,8 @@ fun LauncherApp(viewModel: LauncherViewModel) {
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
     val screenHeightDp = LocalConfiguration.current.screenHeightDp
-    val fullPullPx = with(density) { screenHeightDp.dp.toPx() } * FULL_PULL_FRACTION
+    // Attached: the drawer sticks to the finger one-to-one; otherwise a shorter pull is enough to open it.
+    val fullPullPx = with(density) { screenHeightDp.dp.toPx() } * if (settings.drawerAttached) 1f else FULL_PULL_FRACTION
     // Only recompose the drawer's host when it appears or disappears, not on every animation frame.
     val drawerVisible by remember { derivedStateOf { progress.value > 0f } }
 
@@ -87,28 +88,39 @@ fun LauncherApp(viewModel: LauncherViewModel) {
     BackHandler(enabled = settingsOpen) { viewModel.setSettingsOpen(false) }
 
     Box(Modifier.fillMaxSize()) {
-        HomeScreen(
-            viewModel,
-            onOpenDrawer = { focusSearch -> viewModel.openDrawer(focusSearch) },
-            onDrawerDrag = { upPx -> scope.launch { progress.snapTo((upPx / fullPullPx).coerceIn(0f, 1f)) } },
-            onDrawerRelease = { open ->
-                if (open) {
-                    viewModel.openDrawer(false)
-                } else if (!drawerOpen) {
-                    // A pull that was let go too early: slide back down.
-                    scope.launch { progress.animateTo(0f, tween(durationMillis = 180)) }
-                }
-            },
-            onOpenSettings = { viewModel.setSettingsOpen(true) },
-        )
+        // Attached drawer: the home screen rides up with the drawer instead of staying put underneath it.
+        Box(
+            Modifier
+                .fillMaxSize()
+                .graphicsLayer { if (settings.drawerAttached) translationY = -progress.value * size.height },
+        ) {
+            HomeScreen(
+                viewModel,
+                onOpenDrawer = { focusSearch -> viewModel.openDrawer(focusSearch) },
+                onDrawerDrag = { upPx -> scope.launch { progress.snapTo((upPx / fullPullPx).coerceIn(0f, 1f)) } },
+                onDrawerRelease = { open ->
+                    if (open) {
+                        viewModel.openDrawer(false)
+                    } else if (!drawerOpen) {
+                        // A pull that was let go too early: slide back down.
+                        scope.launch { progress.animateTo(0f, tween(durationMillis = 180)) }
+                    }
+                },
+                onOpenSettings = { viewModel.setSettingsOpen(true) },
+            )
+        }
 
         if (drawerVisible) {
             Box(
                 Modifier
                     .fillMaxSize()
                     .graphicsLayer {
-                        translationY = (1f - progress.value) * size.height * 0.5f
-                        alpha = progress.value
+                        if (settings.drawerAttached) {
+                            translationY = (1f - progress.value) * size.height
+                        } else {
+                            translationY = (1f - progress.value) * size.height * 0.5f
+                            alpha = progress.value
+                        }
                     },
             ) {
                 AppDrawer(
@@ -135,12 +147,14 @@ fun LauncherApp(viewModel: LauncherViewModel) {
                 DashboardEdge.RIGHT -> slideInHorizontally(slide) { it } + fadeIn(tween(200))
                 DashboardEdge.LEFT -> slideInHorizontally(slide) { -it } + fadeIn(tween(200))
                 DashboardEdge.TOP -> slideInVertically(slide) { -it } + fadeIn(tween(200))
+                DashboardEdge.BOTTOM -> slideInVertically(slide) { it } + fadeIn(tween(200))
                 DashboardEdge.NONE -> fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.94f)
             },
             exit = when (dashboardEdge) {
                 DashboardEdge.RIGHT -> slideOutHorizontally(slide) { it } + fadeOut(tween(200))
                 DashboardEdge.LEFT -> slideOutHorizontally(slide) { -it } + fadeOut(tween(200))
                 DashboardEdge.TOP -> slideOutVertically(slide) { -it } + fadeOut(tween(200))
+                DashboardEdge.BOTTOM -> slideOutVertically(slide) { it } + fadeOut(tween(200))
                 DashboardEdge.NONE -> fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.94f)
             },
         ) {

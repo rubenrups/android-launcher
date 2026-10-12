@@ -7,13 +7,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
 
-enum class SwipeAction(val label: String) {
-    NOTIFICATIONS("Notification shade"),
-    SEARCH("Search apps"),
-    DASHBOARD("Dashboard"),
-    NONE("Nothing"),
-}
-
 enum class WebSearchEngine(val label: String, val urlTemplate: String?) {
     OFF("Off", null),
     SYSTEM("System default", null),
@@ -34,7 +27,9 @@ data class LauncherSettings(
     val anchorBottom: Boolean = false,
     val showIcons: Boolean = true,
     val showSearchButton: Boolean = true,
-    val swipeDown: SwipeAction = SwipeAction.NOTIFICATIONS,
+    /** What each swipe on the home screen does: a [GestureActions] key or an app key; empty = nothing. */
+    val swipeUp: String = GestureActions.DRAWER,
+    val swipeDown: String = GestureActions.NOTIFICATIONS,
     val iconPack: String? = null,
     val folders: List<AppFolder> = emptyList(),
     val showCalendar: Boolean = false,
@@ -67,6 +62,8 @@ data class LauncherSettings(
     val showNavigation: Boolean = true,
     /** App opened by tapping the glucose value; empty = find the LibreLink app automatically. */
     val glucoseApp: String = "",
+    /** The drawer slides up attached beneath the home screen (both move together) instead of fading over it. */
+    val drawerAttached: Boolean = false,
     val autoCheckUpdates: Boolean = true,
     /** Fetch a new build in the background on Wi-Fi so installing is one tap. */
     val autoDownloadUpdates: Boolean = true,
@@ -132,8 +129,12 @@ class LauncherPrefs(context: Context) {
         anchorBottom = prefs.getBoolean(KEY_ANCHOR_BOTTOM, prefs.getBoolean(KEY_ALIGN_END, false)),
         showIcons = prefs.getBoolean(KEY_SHOW_ICONS, true),
         showSearchButton = prefs.getBoolean(KEY_SHOW_SEARCH_BUTTON, true),
-        swipeDown = runCatching { SwipeAction.valueOf(prefs.getString(KEY_SWIPE_DOWN, "").orEmpty()) }
-            .getOrDefault(SwipeAction.NOTIFICATIONS),
+        swipeUp = if (prefs.contains(KEY_SWIPE_UP)) prefs.getString(KEY_SWIPE_UP, "").orEmpty() else GestureActions.DRAWER,
+        swipeDown = if (prefs.contains(KEY_SWIPE_DOWN)) {
+            GestureActions.fromLegacy(prefs.getString(KEY_SWIPE_DOWN, "").orEmpty())
+        } else {
+            GestureActions.NOTIFICATIONS
+        },
         iconPack = prefs.getString(KEY_ICON_PACK, null),
         folders = decodeFolders(prefs.getString(KEY_FOLDERS, null)),
         showCalendar = prefs.getBoolean(KEY_SHOW_CALENDAR, false),
@@ -159,6 +160,7 @@ class LauncherPrefs(context: Context) {
         glucoseHigh = prefs.getInt(KEY_GLUCOSE_HIGH, 180),
         showNavigation = prefs.getBoolean(KEY_SHOW_NAVIGATION, true),
         glucoseApp = prefs.getString(KEY_GLUCOSE_APP, "").orEmpty(),
+        drawerAttached = prefs.getBoolean(KEY_DRAWER_ATTACHED, false),
         autoCheckUpdates = prefs.getBoolean(KEY_AUTO_CHECK, true),
         autoDownloadUpdates = prefs.getBoolean(KEY_AUTO_DOWNLOAD, true),
         dismissedUpdate = prefs.getInt(KEY_DISMISSED_UPDATE, 0),
@@ -176,7 +178,8 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_ANCHOR_BOTTOM, s.anchorBottom)
             .putBoolean(KEY_SHOW_ICONS, s.showIcons)
             .putBoolean(KEY_SHOW_SEARCH_BUTTON, s.showSearchButton)
-            .putString(KEY_SWIPE_DOWN, s.swipeDown.name)
+            .putString(KEY_SWIPE_UP, s.swipeUp)
+            .putString(KEY_SWIPE_DOWN, s.swipeDown)
             .putString(KEY_ICON_PACK, s.iconPack)
             .putString(KEY_FOLDERS, encodeFolders(s.folders))
             .putBoolean(KEY_SHOW_CALENDAR, s.showCalendar)
@@ -201,6 +204,7 @@ class LauncherPrefs(context: Context) {
             .putInt(KEY_GLUCOSE_HIGH, s.glucoseHigh)
             .putBoolean(KEY_SHOW_NAVIGATION, s.showNavigation)
             .putString(KEY_GLUCOSE_APP, s.glucoseApp)
+            .putBoolean(KEY_DRAWER_ATTACHED, s.drawerAttached)
             .putBoolean(KEY_AUTO_CHECK, s.autoCheckUpdates)
             .putBoolean(KEY_AUTO_DOWNLOAD, s.autoDownloadUpdates)
             .putInt(KEY_DISMISSED_UPDATE, s.dismissedUpdate)
@@ -245,6 +249,8 @@ class LauncherPrefs(context: Context) {
         const val KEY_TEXT_SP = "favourite_text_sp"
         const val KEY_ALIGN_END = "align_end"
         const val KEY_SWIPE_DOWN = "swipe_down"
+        const val KEY_SWIPE_UP = "swipe_up"
+        const val KEY_DRAWER_ATTACHED = "drawer_attached"
         const val KEY_ICON_PACK = "icon_pack"
         const val KEY_FOLDERS = "folders"
         const val KEY_SHOW_CALENDAR = "show_calendar"

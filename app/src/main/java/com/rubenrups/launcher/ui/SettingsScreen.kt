@@ -46,7 +46,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.data.CalendarReader
-import com.rubenrups.launcher.data.SwipeAction
+import com.rubenrups.launcher.data.GestureActions
 import com.rubenrups.launcher.data.UpdateChecker
 import com.rubenrups.launcher.data.UpdateState
 import com.rubenrups.launcher.data.WebSearchEngine
@@ -85,10 +85,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
             }
         }
     }
-    fun swipeLabel(key: String) = when (key) {
-        LauncherViewModel.ACTION_DASHBOARD -> "Dashboard"
-        else -> visibleApps.firstOrNull { it.key == key }?.label ?: "Nothing"
-    }
+    fun swipeLabel(key: String) = GestureActions.builtInLabel(key) ?: visibleApps.firstOrNull { it.key == key }?.label ?: "Nothing"
     var pickWidget by remember { mutableStateOf(false) }
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
     val installedBuild = remember { UpdateChecker.installedBuild(context) }
@@ -191,6 +188,8 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
         )
 
         Section("Drawer & search")
+        SwitchRow("Attach the drawer below the home screen", settings.drawerAttached) { v -> viewModel.update { it.copy(drawerAttached = v) } }
+        Hint("On: the home screen and drawer are one tall page that slide together. Off: the drawer fades in over the home screen.")
         SwitchRow("Show recent apps", settings.showRecents) { v -> viewModel.update { it.copy(showRecents = v) } }
         Label("Web search when typing in the drawer")
         WebSearchEngine.entries.forEach { engine ->
@@ -323,42 +322,39 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                 "access to this repository's contents. It is stored on this device only."
         )
 
-        Section("Swipe down on home")
-        SwipeAction.entries.forEach { action ->
-            ChoiceRow(action.label, selected = settings.swipeDown == action) {
-                viewModel.update { it.copy(swipeDown = action) }
-            }
-        }
-
-        Section("Swipe left / right on home")
-        ActionRow("Swipe left opens: ${swipeLabel(settings.swipeLeftApp)}") { chooser = "left" }
-        ActionRow("Swipe right opens: ${swipeLabel(settings.swipeRightApp)}") { chooser = "right" }
+        Section("Swipe gestures on home")
+        ActionRow("Swipe up: ${swipeLabel(settings.swipeUp)}") { chooser = "up" }
+        ActionRow("Swipe down: ${swipeLabel(settings.swipeDown)}") { chooser = "down" }
+        ActionRow("Swipe left: ${swipeLabel(settings.swipeLeftApp)}") { chooser = "left" }
+        ActionRow("Swipe right: ${swipeLabel(settings.swipeRightApp)}") { chooser = "right" }
+        Hint("Each swipe can open the drawer, search, the notification shade, the dashboard or any app. A short label shows what it will do while you swipe.")
         chooser?.let { side ->
             val forGlucose = side == "glucose"
+            fun set(key: String) {
+                viewModel.update {
+                    when (side) {
+                        "up" -> it.copy(swipeUp = key)
+                        "down" -> it.copy(swipeDown = key)
+                        "left" -> it.copy(swipeLeftApp = key)
+                        "right" -> it.copy(swipeRightApp = key)
+                        else -> it.copy(glucoseApp = key)
+                    }
+                }
+                chooser = null
+            }
             AppChooserDialog(
                 title = when (side) {
-                    "left" -> "Swipe left opens"
-                    "right" -> "Swipe right opens"
+                    "up" -> "Swipe up"
+                    "down" -> "Swipe down"
+                    "left" -> "Swipe left"
+                    "right" -> "Swipe right"
                     else -> "Tapping the glucose value opens"
                 },
                 viewModel = viewModel,
-                onPick = { app ->
-                    val key = app?.key.orEmpty()
-                    viewModel.update {
-                        when (side) {
-                            "left" -> it.copy(swipeLeftApp = key)
-                            "right" -> it.copy(swipeRightApp = key)
-                            else -> it.copy(glucoseApp = key)
-                        }
-                    }
-                    chooser = null
-                },
+                onPick = { app -> set(app?.key.orEmpty()) },
                 onDismiss = { chooser = null },
-                extras = if (forGlucose) emptyList() else listOf("Dashboard" to LauncherViewModel.ACTION_DASHBOARD),
-                onPickExtra = { key ->
-                    viewModel.update { if (side == "left") it.copy(swipeLeftApp = key) else it.copy(swipeRightApp = key) }
-                    chooser = null
-                },
+                extras = if (forGlucose) emptyList() else GestureActions.builtIn.map { (key, label) -> label to key },
+                onPickExtra = { key -> set(key) },
             )
         }
 

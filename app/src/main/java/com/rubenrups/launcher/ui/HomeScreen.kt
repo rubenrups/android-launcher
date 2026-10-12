@@ -97,7 +97,7 @@ import com.rubenrups.launcher.data.Entry
 import com.rubenrups.launcher.data.FolderEntry
 import com.rubenrups.launcher.data.LauncherSettings
 import com.rubenrups.launcher.data.NextEvent
-import com.rubenrups.launcher.data.SwipeAction
+import com.rubenrups.launcher.data.GestureActions
 import com.rubenrups.launcher.data.UpdateState
 import com.rubenrups.launcher.expandNotificationShade
 import com.rubenrups.launcher.notifications.MediaState
@@ -112,6 +112,14 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private const val SWIPE_THRESHOLD_PX = 120f
+
+/** A swipe shorter than this shows no label yet, so ordinary taps and scrolls stay uncluttered. */
+private const val HINT_START_PX = 24f
+
+private enum class SwipeDir { UP, DOWN, LEFT, RIGHT }
+
+/** The label shown while swiping: what will happen, how far along the swipe is, and whether releasing now triggers it. */
+private data class SwipeHint(val text: String, val dir: SwipeDir, val progress: Float, val armed: Boolean)
 
 /** The most the home content leans during a swipe, in pixels. */
 private const val PULL_MAX_PX = 160f
@@ -191,6 +199,7 @@ private fun HomeContent(
     var pullX by remember { mutableFloatStateOf(0f) }
     var pullY by remember { mutableFloatStateOf(0f) }
     var pulling by remember { mutableStateOf(false) }
+    var hint by remember { mutableStateOf<SwipeHint?>(null) }
     val shownPullX by animateFloatAsState(pullX, if (pulling) snap() else spring(dampingRatio = 0.55f, stiffness = 300f), label = "pullX")
     val shownPullY by animateFloatAsState(pullY, if (pulling) snap() else spring(dampingRatio = 0.55f, stiffness = 300f), label = "pullY")
 
@@ -209,7 +218,7 @@ private fun HomeContent(
                     if (editMode) return@pointerInput
                     detectTapGestures(onLongPress = { homeMenuAt = it })
                 }
-                // Swipe up pulls the drawer up under the finger; swipe down and sideways run your settings.
+                // Each direction runs the action chosen in settings. When swipe-up is the drawer, it follows the finger.
                 .pointerInput(editMode) {
                     if (editMode) return@pointerInput
                     var dx = 0f
@@ -220,42 +229,77 @@ private fun HomeContent(
                         pullX = 0f
                         pullY = 0f
                         crossed = false
+                        hint = null
                     }
+                    fun directionOf(horizontalBias: Float): SwipeDir =
+                        if (abs(dy) > abs(dx) * horizontalBias) {
+                            if (dy < 0f) SwipeDir.UP else SwipeDir.DOWN
+                        } else {
+                            if (dx < 0f) SwipeDir.LEFT else SwipeDir.RIGHT
+                        }
+                    fun actionFor(dir: SwipeDir): String = with(currentSettings) {
+                        when (dir) {
+                            SwipeDir.UP -> swipeUp
+                            SwipeDir.DOWN -> swipeDown
+                            SwipeDir.LEFT -> swipeLeftApp
+                            SwipeDir.RIGHT -> swipeRightApp
+                        }
+                    }
+                    fun distanceOf(dir: SwipeDir) = if (dir == SwipeDir.UP || dir == SwipeDir.DOWN) abs(dy) else abs(dx)
                     detectDragGestures(
                         onDragStart = { dx = 0f; dy = 0f; crossed = false; pulling = true },
                         onDrag = { _, amount ->
                             dx += amount.x
                             dy += amount.y
-                            if (dy < 0f && abs(dy) > abs(dx)) currentDrawerDrag(-dy)
-                            val s = currentSettings
-                            val horizontalKey = if (dx < 0f) s.swipeLeftApp else s.swipeRightApp
-                            val wantsX = abs(dx) > abs(dy) && horizontalKey.isNotBlank()
-                            val wantsY = dy > 0f && abs(dy) > abs(dx) && s.swipeDown != SwipeAction.NONE
-                            pullX = if (wantsX) (dx * 0.35f).coerceIn(-PULL_MAX_PX, PULL_MAX_PX) else 0f
-                            pullY = if (wantsY) (dy * 0.25f).coerceIn(0f, PULL_MAX_PX) else 0f
-                            // A tick the moment the swipe is long enough to count.
-                            val past = (wantsX && abs(dx) > SWIPE_THRESHOLD_PX) || (wantsY && dy > SWIPE_THRESHOLD_PX)
+                            val dir = directionOf(1f)
+                            val action = actionFor(dir)
+                            val drawerFollowsFinger = dir == SwipeDir.UP && action == GestureActions.DRAWER
+                            if (drawerFollowsFinger) currentDrawerDrag(-dy)
+                            val active = action.isNotBlank() && !drawerFollowsFinger
+                            val distance = distanceOf(dir)
+                            val horizontal = dir == SwipeDir.LEFT || dir == SwipeDir.RIGHT
+                            pullX = if (active && horizontal) (dx * 0.35f).coerceIn(-PULL_MAX_PX, PULL_MAX_PX) else 0f
+                            pullY = if (active && !horizontal) (dy * 0.25f).coerceIn(-PULL_MAX_PX, PULL_MAX_PX) else 0f
+                            // A tick, and a firmer label, the moment the swipe is long enough to count.
+                            val past = active && distance > SWIPE_THRESHOLD_PX
                             if (past && !crossed) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                             crossed = past
+                            hint = if (active && distance > HINT_START_PX) {
+                                viewModel.actionHint(action)?.let {
+                                    SwipeHint(it, dir, (distance / SWIPE_THRESHOLD_PX).coerceIn(0f, 1f), past)
+                                }
+                            } else {
+                                null
+                            }
                         },
                         onDragEnd = {
                             settle()
-                            val vertical = abs(dy) > abs(dx) * 1.2f
-                            val horizontal = abs(dx) > abs(dy) * 1.2f
-                            if (vertical && dy < -SWIPE_THRESHOLD_PX) {
-                                currentDrawerRelease(true)
+                            val clearlyVertical = abs(dy) > abs(dx) * 1.2f
+                            val clearlyHorizontal = abs(dx) > abs(dy) * 1.2f
+                            if (!clearlyVertical && !clearlyHorizontal) {
+                                currentDrawerRelease(false)
+                                return@detectDragGestures
+                            }
+                            val dir = directionOf(1.2f)
+                            val action = actionFor(dir)
+                            val longEnough = distanceOf(dir) > SWIPE_THRESHOLD_PX
+                            if (dir == SwipeDir.UP && action == GestureActions.DRAWER) {
+                                currentDrawerRelease(longEnough)
                             } else {
                                 currentDrawerRelease(false)
-                                if (vertical && dy > SWIPE_THRESHOLD_PX) {
-                                    when (currentSettings.swipeDown) {
-                                        SwipeAction.NOTIFICATIONS -> expandNotificationShade(context)
-                                        SwipeAction.SEARCH -> currentOpenDrawer(true)
-                                        SwipeAction.DASHBOARD -> viewModel.setDashboardOpen(true, DashboardEdge.TOP)
-                                        SwipeAction.NONE -> Unit
+                                if (longEnough && action.isNotBlank()) {
+                                    val edge = when (dir) {
+                                        SwipeDir.LEFT -> DashboardEdge.RIGHT
+                                        SwipeDir.RIGHT -> DashboardEdge.LEFT
+                                        SwipeDir.DOWN -> DashboardEdge.TOP
+                                        SwipeDir.UP -> DashboardEdge.BOTTOM
                                     }
-                                } else if (horizontal && abs(dx) > SWIPE_THRESHOLD_PX) {
-                                    val key = if (dx < 0f) currentSettings.swipeLeftApp else currentSettings.swipeRightApp
-                                    if (key.isNotBlank()) viewModel.launchByKey(key, if (dx < 0f) DashboardEdge.RIGHT else DashboardEdge.LEFT)
+                                    when (action) {
+                                        GestureActions.DRAWER -> currentOpenDrawer(false)
+                                        GestureActions.SEARCH -> currentOpenDrawer(true)
+                                        GestureActions.NOTIFICATIONS -> expandNotificationShade(context)
+                                        else -> viewModel.launchByKey(action, edge)
+                                    }
                                 }
                             }
                         },
@@ -358,6 +402,28 @@ private fun HomeContent(
             } else {
                 Box(Modifier.weight(1f, fill = false).then(scrollModifier)) { favouritesContent() }
             }
+        }
+
+        hint?.let { h ->
+            val alignment = when (h.dir) {
+                SwipeDir.LEFT -> Alignment.CenterEnd
+                SwipeDir.RIGHT -> Alignment.CenterStart
+                SwipeDir.UP -> Alignment.BottomCenter
+                SwipeDir.DOWN -> Alignment.TopCenter
+            }
+            Text(
+                h.text,
+                color = if (h.armed) Color(0xFF14181B) else Color.White,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .align(alignment)
+                    .windowInsetsPadding(WindowInsets.systemBars)
+                    .padding(horizontal = 20.dp, vertical = if (h.dir == SwipeDir.UP) 96.dp else 24.dp)
+                    .alpha(0.35f + 0.65f * h.progress)
+                    .background(if (h.armed) Color.White else Color.Black.copy(alpha = 0.55f), RoundedCornerShape(50))
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+            )
         }
 
         if (showWidgetPicker) WidgetPickerDialog(viewModel, onDismiss = { showWidgetPicker = false })
