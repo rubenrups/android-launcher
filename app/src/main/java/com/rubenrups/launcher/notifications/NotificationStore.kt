@@ -2,6 +2,7 @@ package com.rubenrups.launcher.notifications
 
 import android.app.PendingIntent
 import android.media.session.MediaController
+import android.media.session.PlaybackState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,6 +35,8 @@ data class MediaState(
     val artist: String,
     val isPlaying: Boolean,
     val controller: MediaController,
+    /** Extra buttons the player offers, e.g. Spotify's add-to-liked-songs plus/heart. */
+    val customActions: List<PlaybackState.CustomAction> = emptyList(),
 )
 
 /**

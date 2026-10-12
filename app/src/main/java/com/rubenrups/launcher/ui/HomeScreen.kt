@@ -85,6 +85,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.toBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.DashboardEdge
@@ -969,6 +971,10 @@ internal fun MediaCard(media: MediaState, modifier: Modifier = Modifier) {
                 Text(media.artist, color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
+        // The player's own extra buttons (Spotify: add to / remove from liked songs). Icons come from the player app.
+        media.customActions.take(3).forEach { action ->
+            CustomActionButton(media.controller.packageName, action) { controls.sendCustomAction(action, null) }
+        }
         MediaButton("|◀") { controls.skipToPrevious() }
         MediaButton(if (media.isPlaying) "❚❚" else "▶") {
             if (media.isPlaying) controls.pause() else controls.play()
@@ -1017,4 +1023,27 @@ private fun MediaButton(label: String, onClick: () -> Unit) {
         fontSize = 18.sp,
         modifier = Modifier.clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp),
     )
+}
+
+/** A custom media action drawn with the icon its app supplied, or its name if that icon can't be loaded. */
+@Composable
+private fun CustomActionButton(packageName: String, action: android.media.session.PlaybackState.CustomAction, onClick: () -> Unit) {
+    val context = LocalContext.current
+    val icon = remember(packageName, action.icon) {
+        runCatching {
+            val resources = context.packageManager.getResourcesForApplication(packageName)
+            androidx.core.content.res.ResourcesCompat.getDrawable(resources, action.icon, null)
+                ?.toBitmap(width = 96, height = 96)?.asImageBitmap()
+        }.getOrNull()
+    }
+    if (icon != null) {
+        androidx.compose.foundation.Image(
+            bitmap = icon,
+            contentDescription = action.name.toString(),
+            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White),
+            modifier = Modifier.clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 4.dp).size(32.dp),
+        )
+    } else {
+        MediaButton(action.name.toString().take(10), onClick)
+    }
 }

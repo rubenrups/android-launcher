@@ -124,6 +124,7 @@ class LauncherNotificationService : NotificationListenerService() {
                 artist = c.metadata?.getString(MediaMetadata.METADATA_KEY_ARTIST).orEmpty(),
                 isPlaying = c.playbackState?.state == PlaybackState.STATE_PLAYING,
                 controller = c,
+                customActions = c.playbackState?.customActions.orEmpty(),
             )
         )
     }

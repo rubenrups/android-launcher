@@ -5,6 +5,7 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 ## Features (v0.9)
 
 - **Dashboard**: a second screen with glucose (graph, in-range %), navigation, media controls and quick stats. Open it from the long-press menu or assign it to any swipe (down, left, right). Tapping the glucose value opens the Libre app
+- **Player buttons**: the media card shows the player's own extra buttons, such as Spotify's add to liked songs
 - **Swipe feedback**: the home screen leans after your finger during a configured swipe, ticks when it counts, and the dashboard slides in from the side you swiped
 - **Glucose on home**: FreeStyle Libre value, trend and age under the clock, via a LibreLinkUp follower account (display only; greyed out when older than 10 min)
 - **Navigation card**: the Google Maps / Waze next-turn notification shown on home
