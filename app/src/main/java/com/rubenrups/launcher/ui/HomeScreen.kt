@@ -87,6 +87,7 @@ import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.rubenrups.launcher.DashboardEdge
 import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.data.AppEntry
 import com.rubenrups.launcher.data.AppInfo
@@ -108,6 +109,9 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private const val SWIPE_THRESHOLD_PX = 120f
+
+/** The most the home content leans during a swipe, in pixels. */
+private const val PULL_MAX_PX = 160f
 
 /**
  * The screen has no side margin of its own, so favourite rows can be tappable edge to edge.
@@ -178,6 +182,14 @@ private fun HomeContent(
     val nextEvent = rememberNextEvent(settings.showCalendar)
     var showWidgetPicker by remember { mutableStateOf(false) }
 
+    val haptics = LocalHapticFeedback.current
+    // The content leans after the finger during a configured swipe and springs back, so a swipe visibly "does something".
+    var pullX by remember { mutableFloatStateOf(0f) }
+    var pullY by remember { mutableFloatStateOf(0f) }
+    var pulling by remember { mutableStateOf(false) }
+    val shownPullX by animateFloatAsState(pullX, if (pulling) snap() else spring(dampingRatio = 0.55f, stiffness = 300f), label = "pullX")
+    val shownPullY by animateFloatAsState(pullY, if (pulling) snap() else spring(dampingRatio = 0.55f, stiffness = 300f), label = "pullY")
+
     val currentSettings by rememberUpdatedState(settings)
     val currentOpenDrawer by rememberUpdatedState(onOpenDrawer)
     val currentDrawerDrag by rememberUpdatedState(onDrawerDrag)
@@ -198,14 +210,32 @@ private fun HomeContent(
                     if (editMode) return@pointerInput
                     var dx = 0f
                     var dy = 0f
+                    var crossed = false
+                    fun settle() {
+                        pulling = false
+                        pullX = 0f
+                        pullY = 0f
+                        crossed = false
+                    }
                     detectDragGestures(
-                        onDragStart = { dx = 0f; dy = 0f },
+                        onDragStart = { dx = 0f; dy = 0f; crossed = false; pulling = true },
                         onDrag = { _, amount ->
                             dx += amount.x
                             dy += amount.y
                             if (dy < 0f && abs(dy) > abs(dx)) currentDrawerDrag(-dy)
+                            val s = currentSettings
+                            val horizontalKey = if (dx < 0f) s.swipeLeftApp else s.swipeRightApp
+                            val wantsX = abs(dx) > abs(dy) && horizontalKey.isNotBlank()
+                            val wantsY = dy > 0f && abs(dy) > abs(dx) && s.swipeDown != SwipeAction.NONE
+                            pullX = if (wantsX) (dx * 0.35f).coerceIn(-PULL_MAX_PX, PULL_MAX_PX) else 0f
+                            pullY = if (wantsY) (dy * 0.25f).coerceIn(0f, PULL_MAX_PX) else 0f
+                            // A tick the moment the swipe is long enough to count.
+                            val past = (wantsX && abs(dx) > SWIPE_THRESHOLD_PX) || (wantsY && dy > SWIPE_THRESHOLD_PX)
+                            if (past && !crossed) haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            crossed = past
                         },
                         onDragEnd = {
+                            settle()
                             val vertical = abs(dy) > abs(dx) * 1.2f
                             val horizontal = abs(dx) > abs(dy) * 1.2f
                             if (vertical && dy < -SWIPE_THRESHOLD_PX) {
@@ -216,17 +246,22 @@ private fun HomeContent(
                                     when (currentSettings.swipeDown) {
                                         SwipeAction.NOTIFICATIONS -> expandNotificationShade(context)
                                         SwipeAction.SEARCH -> currentOpenDrawer(true)
-                                        SwipeAction.DASHBOARD -> viewModel.setDashboardOpen(true)
+                                        SwipeAction.DASHBOARD -> viewModel.setDashboardOpen(true, DashboardEdge.TOP)
                                         SwipeAction.NONE -> Unit
                                     }
                                 } else if (horizontal && abs(dx) > SWIPE_THRESHOLD_PX) {
                                     val key = if (dx < 0f) currentSettings.swipeLeftApp else currentSettings.swipeRightApp
-                                    if (key.isNotBlank()) viewModel.launchByKey(key)
+                                    if (key.isNotBlank()) viewModel.launchByKey(key, if (dx < 0f) DashboardEdge.RIGHT else DashboardEdge.LEFT)
                                 }
                             }
                         },
-                        onDragCancel = { currentDrawerRelease(false) },
+                        onDragCancel = { settle(); currentDrawerRelease(false) },
                     )
+                }
+                .graphicsLayer {
+                    translationX = shownPullX
+                    translationY = shownPullY
+                    alpha = 1f - (abs(shownPullX) / (PULL_MAX_PX * 4f)).coerceIn(0f, 0.4f)
                 }
                 .padding(vertical = 16.dp),
             horizontalAlignment = if (settings.alignEnd) Alignment.End else Alignment.Start,

@@ -5,6 +5,12 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,12 +24,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
+import com.rubenrups.launcher.DashboardEdge
 import com.rubenrups.launcher.LauncherViewModel
 import kotlinx.coroutines.launch
 
@@ -36,6 +44,7 @@ fun LauncherApp(viewModel: LauncherViewModel) {
     val settingsOpen by viewModel.settingsOpen.collectAsStateWithLifecycle()
     val dashboardOpen by viewModel.dashboardOpen.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val dashboardEdge by viewModel.dashboardEdge.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
 
     // Poll LibreLinkUp once a minute, only while the launcher is on screen; a login change polls straight away.
@@ -110,7 +119,23 @@ fun LauncherApp(viewModel: LauncherViewModel) {
             }
         }
 
-        AnimatedVisibility(visible = dashboardOpen, enter = fadeIn(), exit = fadeOut()) {
+        // The dashboard comes in from the side you swiped from, and leaves the same way.
+        val slide = tween<IntOffset>(durationMillis = 280)
+        AnimatedVisibility(
+            visible = dashboardOpen,
+            enter = when (dashboardEdge) {
+                DashboardEdge.RIGHT -> slideInHorizontally(slide) { it } + fadeIn(tween(200))
+                DashboardEdge.LEFT -> slideInHorizontally(slide) { -it } + fadeIn(tween(200))
+                DashboardEdge.TOP -> slideInVertically(slide) { -it } + fadeIn(tween(200))
+                DashboardEdge.NONE -> fadeIn(tween(220)) + scaleIn(tween(220), initialScale = 0.94f)
+            },
+            exit = when (dashboardEdge) {
+                DashboardEdge.RIGHT -> slideOutHorizontally(slide) { it } + fadeOut(tween(200))
+                DashboardEdge.LEFT -> slideOutHorizontally(slide) { -it } + fadeOut(tween(200))
+                DashboardEdge.TOP -> slideOutVertically(slide) { -it } + fadeOut(tween(200))
+                DashboardEdge.NONE -> fadeOut(tween(180)) + scaleOut(tween(180), targetScale = 0.94f)
+            },
+        ) {
             DashboardScreen(
                 viewModel,
                 onClose = { viewModel.setDashboardOpen(false) },

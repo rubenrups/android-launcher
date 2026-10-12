@@ -30,6 +30,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+/** Which screen edge the dashboard slides in from (and back out to); NONE = fade and scale. */
+enum class DashboardEdge { NONE, LEFT, RIGHT, TOP }
+
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
 
     val repository = AppRepository(application)
@@ -99,6 +102,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _dashboardOpen = MutableStateFlow(false)
     val dashboardOpen: StateFlow<Boolean> = _dashboardOpen.asStateFlow()
 
+    private val _dashboardEdge = MutableStateFlow(DashboardEdge.NONE)
+    val dashboardEdge: StateFlow<DashboardEdge> = _dashboardEdge.asStateFlow()
+
     private val glucoseStore = GlucoseStore()
     val glucose: StateFlow<GlucoseState> = glucoseStore.state
 
@@ -137,9 +143,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         if (app != null) launch(app) else setDashboardOpen(true)
     }
 
-    fun launchByKey(key: String) {
+    fun launchByKey(key: String, from: DashboardEdge = DashboardEdge.NONE) {
         if (key == ACTION_DASHBOARD) {
-            setDashboardOpen(true)
+            setDashboardOpen(true, from)
             return
         }
         repository.apps.value.firstOrNull { it.key == key }?.let { launch(it) }
@@ -151,8 +157,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun setSettingsOpen(open: Boolean) { _settingsOpen.value = open }
 
-    fun setDashboardOpen(open: Boolean) {
-        if (open) closeDrawer()
+    fun setDashboardOpen(open: Boolean, from: DashboardEdge = DashboardEdge.NONE) {
+        // Closing keeps the last edge, so the dashboard leaves the way it came.
+        if (open) {
+            closeDrawer()
+            _dashboardEdge.value = from
+        }
         _dashboardOpen.value = open
     }
 
