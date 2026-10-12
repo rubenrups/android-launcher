@@ -15,7 +15,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -51,6 +54,18 @@ fun WidgetPickerDialog(viewModel: LauncherViewModel, onDismiss: () -> Unit) {
     val providers = remember { viewModel.widgets.installedProviders() }
     val packageManager = context.packageManager
     val listState = rememberLazyListState()
+    var query by remember { mutableStateOf("") }
+    // Each widget with its own name and its app's name, looked up once.
+    val entries = remember(providers) {
+        providers.map { provider ->
+            val app = runCatching {
+                val appInfo = packageManager.getApplicationInfo(provider.provider.packageName, 0)
+                packageManager.getApplicationLabel(appInfo).toString()
+            }.getOrDefault("")
+            Triple(provider, provider.loadLabel(packageManager), app)
+        }
+    }
+    val shown = entries.filter { (_, label, app) -> matchesQuery(query, label, app) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(24.dp), color = Color(0xF21A1A1A)) {
@@ -70,13 +85,9 @@ fun WidgetPickerDialog(viewModel: LauncherViewModel, onDismiss: () -> Unit) {
                         modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                     )
                 }
+                if (providers.isNotEmpty()) PickerSearchField(query) { query = it }
                 LazyColumn(state = listState, modifier = Modifier.weight(1f, fill = false).verticalScrollbar(listState)) {
-                    items(providers, key = { it.provider.flattenToString() }) { provider ->
-                        // The provider's component names its package; look the app's display name up from that.
-                        val app = runCatching {
-                            val appInfo = packageManager.getApplicationInfo(provider.provider.packageName, 0)
-                            packageManager.getApplicationLabel(appInfo).toString()
-                        }.getOrDefault("")
+                    items(shown, key = { it.first.provider.flattenToString() }) { (provider, label, app) ->
                         Column(
                             Modifier
                                 .fillMaxWidth()
@@ -87,7 +98,7 @@ fun WidgetPickerDialog(viewModel: LauncherViewModel, onDismiss: () -> Unit) {
                                 .padding(horizontal = 24.dp, vertical = 10.dp),
                             horizontalAlignment = Alignment.Start,
                         ) {
-                            Text(provider.loadLabel(packageManager), color = Color.White, fontSize = 16.sp, maxLines = 1)
+                            Text(label, color = Color.White, fontSize = 16.sp, maxLines = 1)
                             if (app.isNotBlank()) {
                                 Text(app, color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp, maxLines = 1)
                             }

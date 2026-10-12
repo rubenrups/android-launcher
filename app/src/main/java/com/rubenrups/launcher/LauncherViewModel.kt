@@ -123,6 +123,20 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     /** True while nothing is covering the home screen, so a typed character should start a search. */
     fun canTypeToSearch() = !_drawerOpen.value && !_settingsOpen.value && !_dashboardOpen.value
 
+    /**
+     * Opens the Libre app: the one chosen in settings, else the first installed app that looks like LibreLink
+     * (its package is com.freestylelibre… and varies by country; "LibreLinkUp" is the follower app, not it).
+     * With none found, falls back to the dashboard so the tap still does something.
+     */
+    fun openGlucoseApp() {
+        val apps = repository.apps.value
+        val chosen = settings.value.glucoseApp
+        val app = apps.firstOrNull { chosen.isNotBlank() && it.key == chosen }
+            ?: apps.firstOrNull { it.packageName.startsWith("com.freestylelibre") }
+            ?: apps.firstOrNull { it.label.contains("librelink", ignoreCase = true) && !it.label.contains("up", ignoreCase = true) }
+        if (app != null) launch(app) else setDashboardOpen(true)
+    }
+
     fun launchByKey(key: String) {
         if (key == ACTION_DASHBOARD) {
             setDashboardOpen(true)

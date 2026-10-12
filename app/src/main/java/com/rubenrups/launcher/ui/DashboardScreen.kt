@@ -6,6 +6,8 @@ import android.os.Environment
 import android.os.StatFs
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,6 +29,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -67,7 +70,10 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
     Column(
         Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.6f))
+            // Solid, so nothing of the home screen shows through. Tapping empty space closes it
+            // (cards swallow their own taps, see Card).
+            .background(Color(0xFF0F1215))
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)
             .windowInsetsPadding(WindowInsets.systemBars)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 12.dp),
@@ -95,8 +101,10 @@ private fun Card(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, c
     Column(
         modifier
             .fillMaxWidth()
-            .background(Color.Black.copy(alpha = 0.45f), CardShape)
-            .let { if (onClick != null) it.clickable(onClick = onClick) else it }
+            .background(Color.White.copy(alpha = 0.08f), CardShape)
+            .let {
+                if (onClick != null) it.clickable(onClick = onClick) else it.pointerInput(Unit) { detectTapGestures { } }
+            }
             .padding(16.dp),
     ) { content() }
 }
@@ -116,7 +124,7 @@ private fun GlucoseCard(viewModel: LauncherViewModel, onOpenSettings: () -> Unit
     val latest = state.snapshot?.latest
     val age = rememberAgeMs(latest?.timeMs)
     val stale = latest != null && age > GLUCOSE_STALE_MS
-    Card {
+    Card(onClick = { viewModel.openGlucoseApp() }) {
         Text("Glucose · ${glucoseUnit(settings.glucoseMmol)}", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
         if (latest == null) {
             Text(if (state.error == null) "Loading…" else "No reading", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light)

@@ -254,6 +254,9 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                 placeholder = { Text("LibreLinkUp password") },
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
             )
+            ActionRow("Tapping the value opens: ${settings.glucoseApp.let { k -> if (k.isBlank()) "LibreLink (automatic)" else swipeLabel(k) }}") {
+                chooser = "glucose"
+            }
             SwitchRow("Use mmol/L instead of mg/dL", settings.glucoseMmol) { v -> viewModel.update { it.copy(glucoseMmol = v) } }
             Label("Low below ${formatGlucose(settings.glucoseLow, settings.glucoseMmol)} ${glucoseUnit(settings.glucoseMmol)}")
             Slider(
@@ -329,16 +332,27 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
         ActionRow("Swipe left opens: ${swipeLabel(settings.swipeLeftApp)}") { chooser = "left" }
         ActionRow("Swipe right opens: ${swipeLabel(settings.swipeRightApp)}") { chooser = "right" }
         chooser?.let { side ->
+            val forGlucose = side == "glucose"
             AppChooserDialog(
-                title = if (side == "left") "Swipe left opens" else "Swipe right opens",
+                title = when (side) {
+                    "left" -> "Swipe left opens"
+                    "right" -> "Swipe right opens"
+                    else -> "Tapping the glucose value opens"
+                },
                 viewModel = viewModel,
                 onPick = { app ->
                     val key = app?.key.orEmpty()
-                    viewModel.update { if (side == "left") it.copy(swipeLeftApp = key) else it.copy(swipeRightApp = key) }
+                    viewModel.update {
+                        when (side) {
+                            "left" -> it.copy(swipeLeftApp = key)
+                            "right" -> it.copy(swipeRightApp = key)
+                            else -> it.copy(glucoseApp = key)
+                        }
+                    }
                     chooser = null
                 },
                 onDismiss = { chooser = null },
-                extras = listOf("Dashboard" to LauncherViewModel.ACTION_DASHBOARD),
+                extras = if (forGlucose) emptyList() else listOf("Dashboard" to LauncherViewModel.ACTION_DASHBOARD),
                 onPickExtra = { key ->
                     viewModel.update { if (side == "left") it.copy(swipeLeftApp = key) else it.copy(swipeRightApp = key) }
                     chooser = null

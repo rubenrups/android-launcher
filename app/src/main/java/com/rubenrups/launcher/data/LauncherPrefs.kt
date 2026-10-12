@@ -10,6 +10,7 @@ import org.json.JSONObject
 enum class SwipeAction(val label: String) {
     NOTIFICATIONS("Notification shade"),
     SEARCH("Search apps"),
+    DASHBOARD("Dashboard"),
     NONE("Nothing"),
 }
 
@@ -64,6 +65,8 @@ data class LauncherSettings(
     val glucoseLow: Int = 70,
     val glucoseHigh: Int = 180,
     val showNavigation: Boolean = true,
+    /** App opened by tapping the glucose value; empty = find the LibreLink app automatically. */
+    val glucoseApp: String = "",
 )
 
 /** Persists favourites, hidden apps and user settings in SharedPreferences. */
@@ -150,6 +153,7 @@ class LauncherPrefs(context: Context) {
         glucoseLow = prefs.getInt(KEY_GLUCOSE_LOW, 70),
         glucoseHigh = prefs.getInt(KEY_GLUCOSE_HIGH, 180),
         showNavigation = prefs.getBoolean(KEY_SHOW_NAVIGATION, true),
+        glucoseApp = prefs.getString(KEY_GLUCOSE_APP, "").orEmpty(),
     )
 
     private fun save(s: LauncherSettings) {
@@ -188,6 +192,7 @@ class LauncherPrefs(context: Context) {
             .putInt(KEY_GLUCOSE_LOW, s.glucoseLow)
             .putInt(KEY_GLUCOSE_HIGH, s.glucoseHigh)
             .putBoolean(KEY_SHOW_NAVIGATION, s.showNavigation)
+            .putString(KEY_GLUCOSE_APP, s.glucoseApp)
             .apply()
     }
 
@@ -252,6 +257,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_GLUCOSE_LOW = "glucose_low"
         const val KEY_GLUCOSE_HIGH = "glucose_high"
         const val KEY_SHOW_NAVIGATION = "show_navigation"
+        const val KEY_GLUCOSE_APP = "glucose_app"
         /** Credentials: never written to a backup file, and a restore leaves them alone. */
         val SECRET_KEYS = setOf(KEY_UPDATE_TOKEN, KEY_GLUCOSE_EMAIL, KEY_GLUCOSE_PASSWORD)
         const val KEY_ANCHOR_BOTTOM = "anchor_bottom"

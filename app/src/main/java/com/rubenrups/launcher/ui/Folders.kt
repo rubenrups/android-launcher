@@ -94,6 +94,7 @@ fun FolderPickerDialog(
     onNew: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    var query by remember { mutableStateOf("") }
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(24.dp), color = Color(0xFF1A1A1A)) {
             val scroll = rememberScrollState()
@@ -105,8 +106,9 @@ fun FolderPickerDialog(
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 )
+                if (folders.size > 4) PickerSearchField(query) { query = it }
                 Column(Modifier.weight(1f, fill = false).verticalScrollbar(scroll).verticalScroll(scroll)) {
-                    folders.sortedBy { it.name.lowercase() }.forEach { folder ->
+                    folders.filter { matchesQuery(query, it.name) }.sortedBy { it.name.lowercase() }.forEach { folder ->
                         PickerRow(folder.name) { onPick(folder) }
                     }
                 }
@@ -270,6 +272,8 @@ fun AppPickerDialog(folderId: String, viewModel: LauncherViewModel, onDismiss: (
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val folder = settings.folders.firstOrNull { it.id == folderId } ?: return
     val listState = rememberLazyListState()
+    var query by remember { mutableStateOf("") }
+    val shownApps = apps.filter { matchesQuery(query, it.label) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(24.dp), color = Color(0xF21A1A1A)) {
@@ -281,8 +285,9 @@ fun AppPickerDialog(folderId: String, viewModel: LauncherViewModel, onDismiss: (
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 )
+                PickerSearchField(query) { query = it }
                 LazyColumn(state = listState, modifier = Modifier.weight(1f, fill = false).verticalScrollbar(listState)) {
-                    items(apps, key = { it.key }) { app ->
+                    items(shownApps, key = { it.key }) { app ->
                         val inThis = app.key in folder.appKeys
                         val elsewhere = settings.folders.firstOrNull { it.id != folderId && app.key in it.appKeys }
                         Row(

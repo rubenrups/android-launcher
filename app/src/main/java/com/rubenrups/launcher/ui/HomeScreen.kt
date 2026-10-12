@@ -216,6 +216,7 @@ private fun HomeContent(
                                     when (currentSettings.swipeDown) {
                                         SwipeAction.NOTIFICATIONS -> expandNotificationShade(context)
                                         SwipeAction.SEARCH -> currentOpenDrawer(true)
+                                        SwipeAction.DASHBOARD -> viewModel.setDashboardOpen(true)
                                         SwipeAction.NONE -> Unit
                                     }
                                 } else if (horizontal && abs(dx) > SWIPE_THRESHOLD_PX) {
@@ -235,7 +236,7 @@ private fun HomeContent(
             val mediaState = if (settings.showMedia) media else null
             val glucoseLine: @Composable () -> Unit = {
                 if (settings.glucoseEnabled) {
-                    GlucoseChip(glucose, settings, LocalHomeInk.current) { viewModel.setDashboardOpen(true) }
+                    GlucoseChip(glucose, settings, LocalHomeInk.current) { viewModel.openGlucoseApp() }
                 }
             }
             val mediaBesideClock = landscape && settings.showClock && mediaState != null

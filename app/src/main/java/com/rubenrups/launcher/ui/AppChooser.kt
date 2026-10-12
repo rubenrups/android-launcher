@@ -16,6 +16,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -40,6 +43,9 @@ fun AppChooserDialog(
 ) {
     val apps by viewModel.visibleApps.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
+    var query by remember { mutableStateOf("") }
+    val shownApps = apps.filter { matchesQuery(query, it.label) }
+    val shownExtras = extras.filter { matchesQuery(query, it.first) }
 
     Dialog(onDismissRequest = onDismiss) {
         Surface(shape = RoundedCornerShape(24.dp), color = Color(0xF21A1A1A)) {
@@ -51,8 +57,9 @@ fun AppChooserDialog(
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                 )
+                PickerSearchField(query) { query = it }
                 LazyColumn(state = listState, modifier = Modifier.weight(1f, fill = false).verticalScrollbar(listState)) {
-                    item(key = "nothing") {
+                    if (query.isBlank()) item(key = "nothing") {
                         Text(
                             "Nothing",
                             color = Color.White,
@@ -60,7 +67,7 @@ fun AppChooserDialog(
                             modifier = Modifier.fillMaxWidth().clickable { onPick(null) }.padding(horizontal = 24.dp, vertical = 14.dp),
                         )
                     }
-                    items(extras, key = { it.second }) { (label, key) ->
+                    items(shownExtras, key = { it.second }) { (label, key) ->
                         Text(
                             label,
                             color = Color.White,
@@ -68,7 +75,7 @@ fun AppChooserDialog(
                             modifier = Modifier.fillMaxWidth().clickable { onPickExtra(key) }.padding(horizontal = 24.dp, vertical = 14.dp),
                         )
                     }
-                    items(apps, key = { it.key }) { app ->
+                    items(shownApps, key = { it.key }) { app ->
                         Row(
                             Modifier.fillMaxWidth().clickable { onPick(app) }.padding(horizontal = 24.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically,
