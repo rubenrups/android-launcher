@@ -106,6 +106,7 @@ private val SearchIndex = listOf(
     SettingHit("Recent apps", Page.DRAWER, "recents"),
     SettingHit("Web search when typing", Page.DRAWER, "google duckduckgo engine"),
     SettingHit("Car mode background", Page.DASHBOARD, "dashboard opacity transparency solid"),
+    SettingHit("Home and work addresses", Page.DASHBOARD, "car mode navigate maps shortcut destination"),
     SettingHit("Keep screen on", Page.DASHBOARD, "awake car mode dashboard"),
     SettingHit("Car mode cards and order", Page.DASHBOARD, "dashboard reorder hide media weather navigation"),
     SettingHit("Show glucose", Page.GLUCOSE, "libre librelink librelinkup sugar diabetes"),
@@ -405,6 +406,15 @@ private fun DashboardPage(viewModel: LauncherViewModel, settings: LauncherSettin
         ) { v -> viewModel.update { it.copy(dashboardOpacity = v.toInt()) } }
         Hint("Open car mode from the long-press menu, a swipe (see Gestures), or a favourites button (see Home screen).")
     }
+    Group("Navigation shortcuts") {
+        Field(settings.homeAddress, "Home address") { v -> viewModel.update { it.copy(homeAddress = v) } }
+        Field(settings.workAddress, "Work address") { v -> viewModel.update { it.copy(workAddress = v) } }
+        Hint(
+            "While no route is active, the navigation card in car mode shows Home, Work and Maps buttons. " +
+                "Home and Work start Google Maps driving directions to these addresses. They stay on this device " +
+                "and are not included in backups."
+        )
+    }
     Group("Cards, in order") {
         val order = settings.dashboardOrder
         order.forEachIndexed { index, key ->
@@ -431,7 +441,7 @@ private fun DashboardPage(viewModel: LauncherViewModel, settings: LauncherSettin
             }
         }
         Hint(
-            "You can also hold a card in car mode to move or hide it. Navigation shows only while a route is active, " +
+            "You can also hold a card in car mode to move or hide it. Navigation shows the next turn while a route is active, and Home / Work / Maps buttons otherwise, " +
                 "hourly weather needs the weather city (Home screen), and glucose is set up under its own category."
         )
     }

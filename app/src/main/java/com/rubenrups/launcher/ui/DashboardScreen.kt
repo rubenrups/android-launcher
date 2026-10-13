@@ -103,7 +103,6 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
     // The cards that currently have something to show, in the chosen order.
     val visible = settings.dashboardOrder.filter { key ->
         key !in settings.dashboardHidden && when (key) {
-            DashboardModules.NAVIGATION -> navigation != null
             DashboardModules.WEATHER -> hours.isNotEmpty()
             else -> true
         }
@@ -112,7 +111,9 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
         when (key) {
             DashboardModules.GLUCOSE -> GlucoseCard(viewModel, onOpenSettings)
             DashboardModules.MEDIA -> CarMediaCard(media)
-            DashboardModules.NAVIGATION -> navigation?.let { NavigationCard(it, big = true) }
+            // While a route is active: the next turn. Otherwise: one-tap destinations.
+            DashboardModules.NAVIGATION ->
+                navigation?.let { NavigationCard(it, big = true) } ?: NavigateCard(settings.homeAddress, settings.workAddress, onOpenSettings)
             DashboardModules.WEATHER -> HourlyCard(hours, settings.weatherCity)
             DashboardModules.QUICK -> QuickSettingsCard()
             DashboardModules.STATS -> StatTiles(battery, weather, nextEvent?.text)
@@ -506,3 +507,54 @@ private fun TransportButton(kind: TransportKind, size: androidx.compose.ui.unit.
         }
     }
 }
+
+/** Shown instead of the route card when nothing is being navigated: Home, Work and Maps, as big buttons. */
+@Composable
+private fun NavigateCard(home: String, work: String, onOpenSettings: () -> Unit) {
+    val context = LocalContext.current
+    fun navigateTo(address: String) {
+        val uri = Uri.parse("google.navigation:q=" + Uri.encode(address) + "&mode=d")
+        val viaMaps = Intent(Intent.ACTION_VIEW, uri).setPackage(MAPS_PACKAGE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        // Without the Maps app, let any navigation app that understands the link take it.
+        if (runCatching { context.startActivity(viaMaps) }.isFailure) {
+            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+        }
+    }
+    fun openMaps() {
+        val launch = context.packageManager.getLaunchIntentForPackage(MAPS_PACKAGE)
+            ?: Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0"))
+        runCatching { context.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    Card {
+        Text("🧭 Navigate", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            NavTile("🏠", "Home", if (home.isBlank()) "Set address" else null) {
+                if (home.isBlank()) onOpenSettings() else navigateTo(home)
+            }
+            NavTile("💼", "Work", if (work.isBlank()) "Set address" else null) {
+                if (work.isBlank()) onOpenSettings() else navigateTo(work)
+            }
+            NavTile("🗺️", "Maps", null) { openMaps() }
+        }
+    }
+}
+
+@Composable
+private fun RowScope.NavTile(icon: String, label: String, hint: String?, onClick: () -> Unit) {
+    Column(
+        Modifier
+            .weight(1f)
+            .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 4.dp, vertical = 18.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(icon, fontSize = 34.sp)
+        Text(label, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Medium)
+        if (hint != null) Text(hint, color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp)
+    }
+}
+
+private const val MAPS_PACKAGE = "com.google.android.apps.maps"
