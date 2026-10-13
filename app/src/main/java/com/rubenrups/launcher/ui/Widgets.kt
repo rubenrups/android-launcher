@@ -2,6 +2,10 @@ package com.rubenrups.launcher.ui
 
 import android.view.View
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -107,6 +111,35 @@ fun WidgetPickerDialog(viewModel: LauncherViewModel, onDismiss: () -> Unit) {
                 }
                 TextButton(onClick = onDismiss, modifier = Modifier.align(Alignment.End).padding(8.dp)) { Text("Cancel") }
             }
+        }
+    }
+}
+
+/**
+ * Calls [onLongPress] when a finger stays down on this area without moving, while still letting the widget
+ * underneath receive its normal touches. It watches in the Initial pass (before the widget's own view sees the
+ * event); once it fires it swallows the rest of the gesture, so the widget does not also register a tap.
+ */
+fun Modifier.onLongPressAbove(onLongPress: () -> Unit): Modifier = pointerInput(Unit) {
+    awaitEachGesture {
+        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+        // Slightly shorter than the system's long-press, so the home screen's own long-press menu loses the race.
+        val held = withTimeoutOrNull<Boolean>((viewConfiguration.longPressTimeoutMillis - 100).coerceAtLeast(150)) {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val change = event.changes.firstOrNull { it.id == down.id } ?: return@withTimeoutOrNull false
+                if (!change.pressed) return@withTimeoutOrNull false
+                if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) return@withTimeoutOrNull false
+            }
+            @Suppress("UNREACHABLE_CODE")
+            false
+        }
+        if (held == null) {
+            onLongPress()
+            do {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                event.changes.forEach { it.consume() }
+            } while (event.changes.any { it.pressed })
         }
     }
 }

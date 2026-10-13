@@ -55,6 +55,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.data.AppInfo
 import com.rubenrups.launcher.data.CalendarReader
+import com.rubenrups.launcher.data.DashboardModules
 import com.rubenrups.launcher.data.GestureActions
 import com.rubenrups.launcher.data.LauncherSettings
 import com.rubenrups.launcher.data.UpdateChecker
@@ -390,6 +391,14 @@ private fun DashboardPage(
     apps: List<AppInfo>,
     openChooser: (String) -> Unit,
 ) {
+    Group("Cards on the dashboard") {
+        DashboardModules.all.forEach { (key, label) ->
+            SwitchRow(label, key !in settings.dashboardHidden) { on ->
+                viewModel.update { it.copy(dashboardHidden = if (on) it.dashboardHidden - key else it.dashboardHidden + key) }
+            }
+        }
+        Hint("Hourly weather needs the weather city (Home screen). Cards with nothing to show stay out of the way.")
+    }
     Group("Dashboard") {
         SliderRow(
             "Background",
@@ -481,6 +490,16 @@ private fun AppsPage(viewModel: LauncherViewModel, settings: LauncherSettings, o
             }
         }
         NavRow("Add widget", onClick = onAddWidget)
+    }
+    if (otherProfiles.isEmpty()) {
+        Group("Work profile") {
+            InfoRow("Status", "No work profile on this device")
+            Hint(
+                "A work profile is a separate space for work apps (Android Enterprise, or apps like Shelter and Island). " +
+                    "If you have one, its apps show in the drawer with a 💼 badge, and you can pause or resume them here. " +
+                    "Without one there is nothing to set."
+            )
+        }
     }
     if (otherProfiles.isNotEmpty()) {
         Group("Work profile") {

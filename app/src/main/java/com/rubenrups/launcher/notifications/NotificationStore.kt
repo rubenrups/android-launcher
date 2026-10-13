@@ -1,6 +1,7 @@
 package com.rubenrups.launcher.notifications
 
 import android.app.PendingIntent
+import android.graphics.Bitmap
 import android.media.session.MediaController
 import android.media.session.PlaybackState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -37,6 +38,8 @@ data class MediaState(
     val controller: MediaController,
     /** Extra buttons the player offers, e.g. Spotify's add-to-liked-songs plus/heart. */
     val customActions: List<PlaybackState.CustomAction> = emptyList(),
+    /** Album art or thumbnail, when the player supplies a bitmap. */
+    val art: Bitmap? = null,
 )
 
 /**

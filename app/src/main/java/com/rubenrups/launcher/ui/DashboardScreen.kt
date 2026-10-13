@@ -17,6 +17,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
+import com.rubenrups.launcher.data.DashboardModules
 import com.rubenrups.launcher.data.HourlyPoint
 import com.rubenrups.launcher.data.TaskItem
 import android.content.Intent
@@ -75,18 +76,21 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
     val hours = rememberHourlyWeather(settings.showWeather, settings.weatherCity, settings.weatherFahrenheit)
     val wide = LocalConfiguration.current.screenWidthDp >= 600
 
-    val glucoseCard: @Composable () -> Unit = { GlucoseCard(viewModel, onOpenSettings) }
-    val tasksCard: @Composable () -> Unit = { TasksCard(viewModel, settings.tasks) }
+    fun shown(module: String) = module !in settings.dashboardHidden
+    val glucoseCard: @Composable () -> Unit = { if (shown(DashboardModules.GLUCOSE)) GlucoseCard(viewModel, onOpenSettings) }
+    val tasksCard: @Composable () -> Unit = { if (shown(DashboardModules.TASKS)) TasksCard(viewModel, settings.tasks) }
     val otherCards: @Composable () -> Unit = {
-        navigation?.let { NavigationCard(it) }
-        if (media != null) {
-            MediaCard(media!!)
-        } else {
-            Card { Text("Nothing is playing", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp) }
+        if (shown(DashboardModules.NAVIGATION)) navigation?.let { NavigationCard(it) }
+        if (shown(DashboardModules.MEDIA)) {
+            if (media != null) {
+                MediaCard(media!!, thumbSize = 64.dp)
+            } else {
+                Card { Text("Nothing is playing", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp) }
+            }
         }
-        if (hours.isNotEmpty()) HourlyCard(hours, settings.weatherCity)
-        QuickSettingsCard()
-        StatTiles(battery, weather, nextEvent?.text)
+        if (shown(DashboardModules.WEATHER) && hours.isNotEmpty()) HourlyCard(hours, settings.weatherCity)
+        if (shown(DashboardModules.QUICK)) QuickSettingsCard()
+        if (shown(DashboardModules.STATS)) StatTiles(battery, weather, nextEvent?.text)
     }
 
     Column(

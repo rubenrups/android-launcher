@@ -14,6 +14,27 @@ enum class WebSearchEngine(val label: String, val urlTemplate: String?) {
     DUCKDUCKGO("DuckDuckGo", "https://duckduckgo.com/?q=%s"),
 }
 
+/** The cards that can be switched on or off on the dashboard. */
+object DashboardModules {
+    const val GLUCOSE = "glucose"
+    const val NAVIGATION = "navigation"
+    const val MEDIA = "media"
+    const val WEATHER = "weather"
+    const val QUICK = "quick"
+    const val TASKS = "tasks"
+    const val STATS = "stats"
+
+    val all: List<Pair<String, String>> = listOf(
+        GLUCOSE to "Glucose",
+        NAVIGATION to "Navigation",
+        MEDIA to "Media player",
+        WEATHER to "Hourly weather",
+        QUICK to "Quick settings",
+        TASKS to "To do",
+        STATS to "Battery, weather and next event",
+    )
+}
+
 /** One line of the dashboard to-do list. */
 data class TaskItem(val text: String, val done: Boolean = false)
 
@@ -72,6 +93,8 @@ data class LauncherSettings(
     val dashboardOpacity: Int = 100,
     /** Scale the home screen down a little while an app starts. */
     val launchAnimation: Boolean = true,
+    /** [DashboardModules] keys that are switched off. Stored as the hidden ones so new cards appear by default. */
+    val dashboardHidden: Set<String> = emptySet(),
     val tasks: List<TaskItem> = emptyList(),
     val autoCheckUpdates: Boolean = true,
     /** Fetch a new build in the background on Wi-Fi so installing is one tap. */
@@ -173,6 +196,7 @@ class LauncherPrefs(context: Context) {
         drawerOpacity = prefs.getInt(KEY_DRAWER_OPACITY, 90),
         dashboardOpacity = prefs.getInt(KEY_DASHBOARD_OPACITY, 100),
         launchAnimation = prefs.getBoolean(KEY_LAUNCH_ANIMATION, true),
+        dashboardHidden = prefs.getString(KEY_DASH_HIDDEN, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }.toSet(),
         tasks = decodeTasks(prefs.getString(KEY_TASKS, null)),
         autoCheckUpdates = prefs.getBoolean(KEY_AUTO_CHECK, true),
         autoDownloadUpdates = prefs.getBoolean(KEY_AUTO_DOWNLOAD, true),
@@ -221,6 +245,7 @@ class LauncherPrefs(context: Context) {
             .putInt(KEY_DRAWER_OPACITY, s.drawerOpacity)
             .putInt(KEY_DASHBOARD_OPACITY, s.dashboardOpacity)
             .putBoolean(KEY_LAUNCH_ANIMATION, s.launchAnimation)
+            .putString(KEY_DASH_HIDDEN, s.dashboardHidden.joinToString(SEPARATOR))
             .putString(KEY_TASKS, encodeTasks(s.tasks))
             .putBoolean(KEY_AUTO_CHECK, s.autoCheckUpdates)
             .putBoolean(KEY_AUTO_DOWNLOAD, s.autoDownloadUpdates)
@@ -310,6 +335,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_GLUCOSE_APP = "glucose_app"
         const val KEY_AUTO_CHECK = "auto_check_updates"
         const val KEY_LAUNCH_ANIMATION = "launch_animation"
+        const val KEY_DASH_HIDDEN = "dashboard_hidden"
         const val KEY_TASKS = "tasks"
         const val KEY_AUTO_DOWNLOAD = "auto_download_updates"
         const val KEY_DISMISSED_UPDATE = "dismissed_update"

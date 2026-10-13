@@ -63,6 +63,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
@@ -359,8 +361,36 @@ private fun HomeContent(
                     Spacer(Modifier.height(8.dp))
                 }
             }
-            settings.widgetIds.forEach { id ->
-                key(id) { WidgetView(id, viewModel.widgets, Modifier.padding(horizontal = 24.dp, vertical = 4.dp)) }
+            settings.widgetIds.forEachIndexed { index, id ->
+                key(id) {
+                    // Hold a widget for Move up / Move down / Remove.
+                    var menuOpen by remember { mutableStateOf(false) }
+                    Box {
+                        WidgetView(
+                            id,
+                            viewModel.widgets,
+                            Modifier.padding(horizontal = 24.dp, vertical = 4.dp).onLongPressAbove { menuOpen = true },
+                        )
+                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                            if (index > 0) {
+                                DropdownMenuItem(text = { Text("Move up") }, onClick = {
+                                    menuOpen = false
+                                    viewModel.moveWidget(id, -1)
+                                })
+                            }
+                            if (index < settings.widgetIds.lastIndex) {
+                                DropdownMenuItem(text = { Text("Move down") }, onClick = {
+                                    menuOpen = false
+                                    viewModel.moveWidget(id, 1)
+                                })
+                            }
+                            DropdownMenuItem(text = { Text("Remove widget") }, onClick = {
+                                menuOpen = false
+                                viewModel.removeWidget(id)
+                            })
+                        }
+                    }
+                }
             }
 
             // Top/bottom placement is its own setting, independent of left/right alignment.
@@ -1033,7 +1063,7 @@ private fun SwipeAwayRow(onDismiss: () -> Unit, content: @Composable () -> Unit)
 }
 
 @Composable
-internal fun MediaCard(media: MediaState, modifier: Modifier = Modifier) {
+internal fun MediaCard(media: MediaState, modifier: Modifier = Modifier, thumbSize: androidx.compose.ui.unit.Dp = 44.dp) {
     val context = LocalContext.current
     val controls = media.controller.transportControls
     Row(
@@ -1045,6 +1075,15 @@ internal fun MediaCard(media: MediaState, modifier: Modifier = Modifier) {
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        media.art?.let { art ->
+            val picture = remember(art) { art.asImageBitmap() }
+            androidx.compose.foundation.Image(
+                bitmap = picture,
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.padding(end = 12.dp).size(thumbSize).clip(RoundedCornerShape(8.dp)),
+            )
+        }
         Column(Modifier.weight(1f)) {
             Text(media.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (media.artist.isNotBlank()) {

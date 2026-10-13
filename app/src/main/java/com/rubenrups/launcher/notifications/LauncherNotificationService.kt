@@ -125,6 +125,11 @@ class LauncherNotificationService : NotificationListenerService() {
                 isPlaying = c.playbackState?.state == PlaybackState.STATE_PLAYING,
                 controller = c,
                 customActions = c.playbackState?.customActions.orEmpty(),
+                art = c.metadata?.let {
+                    it.getBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART)
+                        ?: it.getBitmap(MediaMetadata.METADATA_KEY_ART)
+                        ?: it.getBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON)
+                },
             )
         )
     }

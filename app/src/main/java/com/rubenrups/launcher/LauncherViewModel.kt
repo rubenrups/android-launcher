@@ -337,6 +337,17 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         widgets.beginAdd(activity, provider) { id -> update { it.copy(widgetIds = it.widgetIds + id) } }
     }
 
+    /** Moves a home-screen widget one step up (-1) or down (+1) in the list. */
+    fun moveWidget(id: Int, delta: Int) = update { s ->
+        val from = s.widgetIds.indexOf(id)
+        val to = from + delta
+        if (from < 0 || to !in s.widgetIds.indices) {
+            s
+        } else {
+            s.copy(widgetIds = s.widgetIds.toMutableList().apply { add(to, removeAt(from)) })
+        }
+    }
+
     fun removeWidget(id: Int) {
         widgets.delete(id)
         update { it.copy(widgetIds = it.widgetIds - id) }
