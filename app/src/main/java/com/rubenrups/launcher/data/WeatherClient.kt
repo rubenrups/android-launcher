@@ -11,6 +11,9 @@ import kotlin.math.roundToInt
  * results are cached for 30 minutes. Blocking: call from a background dispatcher, and treat any
  * exception as "no weather right now".
  */
+/** One step of the hourly forecast: "16:00", an emoji, and the temperature. */
+data class HourlyPoint(val time: String, val emoji: String, val temp: Int)
+
 object WeatherClient {
     private class Place(val lat: Double, val lon: Double)
 
@@ -37,6 +40,36 @@ object WeatherClient {
         cacheTime = System.currentTimeMillis()
         cacheText = text
         return text
+    }
+
+    private var hourlyKey: String? = null
+    private var hourlyTime = 0L
+    private var hourlyCache: List<HourlyPoint> = emptyList()
+
+    /** The next 12 hours in two-hour steps. Same city lookup and 30 minute cache as [fetch]. */
+    @Synchronized
+    fun fetchHourly(city: String, fahrenheit: Boolean): List<HourlyPoint> {
+        val key = "$city|$fahrenheit"
+        if (key == hourlyKey && System.currentTimeMillis() - hourlyTime < CACHE_MS) return hourlyCache
+        val place = places[city] ?: geocode(city)?.also { places[city] = it } ?: return emptyList()
+        val unit = if (fahrenheit) "fahrenheit" else "celsius"
+        val hourly = JSONObject(
+            get(
+                "https://api.open-meteo.com/v1/forecast?latitude=${place.lat}&longitude=${place.lon}" +
+                    "&hourly=temperature_2m,weather_code&forecast_hours=12&timezone=auto&temperature_unit=$unit"
+            )
+        ).getJSONObject("hourly")
+        val times = hourly.getJSONArray("time")
+        val temps = hourly.getJSONArray("temperature_2m")
+        val codes = hourly.getJSONArray("weather_code")
+        val points = (0 until times.length() step 2).map { i ->
+            // "2026-10-13T16:00" -> "16:00"
+            HourlyPoint(times.getString(i).substringAfter('T'), emoji(codes.getInt(i)), temps.getDouble(i).roundToInt())
+        }
+        hourlyKey = key
+        hourlyTime = System.currentTimeMillis()
+        hourlyCache = points
+        return points
     }
 
     private fun geocode(city: String): Place? {

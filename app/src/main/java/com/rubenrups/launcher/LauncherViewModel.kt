@@ -23,6 +23,7 @@ import com.rubenrups.launcher.data.VirtualApps
 import com.rubenrups.launcher.data.UpdateState
 import com.rubenrups.launcher.data.GlucoseStore
 import com.rubenrups.launcher.data.LauncherSettings
+import com.rubenrups.launcher.data.TaskItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -46,14 +47,18 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val settings: StateFlow<LauncherSettings> = prefs.settings
     val iconVersion: StateFlow<Int> = repository.iconVersion
 
+    /** Installed apps plus the launcher's own buttons (App drawer, Dashboard), which behave like apps in lists. */
+    private val appsWithButtons: StateFlow<List<AppInfo>> =
+        repository.apps.map { it + VirtualApps.all }.stateIn(viewModelScope, SharingStarted.Eagerly, VirtualApps.all)
+
     /** Apps the user hasn't hidden: what the drawer and search show. */
     val visibleApps: StateFlow<List<AppInfo>> =
-        combine(repository.apps, settings.map { it.hidden }.distinctUntilChanged()) { apps, hidden ->
+        combine(appsWithButtons, settings.map { it.hidden }.distinctUntilChanged()) { apps, hidden ->
             apps.filter { it.key !in hidden }
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val hiddenApps: StateFlow<List<AppInfo>> =
-        combine(repository.apps, settings.map { it.hidden }.distinctUntilChanged()) { apps, hidden ->
+        combine(appsWithButtons, settings.map { it.hidden }.distinctUntilChanged()) { apps, hidden ->
             apps.filter { it.key in hidden }
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
@@ -82,7 +87,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             val inFolder = folders.flatMapTo(HashSet()) { it.appKeys }
             val all = ArrayList<Entry>()
             folders.forEach { f -> all.add(f.resolve(byKey)) }
-            apps.filter { it.key !in inFolder }.forEach { all.add(AppEntry(it)) }
+            // The App drawer button can sit in a folder, but listing it loose inside the drawer itself would be silly.
+            apps.filter { it.key !in inFolder && it.key != VirtualApps.drawer.key }.forEach { all.add(AppEntry(it)) }
             // Folders pin to the top (by name); loose apps follow in A-Z order.
             val sortedFolders = all.filterIsInstance<FolderEntry>().sortedBy { it.label.lowercase() }
             val sortedApps = all.filterIsInstance<AppEntry>().sortedWith(compareBy({ it.letter }, { it.label.lowercase() }))
@@ -105,6 +111,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     private val _dashboardOpen = MutableStateFlow(false)
     val dashboardOpen: StateFlow<Boolean> = _dashboardOpen.asStateFlow()
+
+    /** Counts up each time a real app is launched; the UI plays its launch animation on every change. */
+    private val _launchPulse = MutableStateFlow(0)
+    val launchPulse: StateFlow<Int> = _launchPulse.asStateFlow()
 
     private val _dashboardEdge = MutableStateFlow(DashboardEdge.NONE)
     val dashboardEdge: StateFlow<DashboardEdge> = _dashboardEdge.asStateFlow()
@@ -159,6 +169,19 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun installUpdate() {
         viewModelScope.launch { UpdateManager.installNow(getApplication(), settings.value.updateToken) }
     }
+
+    fun addTask(text: String) {
+        val clean = text.trim()
+        if (clean.isNotEmpty()) update { it.copy(tasks = it.tasks + TaskItem(clean)) }
+    }
+
+    fun toggleTask(index: Int) = update { s ->
+        s.copy(tasks = s.tasks.mapIndexed { i, t -> if (i == index) t.copy(done = !t.done) else t })
+    }
+
+    fun deleteTask(index: Int) = update { s -> s.copy(tasks = s.tasks.filterIndexed { i, _ -> i != index }) }
+
+    fun clearDoneTasks() = update { s -> s.copy(tasks = s.tasks.filter { !it.done }) }
 
     fun dismissUpdate(build: Int) = update { it.copy(dismissedUpdate = build) }
 
@@ -331,6 +354,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             return
         }
         update { s -> s.copy(recents = (listOf(app.key) + (s.recents - app.key)).take(MAX_RECENTS)) }
+        if (settings.value.launchAnimation) _launchPulse.value += 1
         repository.launch(app)
         closeDrawer()
     }

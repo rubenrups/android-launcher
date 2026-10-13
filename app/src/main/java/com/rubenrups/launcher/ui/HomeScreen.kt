@@ -924,10 +924,12 @@ private fun FolderChildRow(
                 menuOpen = false
                 viewModel.removeFromFolder(app)
             })
-            DropdownMenuItem(text = { Text("App info") }, onClick = {
-                menuOpen = false
-                viewModel.repository.openAppInfo(app)
-            })
+            if (!VirtualApps.isVirtual(app)) {
+                DropdownMenuItem(text = { Text("App info") }, onClick = {
+                    menuOpen = false
+                    viewModel.repository.openAppInfo(app)
+                })
+            }
         }
     }
 }

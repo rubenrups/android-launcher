@@ -51,6 +51,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.data.AppFolder
 import com.rubenrups.launcher.data.AppInfo
+import com.rubenrups.launcher.data.VirtualApps
 import com.rubenrups.launcher.data.FolderEntry
 import com.rubenrups.launcher.data.FolderSort
 
@@ -232,10 +233,12 @@ fun FolderDialog(
                                 menuOpen = false
                                 viewModel.removeFromFolder(app)
                             })
-                            DropdownMenuItem(text = { Text("App info") }, onClick = {
-                                menuOpen = false
-                                viewModel.repository.openAppInfo(app)
-                            })
+                            if (!VirtualApps.isVirtual(app)) {
+                                DropdownMenuItem(text = { Text("App info") }, onClick = {
+                                    menuOpen = false
+                                    viewModel.repository.openAppInfo(app)
+                                })
+                            }
                         }
                     }
                 }

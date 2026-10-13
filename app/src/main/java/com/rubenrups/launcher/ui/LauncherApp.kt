@@ -47,6 +47,22 @@ fun LauncherApp(viewModel: LauncherViewModel) {
     val dashboardEdge by viewModel.dashboardEdge.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
 
+    // Launch animation: the whole screen shrinks and fades a little while an app starts, and eases back when we return.
+    val launchPulse by viewModel.launchPulse.collectAsStateWithLifecycle()
+    val launchScale = remember { Animatable(1f) }
+    LaunchedEffect(launchPulse) {
+        if (launchPulse == 0) return@LaunchedEffect
+        launchScale.animateTo(0.9f, tween(durationMillis = 170))
+        // If the app never appeared (launch failed, or it is slow), do not stay shrunk.
+        delay(1_500)
+        launchScale.animateTo(1f, tween(durationMillis = 250))
+    }
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            if (launchScale.value != 1f) launchScale.animateTo(1f, tween(durationMillis = 260))
+        }
+    }
+
     // Look for a new build whenever the launcher comes to the front (throttled inside to every 3 hours).
     LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -87,7 +103,16 @@ fun LauncherApp(viewModel: LauncherViewModel) {
     BackHandler(enabled = dashboardOpen) { viewModel.setDashboardOpen(false) }
     BackHandler(enabled = settingsOpen) { viewModel.setSettingsOpen(false) }
 
-    Box(Modifier.fillMaxSize()) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                val scale = launchScale.value
+                scaleX = scale
+                scaleY = scale
+                alpha = 1f - (1f - scale) * 4f
+            },
+    ) {
         // Attached drawer: the home screen rides up with the drawer instead of staying put underneath it.
         Box(
             Modifier

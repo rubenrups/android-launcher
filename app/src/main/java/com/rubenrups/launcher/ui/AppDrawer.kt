@@ -71,6 +71,7 @@ import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.data.AppEntry
 import com.rubenrups.launcher.data.AppFolder
 import com.rubenrups.launcher.data.AppInfo
+import com.rubenrups.launcher.data.VirtualApps
 import com.rubenrups.launcher.data.Entry
 import com.rubenrups.launcher.data.FolderEntry
 import com.rubenrups.launcher.data.WebSearchEngine
@@ -339,21 +340,24 @@ private fun DrawerRow(
                 menuOpen = false
                 viewModel.hide(app)
             })
-            DropdownMenuItem(text = { Text("App info") }, onClick = {
-                menuOpen = false
-                viewModel.repository.openAppInfo(app)
-            })
-            if (app.shortcutId != null) {
-                DropdownMenuItem(text = { Text("Remove shortcut") }, onClick = {
+            // The launcher's own buttons (App drawer, Dashboard) are not installed apps: no app info, nothing to uninstall.
+            if (!VirtualApps.isVirtual(app)) {
+                DropdownMenuItem(text = { Text("App info") }, onClick = {
                     menuOpen = false
-                    viewModel.repository.unpinShortcut(app)
+                    viewModel.repository.openAppInfo(app)
                 })
-            } else if (app.isMainProfile) {
-                // Uninstalling a work-profile app would hit the personal copy, so only offer it for the main profile.
-                DropdownMenuItem(text = { Text("Uninstall") }, onClick = {
-                    menuOpen = false
-                    viewModel.repository.uninstall(app)
-                })
+                if (app.shortcutId != null) {
+                    DropdownMenuItem(text = { Text("Remove shortcut") }, onClick = {
+                        menuOpen = false
+                        viewModel.repository.unpinShortcut(app)
+                    })
+                } else if (app.isMainProfile) {
+                    // Uninstalling a work-profile app would hit the personal copy, so only offer it for the main profile.
+                    DropdownMenuItem(text = { Text("Uninstall") }, onClick = {
+                        menuOpen = false
+                        viewModel.repository.uninstall(app)
+                    })
+                }
             }
         }
     }

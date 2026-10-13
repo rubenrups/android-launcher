@@ -75,6 +75,54 @@ private enum class Page(val title: String, val icon: String) {
     BACKUP("Backup & updates", "☁️"),
 }
 
+/** One entry in the settings search: what it is called, where it lives, and extra words that should find it. */
+private data class SettingHit(val title: String, val page: Page, val keywords: String = "")
+
+private val SearchIndex = listOf(
+    SettingHit("Clock", Page.HOME, "time header"),
+    SettingHit("Next calendar event", Page.HOME, "agenda"),
+    SettingHit("Weather", Page.HOME, "city temperature fahrenheit celsius forecast"),
+    SettingHit("Align to the right", Page.HOME, "left right alignment favourites"),
+    SettingHit("Pin list to the bottom", Page.HOME, "top bottom anchor thumb"),
+    SettingHit("Two columns in landscape", Page.HOME, "grid rotate"),
+    SettingHit("Open folders as a popup", Page.HOME, "inline expand folder"),
+    SettingHit("Search button", Page.HOME, "magnifier floating"),
+    SettingHit("App drawer button in favourites", Page.HOME, "add shortcut button"),
+    SettingHit("Dashboard button in favourites", Page.HOME, "add shortcut button"),
+    SettingHit("Presets", Page.APPEARANCE, "left aligned right aligned large text layout"),
+    SettingHit("Show app icons", Page.APPEARANCE, "icons"),
+    SettingHit("Text size", Page.APPEARANCE, "font favourites"),
+    SettingHit("Adapt text colour to the wallpaper", Page.APPEARANCE, "dark light ink contrast"),
+    SettingHit("Launch animation", Page.APPEARANCE, "motion zoom open app"),
+    SettingHit("Icon pack", Page.APPEARANCE, "theme nova adw"),
+    SettingHit("Swipe up", Page.GESTURES, "gesture"),
+    SettingHit("Swipe down", Page.GESTURES, "gesture notification shade"),
+    SettingHit("Swipe left", Page.GESTURES, "gesture"),
+    SettingHit("Swipe right", Page.GESTURES, "gesture"),
+    SettingHit("Attach below the home screen", Page.DRAWER, "drawer one page slide"),
+    SettingHit("Drawer background", Page.DRAWER, "opacity transparency solid"),
+    SettingHit("Recent apps", Page.DRAWER, "recents"),
+    SettingHit("Web search when typing", Page.DRAWER, "google duckduckgo engine"),
+    SettingHit("Dashboard background", Page.DASHBOARD, "opacity transparency solid"),
+    SettingHit("Show glucose", Page.DASHBOARD, "libre librelink librelinkup sugar diabetes"),
+    SettingHit("LibreLinkUp login", Page.DASHBOARD, "email password follower account"),
+    SettingHit("Tapping the glucose value opens", Page.DASHBOARD, "librelink app"),
+    SettingHit("mmol/L or mg/dL", Page.DASHBOARD, "units glucose"),
+    SettingHit("Glucose low and high thresholds", Page.DASHBOARD, "range alert colour"),
+    SettingHit("Notification access", Page.NOTIFICATIONS, "restricted settings listener permission"),
+    SettingHit("Notifications on home", Page.NOTIFICATIONS, "show list"),
+    SettingHit("Media player", Page.NOTIFICATIONS, "music spotify card"),
+    SettingHit("Navigation", Page.NOTIFICATIONS, "google maps waze turn next"),
+    SettingHit("Widgets", Page.APPS, "add remove"),
+    SettingHit("Work profile", Page.APPS, "pause resume work apps"),
+    SettingHit("Hidden apps", Page.APPS, "unhide"),
+    SettingHit("Save a backup file", Page.BACKUP, "export"),
+    SettingHit("Restore from a backup file", Page.BACKUP, "import"),
+    SettingHit("Check for updates", Page.BACKUP, "update install build"),
+    SettingHit("Download new builds on Wi-Fi", Page.BACKUP, "automatic update"),
+    SettingHit("GitHub token", Page.BACKUP, "private repository access"),
+)
+
 private val Accent = Color(0xFF8AB4F8)
 private val CardColor = Color.White.copy(alpha = 0.07f)
 private val CardShape = RoundedCornerShape(20.dp)
@@ -90,6 +138,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
 
     // Which category is open ("" = the front page). Saved, so rotating the phone keeps your place.
     var pageName by rememberSaveable { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
     val page = Page.entries.firstOrNull { it.name == pageName }
     var chooser by remember { mutableStateOf<String?>(null) } // up / down / left / right / glucose while the app chooser is open
     var pickWidget by remember { mutableStateOf(false) }
@@ -114,7 +163,18 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                 if (current == null) {
                     Header("Settings", actionLabel = "Done", onAction = onClose)
                     Spacer(Modifier.height(8.dp))
-                    Page.entries.forEach { entry ->
+                    PickerSearchField(query) { query = it }
+                    val hits = if (query.isBlank()) emptyList() else SearchIndex.filter { matchesQuery(query, it.title, it.keywords, it.page.title) }
+                    if (query.isNotBlank()) {
+                        if (hits.isEmpty()) Hint("No setting matches \"$query\".")
+                        hits.forEach { hit ->
+                            CategoryRow(hit.page.icon, hit.title, "in ${hit.page.title}") {
+                                query = ""
+                                pageName = hit.page.name
+                            }
+                        }
+                    }
+                    if (query.isBlank()) Page.entries.forEach { entry ->
                         val summary = when (entry) {
                             Page.HOME -> "Clock, weather, favourites"
                             Page.APPEARANCE -> "Text, icons, wallpaper colours"
@@ -261,6 +321,13 @@ private fun AppearancePage(viewModel: LauncherViewModel, settings: LauncherSetti
             settings.adaptiveText,
             subtitle = "Dark text on light wallpapers",
         ) { v -> viewModel.update { it.copy(adaptiveText = v) } }
+    }
+    Group("Motion") {
+        SwitchRow(
+            "Launch animation",
+            settings.launchAnimation,
+            subtitle = "The screen shrinks slightly while an app starts",
+        ) { v -> viewModel.update { it.copy(launchAnimation = v) } }
     }
     Group("Icon pack") {
         ChoiceRow("System default", selected = settings.iconPack == null) {

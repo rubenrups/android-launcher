@@ -15,6 +15,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.platform.LocalContext
 import com.rubenrups.launcher.data.CalendarReader
+import com.rubenrups.launcher.data.HourlyPoint
 import com.rubenrups.launcher.data.NextEvent
 import com.rubenrups.launcher.data.WeatherClient
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +50,24 @@ fun rememberWeather(enabled: Boolean, city: String, fahrenheit: Boolean): String
         }
     }
     return weather
+}
+
+/** The next hours of weather for the dashboard; empty when weather is off, no city is set, or the lookup fails. */
+@Composable
+fun rememberHourlyWeather(enabled: Boolean, city: String, fahrenheit: Boolean): List<HourlyPoint> {
+    val hours by produceState<List<HourlyPoint>>(emptyList(), enabled, city, fahrenheit) {
+        value = emptyList()
+        if (!enabled || city.isBlank()) return@produceState
+        delay(800)
+        while (true) {
+            val fresh = withContext(Dispatchers.IO) {
+                runCatching { WeatherClient.fetchHourly(city.trim(), fahrenheit) }.getOrNull()
+            }
+            if (!fresh.isNullOrEmpty()) value = fresh
+            delay(30 * 60_000L)
+        }
+    }
+    return hours
 }
 
 /**

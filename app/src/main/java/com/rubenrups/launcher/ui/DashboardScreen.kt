@@ -1,6 +1,23 @@
 package com.rubenrups.launcher.ui
 
 import android.content.Context
+import android.hardware.camera2.CameraCharacteristics
+import android.hardware.camera2.CameraManager
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextDecoration
+import com.rubenrups.launcher.data.HourlyPoint
+import com.rubenrups.launcher.data.TaskItem
 import android.content.Intent
 import android.os.Environment
 import android.os.StatFs
@@ -54,9 +71,11 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
     val battery = rememberBatteryPercent()
     val weather = rememberWeather(settings.showWeather, settings.weatherCity, settings.weatherFahrenheit)
     val nextEvent = rememberNextEvent(settings.showCalendar)
+    val hours = rememberHourlyWeather(settings.showWeather, settings.weatherCity, settings.weatherFahrenheit)
     val wide = LocalConfiguration.current.screenWidthDp >= 600
 
     val glucoseCard: @Composable () -> Unit = { GlucoseCard(viewModel, onOpenSettings) }
+    val tasksCard: @Composable () -> Unit = { TasksCard(viewModel, settings.tasks) }
     val otherCards: @Composable () -> Unit = {
         navigation?.let { NavigationCard(it) }
         if (media != null) {
@@ -64,6 +83,8 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
         } else {
             Card { Text("Nothing is playing", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp) }
         }
+        if (hours.isNotEmpty()) HourlyCard(hours, settings.weatherCity)
+        QuickSettingsCard()
         StatTiles(battery, weather, nextEvent?.text)
     }
 
@@ -75,6 +96,7 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
             .background(Color(0xFF0F1215).copy(alpha = settings.dashboardOpacity / 100f))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)
             .windowInsetsPadding(WindowInsets.systemBars)
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -85,12 +107,16 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
         }
         if (wide) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { glucoseCard() }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    glucoseCard()
+                    tasksCard()
+                }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { otherCards() }
             }
         } else {
             glucoseCard()
             otherCards()
+            tasksCard()
         }
         Spacer(Modifier.height(24.dp))
     }
@@ -223,3 +249,142 @@ private fun freeStorage(context: Context): String? = runCatching {
     val stat = StatFs(Environment.getDataDirectory().path)
     String.format(Locale.US, "%.0f GB", stat.availableBytes / 1_000_000_000.0)
 }.getOrNull()
+
+/** The next 12 hours in two-hour steps: time, weather emoji, temperature. */
+@Composable
+private fun HourlyCard(hours: List<HourlyPoint>, city: String) {
+    val context = LocalContext.current
+    Card(
+        onClick = {
+            runCatching {
+                context.startActivity(
+                    Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode("weather $city")))
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }
+        },
+    ) {
+        Text("Weather · $city", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            hours.forEach { point ->
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(point.time, color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp)
+                    Text(point.emoji, fontSize = 20.sp)
+                    Text("${point.temp}°", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                }
+            }
+        }
+    }
+}
+
+/** Shortcuts to the phone's own quick settings. Android only lets apps flip the torch directly; the rest open the right screen. */
+@Composable
+private fun QuickSettingsCard() {
+    val context = LocalContext.current
+    val camera = remember { context.getSystemService(CameraManager::class.java) }
+    val torchId = remember {
+        runCatching {
+            camera.cameraIdList.firstOrNull { camera.getCameraCharacteristics(it).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true }
+        }.getOrNull()
+    }
+    var torchOn by remember { mutableStateOf(false) }
+    DisposableEffect(camera) {
+        val callback = object : CameraManager.TorchCallback() {
+            override fun onTorchModeChanged(cameraId: String, enabled: Boolean) {
+                if (cameraId == torchId) torchOn = enabled
+            }
+        }
+        runCatching { camera.registerTorchCallback(callback, null) }
+        onDispose { runCatching { camera.unregisterTorchCallback(callback) } }
+    }
+    fun open(action: String) {
+        runCatching { context.startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    Card {
+        Text("Quick settings", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            if (torchId != null) {
+                QuickTile("🔦", "Torch", active = torchOn) { runCatching { camera.setTorchMode(torchId, !torchOn) } }
+            }
+            QuickTile("📶", "Internet") {
+                open(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) Settings.Panel.ACTION_INTERNET_CONNECTIVITY else Settings.ACTION_WIFI_SETTINGS)
+            }
+            QuickTile("🔵", "Bluetooth") { open(Settings.ACTION_BLUETOOTH_SETTINGS) }
+            QuickTile("🔔", "Sound") { open(Settings.ACTION_SOUND_SETTINGS) }
+            QuickTile("☀️", "Display") { open(Settings.ACTION_DISPLAY_SETTINGS) }
+        }
+    }
+}
+
+@Composable
+private fun QuickTile(icon: String, label: String, active: Boolean = false, onClick: () -> Unit) {
+    Column(
+        Modifier
+            .background(if (active) Color.White.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Text(icon, fontSize = 20.sp)
+        Text(label, color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
+    }
+}
+
+/** A small to-do list: tap a line to tick it off, ✕ to delete, and a field to add more. */
+@Composable
+private fun TasksCard(viewModel: LauncherViewModel, tasks: List<TaskItem>) {
+    var draft by remember { mutableStateOf("") }
+    Card {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("To do", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, modifier = Modifier.weight(1f))
+            if (tasks.any { it.done }) {
+                Text("Clear done", color = Color(0xFF8AB4F8), fontSize = 12.sp, modifier = Modifier.clickable { viewModel.clearDoneTasks() }.padding(4.dp))
+            }
+        }
+        tasks.forEachIndexed { index, task ->
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    (if (task.done) "☑  " else "☐  ") + task.text,
+                    color = Color.White.copy(alpha = if (task.done) 0.45f else 1f),
+                    fontSize = 16.sp,
+                    textDecoration = if (task.done) TextDecoration.LineThrough else null,
+                    modifier = Modifier.weight(1f).clickable { viewModel.toggleTask(index) }.padding(vertical = 8.dp),
+                )
+                Text("✕", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp, modifier = Modifier.clickable { viewModel.deleteTask(index) }.padding(8.dp))
+            }
+        }
+        Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextField(
+                value = draft,
+                onValueChange = { draft = it },
+                singleLine = true,
+                placeholder = { Text("Add a task") },
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = {
+                    viewModel.addTask(draft)
+                    draft = ""
+                }),
+                shape = RoundedCornerShape(12.dp),
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = Color.White.copy(alpha = 0.08f),
+                    unfocusedContainerColor = Color.White.copy(alpha = 0.08f),
+                    focusedIndicatorColor = Color.Transparent,
+                    unfocusedIndicatorColor = Color.Transparent,
+                ),
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                "Add",
+                color = Color(0xFF8AB4F8),
+                fontSize = 15.sp,
+                modifier = Modifier.clickable {
+                    viewModel.addTask(draft)
+                    draft = ""
+                }.padding(12.dp),
+            )
+        }
+    }
+}

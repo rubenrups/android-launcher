@@ -14,6 +14,9 @@ enum class WebSearchEngine(val label: String, val urlTemplate: String?) {
     DUCKDUCKGO("DuckDuckGo", "https://duckduckgo.com/?q=%s"),
 }
 
+/** One line of the dashboard to-do list. */
+data class TaskItem(val text: String, val done: Boolean = false)
+
 data class LauncherSettings(
     val favourites: List<String> = emptyList(),
     val hidden: Set<String> = emptySet(),
@@ -67,6 +70,9 @@ data class LauncherSettings(
     /** How solid the background behind the drawer / dashboard is, in percent. */
     val drawerOpacity: Int = 90,
     val dashboardOpacity: Int = 100,
+    /** Scale the home screen down a little while an app starts. */
+    val launchAnimation: Boolean = true,
+    val tasks: List<TaskItem> = emptyList(),
     val autoCheckUpdates: Boolean = true,
     /** Fetch a new build in the background on Wi-Fi so installing is one tap. */
     val autoDownloadUpdates: Boolean = true,
@@ -166,6 +172,8 @@ class LauncherPrefs(context: Context) {
         drawerAttached = prefs.getBoolean(KEY_DRAWER_ATTACHED, false),
         drawerOpacity = prefs.getInt(KEY_DRAWER_OPACITY, 90),
         dashboardOpacity = prefs.getInt(KEY_DASHBOARD_OPACITY, 100),
+        launchAnimation = prefs.getBoolean(KEY_LAUNCH_ANIMATION, true),
+        tasks = decodeTasks(prefs.getString(KEY_TASKS, null)),
         autoCheckUpdates = prefs.getBoolean(KEY_AUTO_CHECK, true),
         autoDownloadUpdates = prefs.getBoolean(KEY_AUTO_DOWNLOAD, true),
         dismissedUpdate = prefs.getInt(KEY_DISMISSED_UPDATE, 0),
@@ -212,10 +220,26 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_DRAWER_ATTACHED, s.drawerAttached)
             .putInt(KEY_DRAWER_OPACITY, s.drawerOpacity)
             .putInt(KEY_DASHBOARD_OPACITY, s.dashboardOpacity)
+            .putBoolean(KEY_LAUNCH_ANIMATION, s.launchAnimation)
+            .putString(KEY_TASKS, encodeTasks(s.tasks))
             .putBoolean(KEY_AUTO_CHECK, s.autoCheckUpdates)
             .putBoolean(KEY_AUTO_DOWNLOAD, s.autoDownloadUpdates)
             .putInt(KEY_DISMISSED_UPDATE, s.dismissedUpdate)
             .apply()
+    }
+
+    private fun encodeTasks(tasks: List<TaskItem>): String =
+        JSONArray().apply { tasks.forEach { put(JSONObject().put("text", it.text).put("done", it.done)) } }.toString()
+
+    private fun decodeTasks(json: String?): List<TaskItem> {
+        if (json.isNullOrBlank()) return emptyList()
+        return runCatching {
+            val array = JSONArray(json)
+            (0 until array.length()).map { i ->
+                val o = array.getJSONObject(i)
+                TaskItem(o.getString("text"), o.optBoolean("done"))
+            }
+        }.getOrDefault(emptyList())
     }
 
     private fun encodeFolders(folders: List<AppFolder>): String =
@@ -285,6 +309,8 @@ class LauncherPrefs(context: Context) {
         const val KEY_SHOW_NAVIGATION = "show_navigation"
         const val KEY_GLUCOSE_APP = "glucose_app"
         const val KEY_AUTO_CHECK = "auto_check_updates"
+        const val KEY_LAUNCH_ANIMATION = "launch_animation"
+        const val KEY_TASKS = "tasks"
         const val KEY_AUTO_DOWNLOAD = "auto_download_updates"
         const val KEY_DISMISSED_UPDATE = "dismissed_update"
         /** Credentials: never written to a backup file, and a restore leaves them alone. */

@@ -29,6 +29,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.data.AppInfo
+import com.rubenrups.launcher.data.VirtualApps
 
 /** Pick one app (or "Nothing"). Used for the swipe-left / swipe-right shortcuts. */
 @Composable
@@ -44,7 +45,7 @@ fun AppChooserDialog(
     val apps by viewModel.visibleApps.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     var query by remember { mutableStateOf("") }
-    val shownApps = apps.filter { matchesQuery(query, it.label) }
+    val shownApps = apps.filter { !VirtualApps.isVirtual(it) && matchesQuery(query, it.label) }
     val shownExtras = extras.filter { matchesQuery(query, it.first) }
 
     Dialog(onDismissRequest = onDismiss) {
