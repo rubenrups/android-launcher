@@ -39,10 +39,10 @@ object UpdateManager {
     private var lastCheck = 0L
 
     /** [force] = the user asked: ignore the throttle and report errors. Background checks stay quiet. */
-    suspend fun check(context: Context, token: String, force: Boolean, autoDownload: Boolean) = mutex.withLock {
+    suspend fun check(context: Context, token: String, force: Boolean, autoDownload: Boolean, intervalMs: Long = DEFAULT_INTERVAL_MS) = mutex.withLock {
         val now = System.currentTimeMillis()
         val busy = _state.value is UpdateState.Downloading || _state.value is UpdateState.Installing
-        if (busy || (!force && now - lastCheck < CHECK_INTERVAL_MS)) return@withLock
+        if (busy || (!force && now - lastCheck < intervalMs)) return@withLock
         lastCheck = now
         val before = _state.value
         if (force) _state.value = UpdateState.Checking
@@ -116,5 +116,5 @@ object UpdateManager {
     private fun isMetered(context: Context): Boolean =
         runCatching { context.getSystemService(ConnectivityManager::class.java).isActiveNetworkMetered }.getOrDefault(true)
 
-    private const val CHECK_INTERVAL_MS = 3 * 60 * 60 * 1000L
+    private const val DEFAULT_INTERVAL_MS = 3 * 60 * 60 * 1000L
 }

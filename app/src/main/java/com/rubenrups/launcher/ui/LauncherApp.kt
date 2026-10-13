@@ -63,11 +63,14 @@ fun LauncherApp(viewModel: LauncherViewModel) {
         }
     }
 
-    // Look for a new build whenever the launcher comes to the front (throttled inside to every 3 hours).
-    LaunchedEffect(lifecycleOwner) {
+    // Look for a new build while the launcher is on screen: shortly after it appears, then at the chosen interval.
+    LaunchedEffect(lifecycleOwner, settings.updateCheckMinutes) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             delay(3_000)
-            viewModel.checkForUpdate()
+            while (true) {
+                viewModel.checkForUpdate()
+                delay(settings.updateCheckMinutes * 60_000L)
+            }
         }
     }
 

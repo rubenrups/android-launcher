@@ -159,11 +159,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         if (app != null) launch(app) else setDashboardOpen(true)
     }
 
-    /** Background checks respect the setting and a 3-hour throttle; [force] is the user's own "check now". */
+    /** Background checks respect the on/off setting and the chosen interval; [force] is the user's own "check now". */
     fun checkForUpdate(force: Boolean = false) {
         val s = settings.value
         if (!force && !s.autoCheckUpdates) return
-        viewModelScope.launch { UpdateManager.check(getApplication(), s.updateToken, force, s.autoDownloadUpdates) }
+        viewModelScope.launch { UpdateManager.check(getApplication(), s.updateToken, force, s.autoDownloadUpdates, s.updateCheckMinutes * 60_000L) }
     }
 
     fun installUpdate() {

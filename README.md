@@ -14,7 +14,7 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 - **Backgrounds and buttons**: adjustable background opacity for the drawer and dashboard, and "App drawer" / "Dashboard" buttons you can add to the favourites list
 - **Swipe gestures**: swipe up, down, left and right can each open the drawer, search, the notification shade, the dashboard or any app, with a short label showing what the swipe will do
 - **Attached drawer** (optional): the drawer slides up beneath the home screen as one tall page
-- **Auto-update**: checks for new builds in the background (every 3 h), downloads them on Wi-Fi, and shows an "Install" banner on home; installs through Android's installer (you confirm). Needs "Install unknown apps" allowed once, and the GitHub token while the repo is private
+- **Auto-update**: checks for new builds while the launcher is on screen (interval is a setting: 1 min to once a day, default 3 h), downloads them on Wi-Fi, and shows an "Install" banner on home; installs through Android's installer (you confirm). Needs "Install unknown apps" allowed once, and the GitHub token while the repo is private
 - **Player buttons**: the media card shows the player's own extra buttons, such as Spotify's add to liked songs
 - **Swipe feedback**: the home screen leans after your finger during a configured swipe, ticks when it counts, and the dashboard slides in from the side you swiped
 - **Glucose on home**: FreeStyle Libre value, trend and age under the clock, via a LibreLinkUp follower account (display only; greyed out when older than 10 min)

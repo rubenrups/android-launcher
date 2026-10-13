@@ -126,6 +126,7 @@ private val SearchIndex = listOf(
     SettingHit("Restore from a backup file", Page.BACKUP, "import"),
     SettingHit("Check for updates", Page.BACKUP, "update install build"),
     SettingHit("Download new builds on Wi-Fi", Page.BACKUP, "automatic update"),
+    SettingHit("Update check interval", Page.BACKUP, "how often every minute hour check updates"),
     SettingHit("GitHub token", Page.BACKUP, "private repository access"),
 )
 
@@ -656,6 +657,21 @@ private fun BackupPage(viewModel: LauncherViewModel, settings: LauncherSettings,
                 viewModel.update { it.copy(autoDownloadUpdates = v) }
             }
         }
+    }
+    if (settings.autoCheckUpdates) {
+        Group("Check every") {
+            UpdateIntervals.forEach { (minutes, label) ->
+                ChoiceRow(label, selected = settings.updateCheckMinutes == minutes) {
+                    viewModel.update { it.copy(updateCheckMinutes = minutes) }
+                }
+            }
+            Hint(
+                "Checks happen while the launcher is on screen. GitHub allows about 60 anonymous checks an hour, so " +
+                    "1 minute is only safe with a token (Settings below); otherwise a check can fail until the hour is up."
+            )
+        }
+    }
+    Group("Install") {
         NavRow("Check for updates now") { viewModel.checkForUpdate(force = true) }
         when (update) {
             is UpdateState.Checking -> Hint("Checking…")
@@ -687,6 +703,17 @@ private fun BackupPage(viewModel: LauncherViewModel, settings: LauncherSettings,
 // ---------------------------------------------------------------------------------------------
 // Building blocks
 // ---------------------------------------------------------------------------------------------
+
+/** The choices for how often to look for a new build: minutes to label. */
+private val UpdateIntervals = listOf(
+    1 to "Every minute",
+    5 to "Every 5 minutes",
+    15 to "Every 15 minutes",
+    60 to "Every hour",
+    180 to "Every 3 hours",
+    360 to "Every 6 hours",
+    1440 to "Once a day",
+)
 
 private fun labelFor(key: String, apps: List<AppInfo>): String =
     GestureActions.builtInLabel(key) ?: apps.firstOrNull { it.key == key }?.label ?: "Nothing"

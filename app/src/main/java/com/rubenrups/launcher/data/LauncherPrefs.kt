@@ -106,6 +106,8 @@ data class LauncherSettings(
     /** Places for the car-mode navigation buttons. Personal, so never exported in a backup. */
     val destinations: List<Destination> = emptyList(),
     val autoCheckUpdates: Boolean = true,
+    /** How often the launcher looks for a new build while it is on screen, in minutes. */
+    val updateCheckMinutes: Int = 180,
     /** Fetch a new build in the background on Wi-Fi so installing is one tap. */
     val autoDownloadUpdates: Boolean = true,
     /** The build whose banner was dismissed; a newer build shows it again. */
@@ -215,6 +217,7 @@ class LauncherPrefs(context: Context) {
         carSwipeRight = prefs.getString(KEY_CAR_RIGHT, GestureActions.PREVIOUS).orEmpty(),
         destinations = loadDestinations(),
         autoCheckUpdates = prefs.getBoolean(KEY_AUTO_CHECK, true),
+        updateCheckMinutes = prefs.getInt(KEY_UPDATE_MINUTES, 180),
         autoDownloadUpdates = prefs.getBoolean(KEY_AUTO_DOWNLOAD, true),
         dismissedUpdate = prefs.getInt(KEY_DISMISSED_UPDATE, 0),
     )
@@ -270,6 +273,7 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_CAR_RIGHT, s.carSwipeRight)
             .putString(KEY_DESTINATIONS, encodeDestinations(s.destinations))
             .putBoolean(KEY_AUTO_CHECK, s.autoCheckUpdates)
+            .putInt(KEY_UPDATE_MINUTES, s.updateCheckMinutes)
             .putBoolean(KEY_AUTO_DOWNLOAD, s.autoDownloadUpdates)
             .putInt(KEY_DISMISSED_UPDATE, s.dismissedUpdate)
             .apply()
@@ -367,6 +371,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_SHOW_NAVIGATION = "show_navigation"
         const val KEY_GLUCOSE_APP = "glucose_app"
         const val KEY_AUTO_CHECK = "auto_check_updates"
+        const val KEY_UPDATE_MINUTES = "update_check_minutes"
         const val KEY_LAUNCH_ANIMATION = "launch_animation"
         const val KEY_DASH_HIDDEN = "dashboard_hidden"
         const val KEY_DASH_ORDER = "dashboard_order"
