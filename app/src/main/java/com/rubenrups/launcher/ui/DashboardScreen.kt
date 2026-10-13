@@ -6,20 +6,12 @@ import android.hardware.camera2.CameraManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.TextField
-import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextDecoration
 import com.rubenrups.launcher.data.DashboardModules
 import com.rubenrups.launcher.data.HourlyPoint
-import com.rubenrups.launcher.data.TaskItem
 import android.content.Intent
 import android.os.Environment
 import android.os.StatFs
@@ -28,8 +20,19 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.key
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.platform.LocalView
+import com.rubenrups.launcher.notifications.MediaState
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -46,6 +49,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -63,11 +68,23 @@ import java.util.Locale
 
 private val CardShape = RoundedCornerShape(16.dp)
 
-/** The second screen: glucose, navigation, media and a few quick stats, over a dimmed wallpaper. */
+/** Rough relative heights, used to pack the cards into two columns on wide screens. */
+private val CardWeight = mapOf(
+    DashboardModules.GLUCOSE to 1.3f,
+    DashboardModules.MEDIA to 2.2f,
+    DashboardModules.NAVIGATION to 1.1f,
+    DashboardModules.WEATHER to 1.5f,
+    DashboardModules.QUICK to 1.4f,
+    DashboardModules.STATS to 1.0f,
+)
+
+/**
+ * Car mode: a big, glanceable screen with glucose, navigation, media and a few extras. Cards follow the order set
+ * in settings (or by holding one); on wide screens they pack into two columns.
+ */
 @Composable
 fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSettings: () -> Unit) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
-    val glucose by viewModel.glucose.collectAsStateWithLifecycle()
     val media by NotificationStore.media.collectAsStateWithLifecycle()
     val navigation by NotificationStore.navigation.collectAsStateWithLifecycle()
     val battery = rememberBatteryPercent()
@@ -76,54 +93,102 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
     val hours = rememberHourlyWeather(settings.showWeather, settings.weatherCity, settings.weatherFahrenheit)
     val wide = LocalConfiguration.current.screenWidthDp >= 600
 
-    fun shown(module: String) = module !in settings.dashboardHidden
-    val glucoseCard: @Composable () -> Unit = { if (shown(DashboardModules.GLUCOSE)) GlucoseCard(viewModel, onOpenSettings) }
-    val tasksCard: @Composable () -> Unit = { if (shown(DashboardModules.TASKS)) TasksCard(viewModel, settings.tasks) }
-    val otherCards: @Composable () -> Unit = {
-        if (shown(DashboardModules.NAVIGATION)) navigation?.let { NavigationCard(it) }
-        if (shown(DashboardModules.MEDIA)) {
-            if (media != null) {
-                MediaCard(media!!, thumbSize = 64.dp)
-            } else {
-                Card { Text("Nothing is playing", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp) }
-            }
+    // Keep the screen on while car mode is up (it is meant to be glanced at, not tapped awake).
+    val view = LocalView.current
+    DisposableEffect(settings.keepScreenOn) {
+        view.keepScreenOn = settings.keepScreenOn
+        onDispose { view.keepScreenOn = false }
+    }
+
+    // The cards that currently have something to show, in the chosen order.
+    val visible = settings.dashboardOrder.filter { key ->
+        key !in settings.dashboardHidden && when (key) {
+            DashboardModules.NAVIGATION -> navigation != null
+            DashboardModules.WEATHER -> hours.isNotEmpty()
+            else -> true
         }
-        if (shown(DashboardModules.WEATHER) && hours.isNotEmpty()) HourlyCard(hours, settings.weatherCity)
-        if (shown(DashboardModules.QUICK)) QuickSettingsCard()
-        if (shown(DashboardModules.STATS)) StatTiles(battery, weather, nextEvent?.text)
+    }
+    val content: @Composable (String) -> Unit = { key ->
+        when (key) {
+            DashboardModules.GLUCOSE -> GlucoseCard(viewModel, onOpenSettings)
+            DashboardModules.MEDIA -> CarMediaCard(media)
+            DashboardModules.NAVIGATION -> navigation?.let { NavigationCard(it, big = true) }
+            DashboardModules.WEATHER -> HourlyCard(hours, settings.weatherCity)
+            DashboardModules.QUICK -> QuickSettingsCard()
+            DashboardModules.STATS -> StatTiles(battery, weather, nextEvent?.text)
+            else -> Unit
+        }
+    }
+    val slot: @Composable (String) -> Unit = { key ->
+        val index = visible.indexOf(key)
+        CardSlot(
+            hasEarlier = index > 0,
+            hasLater = index < visible.lastIndex,
+            onMoveEarlier = { viewModel.swapDashboardCards(key, visible[index - 1]) },
+            onMoveLater = { viewModel.swapDashboardCards(key, visible[index + 1]) },
+            onHide = { viewModel.setDashboardCardHidden(key, true) },
+        ) { content(key) }
     }
 
     Column(
         Modifier
             .fillMaxSize()
-            // Solid, so nothing of the home screen shows through. Tapping empty space closes it
-            // (cards swallow their own taps, see Card).
+            // Tapping empty space closes it (cards swallow their own taps, see Card).
             .background(Color(0xFF0F1215).copy(alpha = settings.dashboardOpacity / 100f))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)
             .windowInsetsPadding(WindowInsets.systemBars)
-            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Dashboard", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Light, modifier = Modifier.weight(1f))
-            Text("✕", color = Color.White, fontSize = 22.sp, modifier = Modifier.clickable(onClick = onClose).padding(12.dp))
+            Text("Car mode", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light, modifier = Modifier.weight(1f))
+            Text("✕", color = Color.White, fontSize = 28.sp, modifier = Modifier.clickable(onClick = onClose).padding(16.dp))
         }
         if (wide) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    glucoseCard()
-                    tasksCard()
-                }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) { otherCards() }
+            // Auto-stack: each card goes into whichever column is currently shorter.
+            val left = ArrayList<String>()
+            val right = ArrayList<String>()
+            var leftHeight = 0f
+            var rightHeight = 0f
+            visible.forEach { key ->
+                val weight = CardWeight[key] ?: 1f
+                if (leftHeight <= rightHeight) { left.add(key); leftHeight += weight } else { right.add(key); rightHeight += weight }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) { left.forEach { key(it) { slot(it) } } }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) { right.forEach { key(it) { slot(it) } } }
             }
         } else {
-            glucoseCard()
-            otherCards()
-            tasksCard()
+            visible.forEach { key(it) { slot(it) } }
         }
-        Spacer(Modifier.height(24.dp))
+        Text(
+            "Hold a card to move or hide it.",
+            color = Color.White.copy(alpha = 0.3f),
+            fontSize = 12.sp,
+            modifier = Modifier.padding(top = 4.dp, bottom = 24.dp),
+        )
+    }
+}
+
+/** Wraps a card so holding it opens Move earlier / Move later / Hide. */
+@Composable
+private fun CardSlot(
+    hasEarlier: Boolean,
+    hasLater: Boolean,
+    onMoveEarlier: () -> Unit,
+    onMoveLater: () -> Unit,
+    onHide: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    Box(Modifier.onLongPressAbove { menuOpen = true }) {
+        content()
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            if (hasEarlier) DropdownMenuItem(text = { Text("Move earlier") }, onClick = { menuOpen = false; onMoveEarlier() })
+            if (hasLater) DropdownMenuItem(text = { Text("Move later") }, onClick = { menuOpen = false; onMoveLater() })
+            DropdownMenuItem(text = { Text("Hide card") }, onClick = { menuOpen = false; onHide() })
+        }
     }
 }
 
@@ -221,16 +286,16 @@ private fun GlucoseCard(viewModel: LauncherViewModel, onOpenSettings: () -> Unit
 }
 
 @Composable
-private fun Stat(label: String, value: String) {
+private fun Stat(label: String, value: String, size: androidx.compose.ui.unit.TextUnit = 16.sp) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Medium)
-        Text(label, color = Color.White.copy(alpha = 0.55f), fontSize = 11.sp)
+        Text(value, color = Color.White, fontSize = size, fontWeight = FontWeight.Medium)
+        Text(label, color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp)
     }
 }
 
 /** Next turn and trip summary from the navigation app's notification. Tap returns to the app. */
 @Composable
-internal fun NavigationCard(nav: NavigationState, modifier: Modifier = Modifier) {
+internal fun NavigationCard(nav: NavigationState, modifier: Modifier = Modifier, big: Boolean = false) {
     val context = LocalContext.current
     Card(
         modifier,
@@ -245,9 +310,9 @@ internal fun NavigationCard(nav: NavigationState, modifier: Modifier = Modifier)
     ) {
         Text("🧭 Navigation", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
         val headline = listOf(nav.title, nav.text).filter { it.isNotBlank() }.joinToString(" · ")
-        Text(headline, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        Text(headline, color = Color.White, fontSize = if (big) 26.sp else 17.sp, fontWeight = FontWeight.Medium, maxLines = 3, overflow = TextOverflow.Ellipsis)
         if (nav.summary.isNotBlank()) {
-            Text(nav.summary, color = Color.White.copy(alpha = 0.75f), fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(nav.summary, color = Color.White.copy(alpha = 0.75f), fontSize = if (big) 18.sp else 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -258,12 +323,12 @@ private fun StatTiles(battery: Int, weather: String?, event: String?) {
     val free = remember { freeStorage(context) }
     Card {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            if (battery >= 0) Stat("Battery", "$battery%")
-            weather?.let { Stat("Weather", it) }
-            free?.let { Stat("Free space", it) }
+            if (battery >= 0) Stat("Battery", "$battery%", 24.sp)
+            weather?.let { Stat("Weather", it, 24.sp) }
+            free?.let { Stat("Free space", it, 24.sp) }
         }
         event?.let {
-            Text("📅 $it", color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 12.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text("📅 $it", color = Color.White, fontSize = 18.sp, modifier = Modifier.padding(top = 12.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -292,9 +357,9 @@ private fun HourlyCard(hours: List<HourlyPoint>, city: String) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             hours.forEach { point ->
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(point.time, color = Color.White.copy(alpha = 0.6f), fontSize = 11.sp)
-                    Text(point.emoji, fontSize = 20.sp)
-                    Text("${point.temp}°", color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                    Text(point.time, color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+                    Text(point.emoji, fontSize = 26.sp)
+                    Text("${point.temp}°", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Medium)
                 }
             }
         }
@@ -328,7 +393,7 @@ private fun QuickSettingsCard() {
     Card {
         Text("Quick settings", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
         Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (torchId != null) {
                 QuickTile("🔦", "Torch", active = torchOn) { runCatching { camera.setTorchMode(torchId, !torchOn) } }
             }
@@ -343,71 +408,101 @@ private fun QuickSettingsCard() {
 }
 
 @Composable
-private fun QuickTile(icon: String, label: String, active: Boolean = false, onClick: () -> Unit) {
+private fun RowScope.QuickTile(icon: String, label: String, active: Boolean = false, onClick: () -> Unit) {
     Column(
         Modifier
-            .background(if (active) Color.White.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.08f), RoundedCornerShape(14.dp))
+            .weight(1f)
+            .background(if (active) Color.White.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 8.dp),
+            .padding(horizontal = 4.dp, vertical = 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(icon, fontSize = 20.sp)
-        Text(label, color = Color.White.copy(alpha = 0.8f), fontSize = 11.sp)
+        Text(icon, fontSize = 28.sp)
+        Text(label, color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, maxLines = 1)
     }
 }
 
-/** A small to-do list: tap a line to tick it off, ✕ to delete, and a field to add more. */
+/** A big media card for the car: large album art, large title, and big previous / play-pause / next buttons. */
 @Composable
-private fun TasksCard(viewModel: LauncherViewModel, tasks: List<TaskItem>) {
-    var draft by remember { mutableStateOf("") }
-    Card {
+private fun CarMediaCard(media: MediaState?) {
+    if (media == null) {
+        Card { Text("Nothing is playing", color = Color.White.copy(alpha = 0.6f), fontSize = 20.sp) }
+        return
+    }
+    val context = LocalContext.current
+    val controls = media.controller.transportControls
+    Card(onClick = { openMediaApp(context, media.controller) }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("To do", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp, modifier = Modifier.weight(1f))
-            if (tasks.any { it.done }) {
-                Text("Clear done", color = Color(0xFF8AB4F8), fontSize = 12.sp, modifier = Modifier.clickable { viewModel.clearDoneTasks() }.padding(4.dp))
-            }
-        }
-        tasks.forEachIndexed { index, task ->
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    (if (task.done) "☑  " else "☐  ") + task.text,
-                    color = Color.White.copy(alpha = if (task.done) 0.45f else 1f),
-                    fontSize = 16.sp,
-                    textDecoration = if (task.done) TextDecoration.LineThrough else null,
-                    modifier = Modifier.weight(1f).clickable { viewModel.toggleTask(index) }.padding(vertical = 8.dp),
+            media.art?.let { art ->
+                val picture = remember(art) { art.asImageBitmap() }
+                androidx.compose.foundation.Image(
+                    bitmap = picture,
+                    contentDescription = null,
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                    modifier = Modifier.padding(end = 16.dp).size(96.dp).clip(RoundedCornerShape(12.dp)),
                 )
-                Text("✕", color = Color.White.copy(alpha = 0.5f), fontSize = 14.sp, modifier = Modifier.clickable { viewModel.deleteTask(index) }.padding(8.dp))
+            }
+            Column(Modifier.weight(1f)) {
+                Text(media.title, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                if (media.artist.isNotBlank()) {
+                    Text(media.artist, color = Color.White.copy(alpha = 0.75f), fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
             }
         }
-        Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            TextField(
-                value = draft,
-                onValueChange = { draft = it },
-                singleLine = true,
-                placeholder = { Text("Add a task") },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = {
-                    viewModel.addTask(draft)
-                    draft = ""
-                }),
-                shape = RoundedCornerShape(12.dp),
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.White.copy(alpha = 0.08f),
-                    unfocusedContainerColor = Color.White.copy(alpha = 0.08f),
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent,
-                ),
-                modifier = Modifier.weight(1f),
-            )
-            Text(
-                "Add",
-                color = Color(0xFF8AB4F8),
-                fontSize = 15.sp,
-                modifier = Modifier.clickable {
-                    viewModel.addTask(draft)
-                    draft = ""
-                }.padding(12.dp),
-            )
+        Spacer(Modifier.height(14.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+            TransportButton(TransportKind.PREVIOUS, 72.dp, filled = false) { controls.skipToPrevious() }
+            TransportButton(if (media.isPlaying) TransportKind.PAUSE else TransportKind.PLAY, 96.dp, filled = true) {
+                if (media.isPlaying) controls.pause() else controls.play()
+            }
+            TransportButton(TransportKind.NEXT, 72.dp, filled = false) { controls.skipToNext() }
+        }
+        if (media.customActions.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            // The player's own extras (Spotify: shuffle, add to liked songs…), kept smaller than the main controls.
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                media.customActions.take(3).forEach { action ->
+                    CustomActionButton(media.controller.packageName, action, size = 48.dp) { controls.sendCustomAction(action, null) }
+                }
+            }
+        }
+    }
+}
+
+private enum class TransportKind { PREVIOUS, PLAY, PAUSE, NEXT }
+
+/** A round transport button with a drawn icon, so it looks the same on every phone. */
+@Composable
+private fun TransportButton(kind: TransportKind, size: androidx.compose.ui.unit.Dp, filled: Boolean, onClick: () -> Unit) {
+    val ink = if (filled) Color(0xFF14181B) else Color.White
+    Box(
+        Modifier
+            .size(size)
+            .background(if (filled) Color.White else Color.White.copy(alpha = 0.12f), CircleShape)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Canvas(Modifier.size(size * 0.42f)) {
+            val w = this.size.width
+            val h = this.size.height
+            when (kind) {
+                TransportKind.PLAY -> drawPath(
+                    Path().apply { moveTo(w * 0.15f, 0f); lineTo(w, h / 2); lineTo(w * 0.15f, h); close() },
+                    ink,
+                )
+                TransportKind.PAUSE -> {
+                    drawRect(ink, androidx.compose.ui.geometry.Offset(w * 0.1f, 0f), androidx.compose.ui.geometry.Size(w * 0.32f, h))
+                    drawRect(ink, androidx.compose.ui.geometry.Offset(w * 0.58f, 0f), androidx.compose.ui.geometry.Size(w * 0.32f, h))
+                }
+                TransportKind.NEXT -> {
+                    drawPath(Path().apply { moveTo(0f, 0f); lineTo(w * 0.8f, h / 2); lineTo(0f, h); close() }, ink)
+                    drawRect(ink, androidx.compose.ui.geometry.Offset(w * 0.84f, 0f), androidx.compose.ui.geometry.Size(w * 0.16f, h))
+                }
+                TransportKind.PREVIOUS -> {
+                    drawPath(Path().apply { moveTo(w, 0f); lineTo(w * 0.2f, h / 2); lineTo(w, h); close() }, ink)
+                    drawRect(ink, androidx.compose.ui.geometry.Offset(0f, 0f), androidx.compose.ui.geometry.Size(w * 0.16f, h))
+                }
+            }
         }
     }
 }

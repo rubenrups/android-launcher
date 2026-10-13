@@ -71,7 +71,7 @@ private enum class Page(val title: String, val icon: String) {
     GESTURES("Gestures", "👆"),
     DRAWER("App drawer", "🗂️"),
     GLUCOSE("Glucose", "🩸"),
-    DASHBOARD("Dashboard", "📊"),
+    DASHBOARD("Car mode", "🚗"),
     NOTIFICATIONS("Notifications & media", "🔔"),
     APPS("Apps & widgets", "🧩"),
     BACKUP("Backup & updates", "☁️"),
@@ -90,7 +90,7 @@ private val SearchIndex = listOf(
     SettingHit("Open folders as a popup", Page.HOME, "inline expand folder"),
     SettingHit("Search button", Page.HOME, "magnifier floating"),
     SettingHit("App drawer button in favourites", Page.HOME, "add shortcut button"),
-    SettingHit("Dashboard button in favourites", Page.HOME, "add shortcut button"),
+    SettingHit("Car mode button in favourites", Page.HOME, "dashboard add shortcut button"),
     SettingHit("Presets", Page.APPEARANCE, "left aligned right aligned large text layout"),
     SettingHit("Show app icons", Page.APPEARANCE, "icons"),
     SettingHit("Text size", Page.APPEARANCE, "font favourites"),
@@ -105,7 +105,9 @@ private val SearchIndex = listOf(
     SettingHit("Drawer background", Page.DRAWER, "opacity transparency solid"),
     SettingHit("Recent apps", Page.DRAWER, "recents"),
     SettingHit("Web search when typing", Page.DRAWER, "google duckduckgo engine"),
-    SettingHit("Dashboard background", Page.DASHBOARD, "opacity transparency solid"),
+    SettingHit("Car mode background", Page.DASHBOARD, "dashboard opacity transparency solid"),
+    SettingHit("Keep screen on", Page.DASHBOARD, "awake car mode dashboard"),
+    SettingHit("Car mode cards and order", Page.DASHBOARD, "dashboard reorder hide media weather navigation"),
     SettingHit("Show glucose", Page.GLUCOSE, "libre librelink librelinkup sugar diabetes"),
     SettingHit("LibreLinkUp login", Page.GLUCOSE, "email password follower account"),
     SettingHit("Tapping the glucose value opens", Page.GLUCOSE, "librelink app"),
@@ -183,7 +185,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                             Page.GESTURES -> "Swipe up, down, left, right"
                             Page.DRAWER -> "Search, recents, background"
                             Page.GLUCOSE -> if (settings.glucoseEnabled) "On · LibreLinkUp" else "LibreLinkUp, units, thresholds"
-                            Page.DASHBOARD -> "Cards, background, to do"
+                            Page.DASHBOARD -> "Big glanceable screen, cards, order"
                             Page.NOTIFICATIONS -> if (listenerConnected) "Access connected ✓" else "Access not connected"
                             Page.APPS -> "Widgets, hidden apps, work profile"
                             Page.BACKUP -> when (updateState) {
@@ -354,7 +356,7 @@ private fun GesturesPage(settings: LauncherSettings, apps: List<AppInfo>, openCh
         NavRow("Swipe left", labelFor(settings.swipeLeftApp, apps)) { openChooser("left") }
         NavRow("Swipe right", labelFor(settings.swipeRightApp, apps)) { openChooser("right") }
         Hint(
-            "Each swipe can open the drawer, search, the notification shade, the dashboard or any app. " +
+            "Each swipe can open the drawer, search, the notification shade, car mode or any app. " +
                 "A short label shows what it will do while you swipe."
         )
     }
@@ -389,22 +391,49 @@ private fun DrawerPage(viewModel: LauncherViewModel, settings: LauncherSettings)
 
 @Composable
 private fun DashboardPage(viewModel: LauncherViewModel, settings: LauncherSettings) {
-    Group("Cards on the dashboard") {
-        DashboardModules.all.forEach { (key, label) ->
-            SwitchRow(label, key !in settings.dashboardHidden) { on ->
-                viewModel.update { it.copy(dashboardHidden = if (on) it.dashboardHidden - key else it.dashboardHidden + key) }
-            }
-        }
-        Hint("Hourly weather needs the weather city (Home screen). Glucose is set up under its own category. Cards with nothing to show stay out of the way.")
-    }
-    Group("Look") {
+    Group("Screen") {
+        SwitchRow(
+            "Keep the screen on",
+            settings.keepScreenOn,
+            subtitle = "While car mode is open",
+        ) { v -> viewModel.update { it.copy(keepScreenOn = v) } }
         SliderRow(
             "Background",
             "${settings.dashboardOpacity}% solid",
             settings.dashboardOpacity.toFloat(),
             0f..100f,
         ) { v -> viewModel.update { it.copy(dashboardOpacity = v.toInt()) } }
-        Hint("Open it from the long-press menu, a swipe (see Gestures), or a favourites button (see Home screen).")
+        Hint("Open car mode from the long-press menu, a swipe (see Gestures), or a favourites button (see Home screen).")
+    }
+    Group("Cards, in order") {
+        val order = settings.dashboardOrder
+        order.forEachIndexed { index, key ->
+            val label = DashboardModules.all.firstOrNull { it.first == key }?.second ?: key
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(label, color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                Text(
+                    "▲",
+                    color = if (index > 0) Color.White else Color.White.copy(alpha = 0.2f),
+                    fontSize = 18.sp,
+                    modifier = Modifier.clickable(enabled = index > 0) { viewModel.swapDashboardCards(key, order[index - 1]) }.padding(12.dp),
+                )
+                Text(
+                    "▼",
+                    color = if (index < order.lastIndex) Color.White else Color.White.copy(alpha = 0.2f),
+                    fontSize = 18.sp,
+                    modifier = Modifier.clickable(enabled = index < order.lastIndex) { viewModel.swapDashboardCards(key, order[index + 1]) }.padding(12.dp),
+                )
+                Switch(
+                    checked = key !in settings.dashboardHidden,
+                    onCheckedChange = { on -> viewModel.setDashboardCardHidden(key, !on) },
+                    modifier = Modifier.padding(start = 4.dp, end = 12.dp),
+                )
+            }
+        }
+        Hint(
+            "You can also hold a card in car mode to move or hide it. Navigation shows only while a route is active, " +
+                "hourly weather needs the weather city (Home screen), and glucose is set up under its own category."
+        )
     }
 }
 

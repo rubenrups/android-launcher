@@ -19,14 +19,14 @@ object VirtualApps {
     private const val PREFIX = "virtual."
 
     val drawer = AppInfo("App drawer", ComponentName(PACKAGE, PREFIX + "Drawer"), Process.myUserHandle())
-    val dashboard = AppInfo("Dashboard", ComponentName(PACKAGE, PREFIX + "Dashboard"), Process.myUserHandle())
+    val dashboard = AppInfo("Car mode", ComponentName(PACKAGE, PREFIX + "Dashboard"), Process.myUserHandle())
     val all = listOf(drawer, dashboard)
 
     fun byKey(key: String): AppInfo? = all.firstOrNull { it.key == key }
 
     fun isVirtual(app: AppInfo) = app.component.className.startsWith(PREFIX)
 
-    /** A round dark badge with a white glyph: a 3x3 grid of dots for the drawer, four tiles for the dashboard. */
+    /** A round dark badge with a white glyph: a 3x3 grid of dots for the drawer, four tiles for car mode. */
     fun icon(app: AppInfo, sizePx: Int = 144): ImageBitmap {
         val bitmap = Bitmap.createBitmap(sizePx, sizePx, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)

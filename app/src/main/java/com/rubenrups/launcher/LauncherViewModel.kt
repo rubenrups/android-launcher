@@ -23,7 +23,6 @@ import com.rubenrups.launcher.data.VirtualApps
 import com.rubenrups.launcher.data.UpdateState
 import com.rubenrups.launcher.data.GlucoseStore
 import com.rubenrups.launcher.data.LauncherSettings
-import com.rubenrups.launcher.data.TaskItem
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -170,18 +169,16 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch { UpdateManager.installNow(getApplication(), settings.value.updateToken) }
     }
 
-    fun addTask(text: String) {
-        val clean = text.trim()
-        if (clean.isNotEmpty()) update { it.copy(tasks = it.tasks + TaskItem(clean)) }
+    /** Swaps two car-mode cards in the stored order. */
+    fun swapDashboardCards(a: String, b: String) = update { s ->
+        val i = s.dashboardOrder.indexOf(a)
+        val j = s.dashboardOrder.indexOf(b)
+        if (i < 0 || j < 0) s else s.copy(dashboardOrder = s.dashboardOrder.toMutableList().apply { this[i] = b; this[j] = a })
     }
 
-    fun toggleTask(index: Int) = update { s ->
-        s.copy(tasks = s.tasks.mapIndexed { i, t -> if (i == index) t.copy(done = !t.done) else t })
+    fun setDashboardCardHidden(key: String, hidden: Boolean) = update { s ->
+        s.copy(dashboardHidden = if (hidden) s.dashboardHidden + key else s.dashboardHidden - key)
     }
-
-    fun deleteTask(index: Int) = update { s -> s.copy(tasks = s.tasks.filterIndexed { i, _ -> i != index }) }
-
-    fun clearDoneTasks() = update { s -> s.copy(tasks = s.tasks.filter { !it.done }) }
 
     fun dismissUpdate(build: Int) = update { it.copy(dismissedUpdate = build) }
 

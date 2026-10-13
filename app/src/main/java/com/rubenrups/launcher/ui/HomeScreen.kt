@@ -473,7 +473,7 @@ private fun HomeContent(
                             editMode = true
                         })
                     }
-                    DropdownMenuItem(text = { Text("Dashboard") }, onClick = {
+                    DropdownMenuItem(text = { Text("Car mode") }, onClick = {
                         homeMenuAt = null
                         viewModel.setDashboardOpen(true)
                     })
@@ -1106,7 +1106,7 @@ internal fun MediaCard(media: MediaState, modifier: Modifier = Modifier, thumbSi
  * Opens the player behind [controller]: the screen the app itself registered for its session
  * (usually "now playing"), or failing that the app's normal launcher entry.
  */
-private fun openMediaApp(context: Context, controller: MediaController) {
+internal fun openMediaApp(context: Context, controller: MediaController) {
     val opened = controller.sessionActivity?.sendAllowingLaunch(context) == true
     if (!opened) {
         context.packageManager.getLaunchIntentForPackage(controller.packageName)?.let {
@@ -1146,7 +1146,12 @@ private fun MediaButton(label: String, onClick: () -> Unit) {
 
 /** A custom media action drawn with the icon its app supplied, or its name if that icon can't be loaded. */
 @Composable
-private fun CustomActionButton(packageName: String, action: android.media.session.PlaybackState.CustomAction, onClick: () -> Unit) {
+internal fun CustomActionButton(
+    packageName: String,
+    action: android.media.session.PlaybackState.CustomAction,
+    size: androidx.compose.ui.unit.Dp = 32.dp,
+    onClick: () -> Unit,
+) {
     val context = LocalContext.current
     val icon = remember(packageName, action.icon) {
         runCatching {
@@ -1160,7 +1165,7 @@ private fun CustomActionButton(packageName: String, action: android.media.sessio
             bitmap = icon,
             contentDescription = action.name.toString(),
             colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(Color.White),
-            modifier = Modifier.clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 4.dp).size(32.dp),
+            modifier = Modifier.clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 4.dp).size(size),
         )
     } else {
         MediaButton(action.name.toString().take(10), onClick)

@@ -16,7 +16,7 @@ object GestureActions {
         DRAWER to "App drawer",
         SEARCH to "Search apps",
         NOTIFICATIONS to "Notification shade",
-        DASHBOARD to "Dashboard",
+        DASHBOARD to "Car mode",
     )
 
     fun builtInLabel(key: String): String? = builtIn.firstOrNull { it.first == key }?.second

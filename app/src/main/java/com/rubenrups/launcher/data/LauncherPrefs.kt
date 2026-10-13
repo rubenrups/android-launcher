@@ -14,29 +14,25 @@ enum class WebSearchEngine(val label: String, val urlTemplate: String?) {
     DUCKDUCKGO("DuckDuckGo", "https://duckduckgo.com/?q=%s"),
 }
 
-/** The cards that can be switched on or off on the dashboard. */
+/** The cards of the car-mode screen: each can be switched off and reordered. */
 object DashboardModules {
     const val GLUCOSE = "glucose"
     const val NAVIGATION = "navigation"
     const val MEDIA = "media"
     const val WEATHER = "weather"
     const val QUICK = "quick"
-    const val TASKS = "tasks"
     const val STATS = "stats"
 
+    /** Default order, and the names shown in settings. */
     val all: List<Pair<String, String>> = listOf(
         GLUCOSE to "Glucose",
-        NAVIGATION to "Navigation",
         MEDIA to "Media player",
+        NAVIGATION to "Navigation",
         WEATHER to "Hourly weather",
         QUICK to "Quick settings",
-        TASKS to "To do",
         STATS to "Battery, weather and next event",
     )
 }
-
-/** One line of the dashboard to-do list. */
-data class TaskItem(val text: String, val done: Boolean = false)
 
 data class LauncherSettings(
     val favourites: List<String> = emptyList(),
@@ -95,7 +91,10 @@ data class LauncherSettings(
     val launchAnimation: Boolean = true,
     /** [DashboardModules] keys that are switched off. Stored as the hidden ones so new cards appear by default. */
     val dashboardHidden: Set<String> = emptySet(),
-    val tasks: List<TaskItem> = emptyList(),
+    /** The order of the car-mode cards ([DashboardModules] keys); missing ones are added at the end. */
+    val dashboardOrder: List<String> = DashboardModules.all.map { it.first },
+    /** Keep the screen on while car mode is open. */
+    val keepScreenOn: Boolean = true,
     val autoCheckUpdates: Boolean = true,
     /** Fetch a new build in the background on Wi-Fi so installing is one tap. */
     val autoDownloadUpdates: Boolean = true,
@@ -197,7 +196,9 @@ class LauncherPrefs(context: Context) {
         dashboardOpacity = prefs.getInt(KEY_DASHBOARD_OPACITY, 100),
         launchAnimation = prefs.getBoolean(KEY_LAUNCH_ANIMATION, true),
         dashboardHidden = prefs.getString(KEY_DASH_HIDDEN, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }.toSet(),
-        tasks = decodeTasks(prefs.getString(KEY_TASKS, null)),
+        dashboardOrder = prefs.getString(KEY_DASH_ORDER, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }
+            .let { saved -> saved.filter { k -> DashboardModules.all.any { it.first == k } } + DashboardModules.all.map { it.first }.filter { it !in saved } },
+        keepScreenOn = prefs.getBoolean(KEY_KEEP_SCREEN_ON, true),
         autoCheckUpdates = prefs.getBoolean(KEY_AUTO_CHECK, true),
         autoDownloadUpdates = prefs.getBoolean(KEY_AUTO_DOWNLOAD, true),
         dismissedUpdate = prefs.getInt(KEY_DISMISSED_UPDATE, 0),
@@ -246,25 +247,12 @@ class LauncherPrefs(context: Context) {
             .putInt(KEY_DASHBOARD_OPACITY, s.dashboardOpacity)
             .putBoolean(KEY_LAUNCH_ANIMATION, s.launchAnimation)
             .putString(KEY_DASH_HIDDEN, s.dashboardHidden.joinToString(SEPARATOR))
-            .putString(KEY_TASKS, encodeTasks(s.tasks))
+            .putString(KEY_DASH_ORDER, s.dashboardOrder.joinToString(SEPARATOR))
+            .putBoolean(KEY_KEEP_SCREEN_ON, s.keepScreenOn)
             .putBoolean(KEY_AUTO_CHECK, s.autoCheckUpdates)
             .putBoolean(KEY_AUTO_DOWNLOAD, s.autoDownloadUpdates)
             .putInt(KEY_DISMISSED_UPDATE, s.dismissedUpdate)
             .apply()
-    }
-
-    private fun encodeTasks(tasks: List<TaskItem>): String =
-        JSONArray().apply { tasks.forEach { put(JSONObject().put("text", it.text).put("done", it.done)) } }.toString()
-
-    private fun decodeTasks(json: String?): List<TaskItem> {
-        if (json.isNullOrBlank()) return emptyList()
-        return runCatching {
-            val array = JSONArray(json)
-            (0 until array.length()).map { i ->
-                val o = array.getJSONObject(i)
-                TaskItem(o.getString("text"), o.optBoolean("done"))
-            }
-        }.getOrDefault(emptyList())
     }
 
     private fun encodeFolders(folders: List<AppFolder>): String =
@@ -336,7 +324,8 @@ class LauncherPrefs(context: Context) {
         const val KEY_AUTO_CHECK = "auto_check_updates"
         const val KEY_LAUNCH_ANIMATION = "launch_animation"
         const val KEY_DASH_HIDDEN = "dashboard_hidden"
-        const val KEY_TASKS = "tasks"
+        const val KEY_DASH_ORDER = "dashboard_order"
+        const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
         const val KEY_AUTO_DOWNLOAD = "auto_download_updates"
         const val KEY_DISMISSED_UPDATE = "dismissed_update"
         /** Credentials: never written to a backup file, and a restore leaves them alone. */
