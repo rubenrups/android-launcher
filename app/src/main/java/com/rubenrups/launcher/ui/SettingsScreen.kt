@@ -108,6 +108,7 @@ private val SearchIndex = listOf(
     SettingHit("Car mode background", Page.DASHBOARD, "dashboard opacity transparency solid"),
     SettingHit("Swipes in car mode", Page.DASHBOARD, "gesture next track close skip"),
     SettingHit("Navigation places", Page.DASHBOARD, "home work address destination car mode navigate maps"),
+    SettingHit("Remember car mode", Page.DASHBOARD, "return stay open after switching apps"),
     SettingHit("Keep screen on", Page.DASHBOARD, "awake car mode dashboard"),
     SettingHit("Car mode cards and order", Page.DASHBOARD, "dashboard reorder hide media weather navigation"),
     SettingHit("Show glucose", Page.GLUCOSE, "libre librelink librelinkup sugar diabetes"),
@@ -412,6 +413,11 @@ private fun DashboardPage(viewModel: LauncherViewModel, settings: LauncherSettin
             settings.keepScreenOn,
             subtitle = "While car mode is open",
         ) { v -> viewModel.update { it.copy(keepScreenOn = v) } }
+        SwitchRow(
+            "Remember car mode",
+            settings.rememberCarMode,
+            subtitle = "Come back to car mode after another app, instead of the plain home screen",
+        ) { v -> viewModel.update { it.copy(rememberCarMode = v) } }
         SliderRow(
             "Background",
             "${settings.dashboardOpacity}% solid",

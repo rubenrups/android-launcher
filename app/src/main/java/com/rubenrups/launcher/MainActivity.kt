@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.lifecycle.Lifecycle
 import com.rubenrups.launcher.ui.LauncherApp
 import com.rubenrups.launcher.ui.LauncherTheme
 
@@ -53,11 +54,15 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** Pressing Home while we are already on top should return to the home screen. */
+    /**
+     * Pressing Home while we are already on top returns to the plain home screen. Pressing it from another app
+     * brings us back as we were, so car mode stays up (unless "remember car mode" is off).
+     */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.action == Intent.ACTION_MAIN && Intent.CATEGORY_HOME in (intent.categories ?: emptySet())) {
-            viewModel.closeAll()
+            val wasOnTop = lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+            viewModel.closeAll(fromAnotherApp = !wasOnTop)
         }
     }
 }

@@ -109,7 +109,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _settingsOpen = MutableStateFlow(false)
     val settingsOpen: StateFlow<Boolean> = _settingsOpen.asStateFlow()
 
-    private val _dashboardOpen = MutableStateFlow(false)
+    // Car mode comes back after the launcher restarts, if it was open and remembering is on.
+    private val _dashboardOpen = MutableStateFlow(settings.value.rememberCarMode && settings.value.carModeWasOpen)
     val dashboardOpen: StateFlow<Boolean> = _dashboardOpen.asStateFlow()
 
     /** Counts up each time a real app is launched; the UI plays its launch animation on every change. */
@@ -228,6 +229,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             _dashboardEdge.value = from
         }
         _dashboardOpen.value = open
+        update { it.copy(carModeWasOpen = open) }
     }
 
     /** One poll of LibreLinkUp; the caller decides the rhythm (see LauncherApp). No-op while the feature is off. */
@@ -240,11 +242,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         glucoseStore.refresh(s.glucoseEmail.trim(), s.glucosePassword)
     }
 
-    /** Back to the plain home screen (Home button pressed while we are already on top). */
-    fun closeAll() {
+    /** Back to the plain home screen (Home pressed). [fromAnotherApp]: the launcher was in the background. */
+    fun closeAll(fromAnotherApp: Boolean = false) {
         closeDrawer()
         _settingsOpen.value = false
-        _dashboardOpen.value = false
+        // Coming back from another app, car mode stays up (if you asked for that); pressing Home on the launcher itself leaves it.
+        if (!(fromAnotherApp && settings.value.rememberCarMode)) setDashboardOpen(false)
     }
 
     fun update(transform: (LauncherSettings) -> LauncherSettings) = prefs.update(transform)
