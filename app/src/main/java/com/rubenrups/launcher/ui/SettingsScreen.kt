@@ -70,7 +70,8 @@ private enum class Page(val title: String, val icon: String) {
     APPEARANCE("Appearance", "🎨"),
     GESTURES("Gestures", "👆"),
     DRAWER("App drawer", "🗂️"),
-    DASHBOARD("Dashboard & glucose", "📊"),
+    GLUCOSE("Glucose", "🩸"),
+    DASHBOARD("Dashboard", "📊"),
     NOTIFICATIONS("Notifications & media", "🔔"),
     APPS("Apps & widgets", "🧩"),
     BACKUP("Backup & updates", "☁️"),
@@ -105,11 +106,11 @@ private val SearchIndex = listOf(
     SettingHit("Recent apps", Page.DRAWER, "recents"),
     SettingHit("Web search when typing", Page.DRAWER, "google duckduckgo engine"),
     SettingHit("Dashboard background", Page.DASHBOARD, "opacity transparency solid"),
-    SettingHit("Show glucose", Page.DASHBOARD, "libre librelink librelinkup sugar diabetes"),
-    SettingHit("LibreLinkUp login", Page.DASHBOARD, "email password follower account"),
-    SettingHit("Tapping the glucose value opens", Page.DASHBOARD, "librelink app"),
-    SettingHit("mmol/L or mg/dL", Page.DASHBOARD, "units glucose"),
-    SettingHit("Glucose low and high thresholds", Page.DASHBOARD, "range alert colour"),
+    SettingHit("Show glucose", Page.GLUCOSE, "libre librelink librelinkup sugar diabetes"),
+    SettingHit("LibreLinkUp login", Page.GLUCOSE, "email password follower account"),
+    SettingHit("Tapping the glucose value opens", Page.GLUCOSE, "librelink app"),
+    SettingHit("mmol/L or mg/dL", Page.GLUCOSE, "units glucose"),
+    SettingHit("Glucose low and high thresholds", Page.GLUCOSE, "range alert colour"),
     SettingHit("Notification access", Page.NOTIFICATIONS, "restricted settings listener permission"),
     SettingHit("Notifications on home", Page.NOTIFICATIONS, "show list"),
     SettingHit("Media player", Page.NOTIFICATIONS, "music spotify card"),
@@ -181,7 +182,8 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                             Page.APPEARANCE -> "Text, icons, wallpaper colours"
                             Page.GESTURES -> "Swipe up, down, left, right"
                             Page.DRAWER -> "Search, recents, background"
-                            Page.DASHBOARD -> if (settings.glucoseEnabled) "Glucose is on" else "Glucose, buttons, background"
+                            Page.GLUCOSE -> if (settings.glucoseEnabled) "On · LibreLinkUp" else "LibreLinkUp, units, thresholds"
+                            Page.DASHBOARD -> "Cards, background, to do"
                             Page.NOTIFICATIONS -> if (listenerConnected) "Access connected ✓" else "Access not connected"
                             Page.APPS -> "Widgets, hidden apps, work profile"
                             Page.BACKUP -> when (updateState) {
@@ -204,7 +206,8 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                         Page.APPEARANCE -> AppearancePage(viewModel, settings)
                         Page.GESTURES -> GesturesPage(settings, visibleApps) { chooser = it }
                         Page.DRAWER -> DrawerPage(viewModel, settings)
-                        Page.DASHBOARD -> DashboardPage(viewModel, settings, visibleApps) { chooser = it }
+                        Page.GLUCOSE -> GlucosePage(viewModel, settings, visibleApps) { chooser = it }
+                        Page.DASHBOARD -> DashboardPage(viewModel, settings)
                         Page.NOTIFICATIONS -> NotificationsPage(viewModel, settings, listenerConnected)
                         Page.APPS -> AppsPage(viewModel, settings) { pickWidget = true }
                         Page.BACKUP -> BackupPage(viewModel, settings, updateState)
@@ -385,21 +388,16 @@ private fun DrawerPage(viewModel: LauncherViewModel, settings: LauncherSettings)
 }
 
 @Composable
-private fun DashboardPage(
-    viewModel: LauncherViewModel,
-    settings: LauncherSettings,
-    apps: List<AppInfo>,
-    openChooser: (String) -> Unit,
-) {
+private fun DashboardPage(viewModel: LauncherViewModel, settings: LauncherSettings) {
     Group("Cards on the dashboard") {
         DashboardModules.all.forEach { (key, label) ->
             SwitchRow(label, key !in settings.dashboardHidden) { on ->
                 viewModel.update { it.copy(dashboardHidden = if (on) it.dashboardHidden - key else it.dashboardHidden + key) }
             }
         }
-        Hint("Hourly weather needs the weather city (Home screen). Cards with nothing to show stay out of the way.")
+        Hint("Hourly weather needs the weather city (Home screen). Glucose is set up under its own category. Cards with nothing to show stay out of the way.")
     }
-    Group("Dashboard") {
+    Group("Look") {
         SliderRow(
             "Background",
             "${settings.dashboardOpacity}% solid",
@@ -408,7 +406,16 @@ private fun DashboardPage(
         ) { v -> viewModel.update { it.copy(dashboardOpacity = v.toInt()) } }
         Hint("Open it from the long-press menu, a swipe (see Gestures), or a favourites button (see Home screen).")
     }
-    Group("Glucose (LibreLinkUp)") {
+}
+
+@Composable
+private fun GlucosePage(
+    viewModel: LauncherViewModel,
+    settings: LauncherSettings,
+    apps: List<AppInfo>,
+    openChooser: (String) -> Unit,
+) {
+    Group("LibreLinkUp") {
         SwitchRow("Show glucose", settings.glucoseEnabled) { v -> viewModel.update { it.copy(glucoseEnabled = v) } }
         if (settings.glucoseEnabled) {
             Field(settings.glucoseEmail, "LibreLinkUp email") { v -> viewModel.update { it.copy(glucoseEmail = v) } }
