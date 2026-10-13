@@ -11,6 +11,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.rubenrups.launcher.data.DashboardModules
+import com.rubenrups.launcher.data.Destination
 import com.rubenrups.launcher.data.HourlyPoint
 import android.content.Intent
 import android.os.Environment
@@ -127,7 +128,7 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
             DashboardModules.MEDIA -> CarMediaCard(media)
             // While a route is active: the next turn. Otherwise: one-tap destinations.
             DashboardModules.NAVIGATION ->
-                navigation?.let { NavigationCard(it, big = true) } ?: NavigateCard(settings.homeAddress, settings.workAddress, onOpenSettings)
+                navigation?.let { NavigationCard(it, big = true) } ?: NavigateCard(settings.destinations, onOpenSettings)
             DashboardModules.WEATHER -> HourlyCard(hours, settings.weatherCity)
             DashboardModules.QUICK -> QuickSettingsCard()
             DashboardModules.STATS -> StatTiles(battery, weather, nextEvent?.text)
@@ -547,9 +548,9 @@ private fun TransportButton(kind: TransportKind, size: androidx.compose.ui.unit.
     }
 }
 
-/** Shown instead of the route card when nothing is being navigated: Home, Work and Maps, as big buttons. */
+/** Shown instead of the route card when nothing is being navigated: your saved places and Maps, as big buttons. */
 @Composable
-private fun NavigateCard(home: String, work: String, onOpenSettings: () -> Unit) {
+private fun NavigateCard(destinations: List<Destination>, onOpenSettings: () -> Unit) {
     val context = LocalContext.current
     fun navigateTo(address: String) {
         val uri = Uri.parse("google.navigation:q=" + Uri.encode(address) + "&mode=d")
@@ -565,23 +566,29 @@ private fun NavigateCard(home: String, work: String, onOpenSettings: () -> Unit)
         runCatching { context.startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
 
+    // Places with an address, then Maps; a hint tile to add places when there are none yet.
+    val tiles = ArrayList<Triple<String, String, () -> Unit>>()
+    destinations.filter { it.address.isNotBlank() }.forEach { place ->
+        tiles.add(Triple(place.icon.ifBlank { "📍" }, place.name.ifBlank { place.address }, { navigateTo(place.address) }))
+    }
+    if (tiles.isEmpty()) tiles.add(Triple("＋", "Add places", onOpenSettings))
+    tiles.add(Triple("🗺️", "Maps", { openMaps() }))
+
     Card {
         Text("🧭 Navigate", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
-        Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            NavTile("🏠", "Home", if (home.isBlank()) "Set address" else null) {
-                if (home.isBlank()) onOpenSettings() else navigateTo(home)
+        tiles.chunked(NAV_TILES_PER_ROW).forEach { rowTiles ->
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                rowTiles.forEach { (icon, label, action) -> NavTile(icon, label, action) }
+                // Keep tiles in a short last row the same width as the others.
+                repeat(NAV_TILES_PER_ROW - rowTiles.size) { Spacer(Modifier.weight(1f)) }
             }
-            NavTile("💼", "Work", if (work.isBlank()) "Set address" else null) {
-                if (work.isBlank()) onOpenSettings() else navigateTo(work)
-            }
-            NavTile("🗺️", "Maps", null) { openMaps() }
         }
     }
 }
 
 @Composable
-private fun RowScope.NavTile(icon: String, label: String, hint: String?, onClick: () -> Unit) {
+private fun RowScope.NavTile(icon: String, label: String, onClick: () -> Unit) {
     Column(
         Modifier
             .weight(1f)
@@ -591,11 +598,11 @@ private fun RowScope.NavTile(icon: String, label: String, hint: String?, onClick
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(icon, fontSize = 34.sp)
-        Text(label, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Medium)
-        if (hint != null) Text(hint, color = Color.White.copy(alpha = 0.5f), fontSize = 11.sp)
+        Text(label, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
+private const val NAV_TILES_PER_ROW = 3
 private const val MAPS_PACKAGE = "com.google.android.apps.maps"
 
 /** Runs a car-mode swipe: close, a media key, a launcher function, or an app. */

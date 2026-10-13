@@ -16,6 +16,7 @@ import android.appwidget.AppWidgetProviderInfo
 import com.rubenrups.launcher.data.AppRepository
 import com.rubenrups.launcher.data.IconPack
 import com.rubenrups.launcher.data.LauncherPrefsHolder
+import com.rubenrups.launcher.data.Destination
 import com.rubenrups.launcher.data.GestureActions
 import com.rubenrups.launcher.data.GlucoseState
 import com.rubenrups.launcher.data.UpdateManager
@@ -167,6 +168,23 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun installUpdate() {
         viewModelScope.launch { UpdateManager.installNow(getApplication(), settings.value.updateToken) }
+    }
+
+    fun addDestination() = update { it.copy(destinations = it.destinations + Destination("", "")) }
+
+    fun updateDestination(index: Int, transform: (Destination) -> Destination) = update { s ->
+        s.copy(destinations = s.destinations.mapIndexed { i, d -> if (i == index) transform(d) else d })
+    }
+
+    fun deleteDestination(index: Int) = update { s -> s.copy(destinations = s.destinations.filterIndexed { i, _ -> i != index }) }
+
+    fun moveDestination(index: Int, delta: Int) = update { s ->
+        val to = index + delta
+        if (index !in s.destinations.indices || to !in s.destinations.indices) {
+            s
+        } else {
+            s.copy(destinations = s.destinations.toMutableList().apply { add(to, removeAt(index)) })
+        }
     }
 
     /** Swaps two car-mode cards in the stored order. */

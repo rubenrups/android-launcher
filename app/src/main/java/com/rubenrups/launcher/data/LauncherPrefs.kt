@@ -14,6 +14,9 @@ enum class WebSearchEngine(val label: String, val urlTemplate: String?) {
     DUCKDUCKGO("DuckDuckGo", "https://duckduckgo.com/?q=%s"),
 }
 
+/** A saved place for the car-mode navigation buttons. */
+data class Destination(val name: String, val address: String, val icon: String = "📍")
+
 /** The cards of the car-mode screen: each can be switched off and reordered. */
 object DashboardModules {
     const val GLUCOSE = "glucose"
@@ -100,9 +103,8 @@ data class LauncherSettings(
     val carSwipeDown: String = GestureActions.CLOSE,
     val carSwipeLeft: String = GestureActions.NEXT,
     val carSwipeRight: String = GestureActions.PREVIOUS,
-    /** Destinations for the car-mode navigation shortcuts. Personal, so never exported in a backup. */
-    val homeAddress: String = "",
-    val workAddress: String = "",
+    /** Places for the car-mode navigation buttons. Personal, so never exported in a backup. */
+    val destinations: List<Destination> = emptyList(),
     val autoCheckUpdates: Boolean = true,
     /** Fetch a new build in the background on Wi-Fi so installing is one tap. */
     val autoDownloadUpdates: Boolean = true,
@@ -211,8 +213,7 @@ class LauncherPrefs(context: Context) {
         carSwipeDown = prefs.getString(KEY_CAR_DOWN, GestureActions.CLOSE).orEmpty(),
         carSwipeLeft = prefs.getString(KEY_CAR_LEFT, GestureActions.NEXT).orEmpty(),
         carSwipeRight = prefs.getString(KEY_CAR_RIGHT, GestureActions.PREVIOUS).orEmpty(),
-        homeAddress = prefs.getString(KEY_HOME_ADDRESS, "").orEmpty(),
-        workAddress = prefs.getString(KEY_WORK_ADDRESS, "").orEmpty(),
+        destinations = loadDestinations(),
         autoCheckUpdates = prefs.getBoolean(KEY_AUTO_CHECK, true),
         autoDownloadUpdates = prefs.getBoolean(KEY_AUTO_DOWNLOAD, true),
         dismissedUpdate = prefs.getInt(KEY_DISMISSED_UPDATE, 0),
@@ -267,12 +268,36 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_CAR_DOWN, s.carSwipeDown)
             .putString(KEY_CAR_LEFT, s.carSwipeLeft)
             .putString(KEY_CAR_RIGHT, s.carSwipeRight)
-            .putString(KEY_HOME_ADDRESS, s.homeAddress)
-            .putString(KEY_WORK_ADDRESS, s.workAddress)
+            .putString(KEY_DESTINATIONS, encodeDestinations(s.destinations))
             .putBoolean(KEY_AUTO_CHECK, s.autoCheckUpdates)
             .putBoolean(KEY_AUTO_DOWNLOAD, s.autoDownloadUpdates)
             .putInt(KEY_DISMISSED_UPDATE, s.dismissedUpdate)
             .apply()
+    }
+
+    private fun encodeDestinations(list: List<Destination>): String =
+        JSONArray().apply {
+            list.forEach { put(JSONObject().put("name", it.name).put("address", it.address).put("icon", it.icon)) }
+        }.toString()
+
+    /** The saved list; builds it from the old single Home / Work addresses the first time. */
+    private fun loadDestinations(): List<Destination> {
+        val json = prefs.getString(KEY_DESTINATIONS, null)
+        if (json == null) {
+            val home = prefs.getString(KEY_HOME_ADDRESS, "").orEmpty()
+            val work = prefs.getString(KEY_WORK_ADDRESS, "").orEmpty()
+            return listOfNotNull(
+                home.takeIf { it.isNotBlank() }?.let { Destination("Home", it, "🏠") },
+                work.takeIf { it.isNotBlank() }?.let { Destination("Work", it, "💼") },
+            )
+        }
+        return runCatching {
+            val array = JSONArray(json)
+            (0 until array.length()).map { i ->
+                val o = array.getJSONObject(i)
+                Destination(o.optString("name"), o.optString("address"), o.optString("icon").ifBlank { "📍" })
+            }
+        }.getOrDefault(emptyList())
     }
 
     private fun encodeFolders(folders: List<AppFolder>): String =
@@ -350,12 +375,13 @@ class LauncherPrefs(context: Context) {
         const val KEY_CAR_DOWN = "car_swipe_down"
         const val KEY_CAR_LEFT = "car_swipe_left"
         const val KEY_CAR_RIGHT = "car_swipe_right"
+        const val KEY_DESTINATIONS = "destinations"
         const val KEY_HOME_ADDRESS = "home_address"
         const val KEY_WORK_ADDRESS = "work_address"
         const val KEY_AUTO_DOWNLOAD = "auto_download_updates"
         const val KEY_DISMISSED_UPDATE = "dismissed_update"
         /** Credentials: never written to a backup file, and a restore leaves them alone. */
-        val SECRET_KEYS = setOf(KEY_UPDATE_TOKEN, KEY_GLUCOSE_EMAIL, KEY_GLUCOSE_PASSWORD, KEY_HOME_ADDRESS, KEY_WORK_ADDRESS)
+        val SECRET_KEYS = setOf(KEY_UPDATE_TOKEN, KEY_GLUCOSE_EMAIL, KEY_GLUCOSE_PASSWORD, KEY_DESTINATIONS, KEY_HOME_ADDRESS, KEY_WORK_ADDRESS)
         const val KEY_ANCHOR_BOTTOM = "anchor_bottom"
         const val KEY_SHOW_ICONS = "show_icons"
         const val KEY_SHOW_SEARCH_BUTTON = "show_search_button"

@@ -107,7 +107,7 @@ private val SearchIndex = listOf(
     SettingHit("Web search when typing", Page.DRAWER, "google duckduckgo engine"),
     SettingHit("Car mode background", Page.DASHBOARD, "dashboard opacity transparency solid"),
     SettingHit("Swipes in car mode", Page.DASHBOARD, "gesture next track close skip"),
-    SettingHit("Home and work addresses", Page.DASHBOARD, "car mode navigate maps shortcut destination"),
+    SettingHit("Navigation places", Page.DASHBOARD, "home work address destination car mode navigate maps"),
     SettingHit("Keep screen on", Page.DASHBOARD, "awake car mode dashboard"),
     SettingHit("Car mode cards and order", Page.DASHBOARD, "dashboard reorder hide media weather navigation"),
     SettingHit("Show glucose", Page.GLUCOSE, "libre librelink librelinkup sugar diabetes"),
@@ -429,13 +429,33 @@ private fun DashboardPage(viewModel: LauncherViewModel, settings: LauncherSettin
                 "Swipes can skip tracks, close car mode or open an app."
         )
     }
-    Group("Navigation shortcuts") {
-        Field(settings.homeAddress, "Home address") { v -> viewModel.update { it.copy(homeAddress = v) } }
-        Field(settings.workAddress, "Work address") { v -> viewModel.update { it.copy(workAddress = v) } }
+    Group("Navigation places") {
+        settings.destinations.forEachIndexed { index, place ->
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("Place ${index + 1}", color = Accent, fontSize = 13.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                Text(
+                    "▲",
+                    color = if (index > 0) Color.White else Color.White.copy(alpha = 0.2f),
+                    fontSize = 16.sp,
+                    modifier = Modifier.clickable(enabled = index > 0) { viewModel.moveDestination(index, -1) }.padding(10.dp),
+                )
+                Text(
+                    "▼",
+                    color = if (index < settings.destinations.lastIndex) Color.White else Color.White.copy(alpha = 0.2f),
+                    fontSize = 16.sp,
+                    modifier = Modifier.clickable(enabled = index < settings.destinations.lastIndex) { viewModel.moveDestination(index, 1) }.padding(10.dp),
+                )
+                Text("Remove", color = Accent, fontSize = 13.sp, modifier = Modifier.clickable { viewModel.deleteDestination(index) }.padding(10.dp))
+            }
+            Field(place.name, "Name, e.g. Home or Gym") { v -> viewModel.updateDestination(index) { it.copy(name = v) } }
+            Field(place.address, "Address") { v -> viewModel.updateDestination(index) { it.copy(address = v) } }
+            Field(place.icon, "Icon (an emoji)") { v -> viewModel.updateDestination(index) { it.copy(icon = v.take(4)) } }
+        }
+        NavRow("Add a place") { viewModel.addDestination() }
         Hint(
-            "While no route is active, the navigation card in car mode shows Home, Work and Maps buttons. " +
-                "Home and Work start Google Maps driving directions to these addresses. They stay on this device " +
-                "and are not included in backups."
+            "While no route is active, the navigation card in car mode shows a button per place, plus Maps. Each " +
+                "starts Google Maps driving directions to its address. Places stay on this device and are not " +
+                "included in backups."
         )
     }
     Group("Cards, in order") {
