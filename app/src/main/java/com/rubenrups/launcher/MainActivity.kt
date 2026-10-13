@@ -2,6 +2,7 @@ package com.rubenrups.launcher
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -15,12 +16,18 @@ class MainActivity : ComponentActivity() {
 
     private val viewModel: LauncherViewModel by viewModels()
 
+    // When we last became visible / were hidden, to tell "Home pressed from another app" from "Home pressed on us".
+    private var startedAt = 0L
+    private var hasBeenStopped = false
+
     override fun onStart() {
         super.onStart()
+        startedAt = SystemClock.uptimeMillis()
         viewModel.widgets.startListening()
     }
 
     override fun onStop() {
+        hasBeenStopped = true
         viewModel.widgets.stopListening()
         super.onStop()
     }
@@ -61,8 +68,15 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.action == Intent.ACTION_MAIN && Intent.CATEGORY_HOME in (intent.categories ?: emptySet())) {
-            val wasOnTop = lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
-            viewModel.closeAll(fromAnotherApp = !wasOnTop)
+            // Depending on the Android version the new intent arrives just before or just after we become visible
+            // again, so "we were hidden" also counts when we only just came back.
+            val stillHidden = !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+            val justReturned = hasBeenStopped && SystemClock.uptimeMillis() - startedAt < RETURN_WINDOW_MS
+            viewModel.closeAll(fromAnotherApp = stillHidden || justReturned)
         }
+    }
+
+    private companion object {
+        const val RETURN_WINDOW_MS = 1_000L
     }
 }

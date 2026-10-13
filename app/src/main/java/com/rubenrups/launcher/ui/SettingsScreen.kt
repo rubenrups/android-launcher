@@ -106,6 +106,7 @@ private val SearchIndex = listOf(
     SettingHit("Recent apps", Page.DRAWER, "recents"),
     SettingHit("Web search when typing", Page.DRAWER, "google duckduckgo engine"),
     SettingHit("Car mode background", Page.DASHBOARD, "dashboard opacity transparency solid"),
+    SettingHit("Quick launch apps", Page.DASHBOARD, "car mode app buttons maps music phone"),
     SettingHit("Swipes in car mode", Page.DASHBOARD, "gesture next track close skip"),
     SettingHit("Navigation places", Page.DASHBOARD, "home work address destination car mode navigate maps"),
     SettingHit("Remember car mode", Page.DASHBOARD, "return stay open after switching apps"),
@@ -238,6 +239,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                     "carDown" -> it.copy(carSwipeDown = key)
                     "carLeft" -> it.copy(carSwipeLeft = key)
                     "carRight" -> it.copy(carSwipeRight = key)
+                    "carApp" -> it.copy(carApps = if (key.isBlank() || key in it.carApps) it.carApps else it.carApps + key)
                     else -> it.copy(glucoseApp = key)
                 }
             }
@@ -253,14 +255,15 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                 "carDown" -> "Car mode: swipe down"
                 "carLeft" -> "Car mode: swipe left"
                 "carRight" -> "Car mode: swipe right"
+                "carApp" -> "Add to quick launch"
                 else -> "Tapping the glucose value opens"
             },
             viewModel = viewModel,
             onPick = { app -> set(app?.key.orEmpty()) },
             onDismiss = { chooser = null },
             extras = when {
-                side == "glucose" -> emptyList()
-                side.startsWith("car") -> GestureActions.carBuiltIn.map { (key, label) -> label to key }
+                side == "glucose" || side == "carApp" -> emptyList()
+                side.startsWith("carUp") || side.startsWith("carDown") || side.startsWith("carLeft") || side.startsWith("carRight") -> GestureActions.carBuiltIn.map { (key, label) -> label to key }
                 else -> GestureActions.builtIn.map { (key, label) -> label to key }
             },
             onPickExtra = { key -> set(key) },
@@ -435,6 +438,28 @@ private fun DashboardPage(viewModel: LauncherViewModel, settings: LauncherSettin
             "There is no close button in car mode: swipe (down by default), press back, or tap empty space. " +
                 "Swipes can skip tracks, close car mode or open an app."
         )
+    }
+    Group("Quick launch apps") {
+        settings.carApps.forEachIndexed { index, key ->
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(labelFor(key, apps), color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                Text(
+                    "▲",
+                    color = if (index > 0) Color.White else Color.White.copy(alpha = 0.2f),
+                    fontSize = 16.sp,
+                    modifier = Modifier.clickable(enabled = index > 0) { viewModel.moveCarApp(index, -1) }.padding(12.dp),
+                )
+                Text(
+                    "▼",
+                    color = if (index < settings.carApps.lastIndex) Color.White else Color.White.copy(alpha = 0.2f),
+                    fontSize = 16.sp,
+                    modifier = Modifier.clickable(enabled = index < settings.carApps.lastIndex) { viewModel.moveCarApp(index, 1) }.padding(12.dp),
+                )
+                Text("Remove", color = Accent, fontSize = 13.sp, modifier = Modifier.clickable { viewModel.removeCarApp(index) }.padding(12.dp))
+            }
+        }
+        NavRow("Add an app") { openChooser("carApp") }
+        Hint("These show as big buttons on the Apps card in car mode, for maps, music, phone and so on.")
     }
     Group("Navigation places") {
         settings.destinations.forEachIndexed { index, place ->

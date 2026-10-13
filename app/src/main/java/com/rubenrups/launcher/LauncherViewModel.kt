@@ -171,6 +171,21 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch { UpdateManager.installNow(getApplication(), settings.value.updateToken) }
     }
 
+    fun addCarApp(key: String) = update { s ->
+        if (key.isBlank() || key in s.carApps) s else s.copy(carApps = s.carApps + key)
+    }
+
+    fun removeCarApp(index: Int) = update { s -> s.copy(carApps = s.carApps.filterIndexed { i, _ -> i != index }) }
+
+    fun moveCarApp(index: Int, delta: Int) = update { s ->
+        val to = index + delta
+        if (index !in s.carApps.indices || to !in s.carApps.indices) {
+            s
+        } else {
+            s.copy(carApps = s.carApps.toMutableList().apply { add(to, removeAt(index)) })
+        }
+    }
+
     fun addDestination() = update { it.copy(destinations = it.destinations + Destination("", "")) }
 
     fun updateDestination(index: Int, transform: (Destination) -> Destination) = update { s ->

@@ -25,12 +25,14 @@ object DashboardModules {
     const val WEATHER = "weather"
     const val QUICK = "quick"
     const val STATS = "stats"
+    const val APPS = "apps"
 
     /** Default order, and the names shown in settings. */
     val all: List<Pair<String, String>> = listOf(
         GLUCOSE to "Glucose",
         MEDIA to "Media player",
         NAVIGATION to "Navigation",
+        APPS to "Quick launch apps",
         WEATHER to "Hourly weather",
         QUICK to "Quick settings",
         STATS to "Battery, weather and next event",
@@ -98,6 +100,8 @@ data class LauncherSettings(
     val dashboardOrder: List<String> = DashboardModules.all.map { it.first },
     /** Keep the screen on while car mode is open. */
     val keepScreenOn: Boolean = true,
+    /** App keys shown as big buttons on the car-mode quick launch card. */
+    val carApps: List<String> = emptyList(),
     /** Come back to car mode, rather than the plain home screen, after visiting another app. */
     val rememberCarMode: Boolean = true,
     /** Whether car mode was open when we last changed it; restored after the launcher restarts. Not backed up. */
@@ -215,6 +219,7 @@ class LauncherPrefs(context: Context) {
         dashboardOrder = prefs.getString(KEY_DASH_ORDER, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }
             .let { saved -> saved.filter { k -> DashboardModules.all.any { it.first == k } } + DashboardModules.all.map { it.first }.filter { it !in saved } },
         keepScreenOn = prefs.getBoolean(KEY_KEEP_SCREEN_ON, true),
+        carApps = prefs.getString(KEY_CAR_APPS, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() },
         rememberCarMode = prefs.getBoolean(KEY_REMEMBER_CAR, true),
         carModeWasOpen = prefs.getBoolean(KEY_CAR_WAS_OPEN, false),
         carSwipeUp = prefs.getString(KEY_CAR_UP, GestureActions.NONE).orEmpty(),
@@ -273,6 +278,7 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_DASH_HIDDEN, s.dashboardHidden.joinToString(SEPARATOR))
             .putString(KEY_DASH_ORDER, s.dashboardOrder.joinToString(SEPARATOR))
             .putBoolean(KEY_KEEP_SCREEN_ON, s.keepScreenOn)
+            .putString(KEY_CAR_APPS, s.carApps.joinToString(SEPARATOR))
             .putBoolean(KEY_REMEMBER_CAR, s.rememberCarMode)
             .putBoolean(KEY_CAR_WAS_OPEN, s.carModeWasOpen)
             .putString(KEY_CAR_UP, s.carSwipeUp)
@@ -384,6 +390,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_DASH_HIDDEN = "dashboard_hidden"
         const val KEY_DASH_ORDER = "dashboard_order"
         const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
+        const val KEY_CAR_APPS = "car_apps"
         const val KEY_REMEMBER_CAR = "remember_car_mode"
         const val KEY_CAR_WAS_OPEN = "car_mode_was_open"
         const val KEY_CAR_UP = "car_swipe_up"

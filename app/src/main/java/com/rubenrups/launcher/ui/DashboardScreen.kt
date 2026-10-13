@@ -83,6 +83,7 @@ private val CardWeight = mapOf(
     DashboardModules.GLUCOSE to 1.3f,
     DashboardModules.MEDIA to 2.2f,
     DashboardModules.NAVIGATION to 1.1f,
+    DashboardModules.APPS to 1.6f,
     DashboardModules.WEATHER to 1.5f,
     DashboardModules.QUICK to 1.4f,
     DashboardModules.STATS to 1.0f,
@@ -130,6 +131,7 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
             DashboardModules.NAVIGATION ->
                 navigation?.let { NavigationCard(it, big = true) } ?: NavigateCard(settings.destinations, onOpenSettings)
             DashboardModules.WEATHER -> HourlyCard(hours, settings.weatherCity)
+            DashboardModules.APPS -> QuickAppsCard(viewModel, settings.carApps, onOpenSettings)
             DashboardModules.QUICK -> QuickSettingsCard()
             DashboardModules.STATS -> StatTiles(battery, weather, nextEvent?.text)
             else -> Unit
@@ -621,5 +623,45 @@ private fun runCarAction(action: String, viewModel: LauncherViewModel, context: 
         GestureActions.NOTIFICATIONS -> expandNotificationShade(context)
         GestureActions.DASHBOARD -> Unit
         else -> viewModel.launchByKey(action)
+    }
+}
+
+/** Big app buttons for the car: the apps chosen in settings (maps, music, phone…), three to a row. */
+@Composable
+private fun QuickAppsCard(viewModel: LauncherViewModel, keys: List<String>, onOpenSettings: () -> Unit) {
+    val installed by viewModel.visibleApps.collectAsStateWithLifecycle()
+    val byKey = remember(installed) { installed.associateBy { it.key } }
+    val apps = keys.mapNotNull { byKey[it] }
+    Card {
+        Text("Apps", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+        if (apps.isEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "＋ Choose apps for quick launch",
+                color = Color(0xFF8AB4F8),
+                fontSize = 18.sp,
+                modifier = Modifier.clickable(onClick = onOpenSettings).padding(vertical = 10.dp),
+            )
+        }
+        apps.chunked(NAV_TILES_PER_ROW).forEach { rowApps ->
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                rowApps.forEach { app ->
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+                            .clickable { viewModel.launch(app) }
+                            .padding(horizontal = 4.dp, vertical = 14.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        AppIcon(app, viewModel, 56.dp)
+                        Spacer(Modifier.height(6.dp))
+                        Text(app.label, color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                repeat(NAV_TILES_PER_ROW - rowApps.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
     }
 }
