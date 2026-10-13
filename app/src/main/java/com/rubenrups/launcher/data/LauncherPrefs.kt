@@ -109,6 +109,12 @@ data class LauncherSettings(
     val folderPopupTextSp: Int = 18,
     /** How much the screen behind the popup is dimmed, in percent. */
     val folderPopupDim: Int = 12,
+    /** The same look settings for the popup opened from the app drawer (which is more solid and dims more by default). */
+    val drawerPopupGrid: Boolean = false,
+    val drawerPopupColumns: Int = 4,
+    val drawerPopupOpacity: Int = 95,
+    val drawerPopupTextSp: Int = 18,
+    val drawerPopupDim: Int = 60,
     /** App keys shown as big buttons on the car-mode quick launch card. */
     val carApps: List<String> = emptyList(),
     /** Come back to car mode, rather than the plain home screen, after visiting another app. */
@@ -234,6 +240,11 @@ class LauncherPrefs(context: Context) {
         folderPopupOpacity = prefs.getInt(KEY_POPUP_OPACITY, 60),
         folderPopupTextSp = prefs.getInt(KEY_POPUP_TEXT_SP, 18),
         folderPopupDim = prefs.getInt(KEY_POPUP_DIM, 12),
+        drawerPopupGrid = prefs.getBoolean(KEY_DPOPUP_GRID, false),
+        drawerPopupColumns = prefs.getInt(KEY_DPOPUP_COLUMNS, 4),
+        drawerPopupOpacity = prefs.getInt(KEY_DPOPUP_OPACITY, 95),
+        drawerPopupTextSp = prefs.getInt(KEY_DPOPUP_TEXT_SP, 18),
+        drawerPopupDim = prefs.getInt(KEY_DPOPUP_DIM, 60),
         carApps = prefs.getString(KEY_CAR_APPS, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() },
         rememberCarMode = prefs.getBoolean(KEY_REMEMBER_CAR, true),
         carModeWasOpen = prefs.getBoolean(KEY_CAR_WAS_OPEN, false),
@@ -299,6 +310,11 @@ class LauncherPrefs(context: Context) {
             .putInt(KEY_POPUP_OPACITY, s.folderPopupOpacity)
             .putInt(KEY_POPUP_TEXT_SP, s.folderPopupTextSp)
             .putInt(KEY_POPUP_DIM, s.folderPopupDim)
+            .putBoolean(KEY_DPOPUP_GRID, s.drawerPopupGrid)
+            .putInt(KEY_DPOPUP_COLUMNS, s.drawerPopupColumns)
+            .putInt(KEY_DPOPUP_OPACITY, s.drawerPopupOpacity)
+            .putInt(KEY_DPOPUP_TEXT_SP, s.drawerPopupTextSp)
+            .putInt(KEY_DPOPUP_DIM, s.drawerPopupDim)
             .putString(KEY_CAR_APPS, s.carApps.joinToString(SEPARATOR))
             .putBoolean(KEY_REMEMBER_CAR, s.rememberCarMode)
             .putBoolean(KEY_CAR_WAS_OPEN, s.carModeWasOpen)
@@ -431,6 +447,11 @@ class LauncherPrefs(context: Context) {
         const val KEY_POPUP_OPACITY = "folder_popup_opacity"
         const val KEY_POPUP_TEXT_SP = "folder_popup_text_sp"
         const val KEY_POPUP_DIM = "folder_popup_dim"
+        const val KEY_DPOPUP_GRID = "drawer_popup_grid"
+        const val KEY_DPOPUP_COLUMNS = "drawer_popup_columns"
+        const val KEY_DPOPUP_OPACITY = "drawer_popup_opacity"
+        const val KEY_DPOPUP_TEXT_SP = "drawer_popup_text_sp"
+        const val KEY_DPOPUP_DIM = "drawer_popup_dim"
         const val KEY_CAR_APPS = "car_apps"
         const val KEY_REMEMBER_CAR = "remember_car_mode"
         const val KEY_CAR_WAS_OPEN = "car_mode_was_open"

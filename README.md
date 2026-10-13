@@ -6,7 +6,7 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 
 - **Car mode** (formerly the dashboard): a big, glanceable second screen with glucose (graph, in-range %), navigation, media controls and quick stats. Open it from the long-press menu or assign it to any swipe (down, left, right). Tapping the glucose value opens the Libre app
 - **Media thumbnail**, per-card dashboard switches, and hold-a-widget on home for Move up / Move down / Remove
-- **Folder sorts** by most recent or most used, and a Folder popup settings group (list or grid, columns, text size, opacity, dim)
+- **Folder sorts** by most recent or most used, and a Folder popup settings (list or grid, columns, text size, opacity, dim), separately for the home screen and the drawer
 - **Quick launch apps** card in car mode: big buttons for the apps you choose
 - **Remember car mode**: car mode stays up when you come back from another app (and after a restart), unless turned off
 - **Car mode swipes**: swipe actions inside car mode (default: down closes, left/right skip tracks), and no header or close button

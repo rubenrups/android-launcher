@@ -138,7 +138,7 @@ fun FolderDialog(
     entry: FolderEntry,
     viewModel: LauncherViewModel,
     onDismiss: () -> Unit,
-    /** See-through variant for the home screen, so the wallpaper stays visible behind it. */
+    /** True for the popup opened from the home screen, which has its own look settings (the drawer's popup has another set). */
     translucent: Boolean = false,
 ) {
     var picking by remember { mutableStateOf(false) }
@@ -147,19 +147,18 @@ fun FolderDialog(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val favouriteKeys = remember(favourites) { favourites.mapTo(HashSet()) { it.key } }
     // The look settings (Settings → Home screen → Folder popup) apply to the see-through popup opened from the home screen.
-    val grid = translucent && settings.folderPopupGrid
-    val columns = settings.folderPopupColumns.coerceIn(2, 6)
-    val textSp = if (translucent) settings.folderPopupTextSp else 18
+    val grid = if (translucent) settings.folderPopupGrid else settings.drawerPopupGrid
+    val columns = (if (translucent) settings.folderPopupColumns else settings.drawerPopupColumns).coerceIn(2, 6)
+    val textSp = if (translucent) settings.folderPopupTextSp else settings.drawerPopupTextSp
+    val opacity = (if (translucent) settings.folderPopupOpacity else settings.drawerPopupOpacity) / 100f
+    val dim = (if (translucent) settings.folderPopupDim else settings.drawerPopupDim) / 100f
     Dialog(onDismissRequest = onDismiss) {
-        if (translucent) {
-            // The dialog window dims everything behind it; how much is a setting, so the wallpaper can show through.
-            val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
-            val dim = settings.folderPopupDim / 100f
-            SideEffect { dialogWindow?.setDimAmount(dim) }
-        }
+        // The dialog window dims everything behind it; how much is a setting, so the wallpaper can show through.
+        val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
+        SideEffect { dialogWindow?.setDimAmount(dim) }
         Surface(
             shape = RoundedCornerShape(24.dp),
-            color = if (translucent) Color(0xFF1A1A1A).copy(alpha = settings.folderPopupOpacity / 100f) else Color(0xF21A1A1A),
+            color = Color(0xFF1A1A1A).copy(alpha = opacity),
         ) {
             val scroll = rememberScrollState()
             Column(

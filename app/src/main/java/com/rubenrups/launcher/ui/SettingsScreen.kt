@@ -90,6 +90,7 @@ private val SearchIndex = listOf(
     SettingHit("Two columns in landscape", Page.HOME, "grid rotate"),
     SettingHit("Open folders as a popup", Page.HOME, "inline expand folder"),
     SettingHit("Folder popup look", Page.HOME, "grid list columns opacity text size dim background"),
+    SettingHit("Folder popup in the drawer", Page.DRAWER, "grid list columns opacity text size dim background"),
     SettingHit("Search button", Page.HOME, "magnifier floating"),
     SettingHit("App drawer button in favourites", Page.HOME, "add shortcut button"),
     SettingHit("Car mode button in favourites", Page.HOME, "dashboard add shortcut button"),
@@ -317,21 +318,18 @@ private fun HomePage(viewModel: LauncherViewModel, settings: LauncherSettings) {
         if (!settings.folderPopupOnHome) {
             Hint("Turn on \"Open folders as a popup\" above to use these.")
         } else {
-            ChoiceRow("List", selected = !settings.folderPopupGrid) { viewModel.update { it.copy(folderPopupGrid = false) } }
-            ChoiceRow("Grid of icons", selected = settings.folderPopupGrid) { viewModel.update { it.copy(folderPopupGrid = true) } }
-            if (settings.folderPopupGrid) {
-                SliderRow("Columns", "${settings.folderPopupColumns}", settings.folderPopupColumns.toFloat(), 2f..6f) { v ->
-                    viewModel.update { it.copy(folderPopupColumns = v.roundToInt()) }
+            PopupLookRows(
+                PopupLook(settings.folderPopupGrid, settings.folderPopupColumns, settings.folderPopupTextSp, settings.folderPopupOpacity, settings.folderPopupDim),
+            ) { look ->
+                viewModel.update {
+                    it.copy(
+                        folderPopupGrid = look.grid,
+                        folderPopupColumns = look.columns,
+                        folderPopupTextSp = look.textSp,
+                        folderPopupOpacity = look.opacity,
+                        folderPopupDim = look.dim,
+                    )
                 }
-            }
-            SliderRow("Text size", "${settings.folderPopupTextSp} sp", settings.folderPopupTextSp.toFloat(), 14f..28f) { v ->
-                viewModel.update { it.copy(folderPopupTextSp = v.toInt()) }
-            }
-            SliderRow("Popup background", "${settings.folderPopupOpacity}% solid", settings.folderPopupOpacity.toFloat(), 0f..100f) { v ->
-                viewModel.update { it.copy(folderPopupOpacity = v.toInt()) }
-            }
-            SliderRow("Dim the screen behind", "${settings.folderPopupDim}%", settings.folderPopupDim.toFloat(), 0f..70f) { v ->
-                viewModel.update { it.copy(folderPopupDim = v.toInt()) }
             }
         }
     }
@@ -419,6 +417,21 @@ private fun DrawerPage(viewModel: LauncherViewModel, settings: LauncherSettings)
             settings.drawerOpacity.toFloat(),
             0f..100f,
         ) { v -> viewModel.update { it.copy(drawerOpacity = v.toInt()) } }
+    }
+    Group("Folder popup in the drawer") {
+        PopupLookRows(
+            PopupLook(settings.drawerPopupGrid, settings.drawerPopupColumns, settings.drawerPopupTextSp, settings.drawerPopupOpacity, settings.drawerPopupDim),
+        ) { look ->
+            viewModel.update {
+                it.copy(
+                    drawerPopupGrid = look.grid,
+                    drawerPopupColumns = look.columns,
+                    drawerPopupTextSp = look.textSp,
+                    drawerPopupOpacity = look.opacity,
+                    drawerPopupDim = look.dim,
+                )
+            }
+        }
     }
     Group("Content") {
         SwitchRow("Recent apps", settings.showRecents) { v -> viewModel.update { it.copy(showRecents = v) } }
@@ -758,6 +771,22 @@ private fun BackupPage(viewModel: LauncherViewModel, settings: LauncherSettings,
 // ---------------------------------------------------------------------------------------------
 // Building blocks
 // ---------------------------------------------------------------------------------------------
+
+/** The look of a folder popup: list or grid, how many columns, text size, background opacity and dimming (percent). */
+private data class PopupLook(val grid: Boolean, val columns: Int, val textSp: Int, val opacity: Int, val dim: Int)
+
+/** The rows that edit one [PopupLook]; the home popup and the drawer popup each keep their own. */
+@Composable
+private fun PopupLookRows(look: PopupLook, onChange: (PopupLook) -> Unit) {
+    ChoiceRow("List", selected = !look.grid) { onChange(look.copy(grid = false)) }
+    ChoiceRow("Grid of icons", selected = look.grid) { onChange(look.copy(grid = true)) }
+    if (look.grid) {
+        SliderRow("Columns", "${look.columns}", look.columns.toFloat(), 2f..6f) { v -> onChange(look.copy(columns = v.roundToInt())) }
+    }
+    SliderRow("Text size", "${look.textSp} sp", look.textSp.toFloat(), 14f..28f) { v -> onChange(look.copy(textSp = v.toInt())) }
+    SliderRow("Popup background", "${look.opacity}% solid", look.opacity.toFloat(), 0f..100f) { v -> onChange(look.copy(opacity = v.toInt())) }
+    SliderRow("Dim the screen behind", "${look.dim}%", look.dim.toFloat(), 0f..80f) { v -> onChange(look.copy(dim = v.toInt())) }
+}
 
 /** The choices for how often to look for a new build: minutes to label. */
 private val UpdateIntervals = listOf(
