@@ -352,10 +352,23 @@ internal fun NavigationCard(nav: NavigationState, modifier: Modifier = Modifier,
         },
     ) {
         Text("🧭 Navigation", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
-        val headline = listOf(nav.title, nav.text).filter { it.isNotBlank() }.joinToString(" · ")
-        Text(headline, color = Color.White, fontSize = if (big) 26.sp else 17.sp, fontWeight = FontWeight.Medium, maxLines = 3, overflow = TextOverflow.Ellipsis)
-        if (nav.summary.isNotBlank()) {
-            Text(nav.summary, color = Color.White.copy(alpha = 0.75f), fontSize = if (big) 18.sp else 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            // The turn arrow from the navigation app's own notification, when we managed to read it.
+            nav.maneuver?.let { picture ->
+                val image = remember(picture) { picture.asImageBitmap() }
+                androidx.compose.foundation.Image(
+                    bitmap = image,
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 14.dp, top = 6.dp).size(if (big) 88.dp else 48.dp),
+                )
+            }
+            Column(Modifier.weight(1f)) {
+                val headline = listOf(nav.title, nav.text).filter { it.isNotBlank() }.joinToString(" · ")
+                Text(headline, color = Color.White, fontSize = if (big) 26.sp else 17.sp, fontWeight = FontWeight.Medium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                if (nav.summary.isNotBlank()) {
+                    Text(nav.summary, color = Color.White.copy(alpha = 0.75f), fontSize = if (big) 18.sp else 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+            }
         }
     }
 }

@@ -2,6 +2,13 @@ package com.rubenrups.launcher.notifications
 
 import android.app.Notification
 import android.content.ComponentName
+import android.graphics.Bitmap
+import android.graphics.drawable.Drawable
+import android.view.View
+import android.view.ViewGroup
+import android.widget.FrameLayout
+import android.widget.ImageView
+import androidx.core.graphics.drawable.toBitmap
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
@@ -66,7 +73,51 @@ class LauncherNotificationService : NotificationListenerService() {
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
         val summary = extras.getCharSequence(Notification.EXTRA_SUB_TEXT)?.toString().orEmpty()
         if (title.isBlank() && text.isBlank()) return null
-        return NavigationState(packageName, title, text, summary, notification.contentIntent)
+        // Reading the picture means inflating the notification's layout, so only redo it when the text has changed.
+        val signature = "$packageName|$title|$text"
+        if (signature != lastNavSignature) {
+            lastNavSignature = signature
+            lastManeuver = runCatching { findManeuverBitmap() }.getOrNull() ?: lastManeuver
+        }
+        return NavigationState(packageName, title, text, summary, notification.contentIntent, lastManeuver)
+    }
+
+    private var lastNavSignature: String? = null
+    private var lastManeuver: Bitmap? = null
+
+    /**
+     * The turn arrow of a navigation notification. Some apps put it in the notification's large icon; Google Maps
+     * draws it inside a custom layout, so failing that we inflate that layout and take its biggest picture.
+     */
+    @Suppress("DEPRECATION")
+    private fun StatusBarNotification.findManeuverBitmap(): Bitmap? {
+        notification.getLargeIcon()?.loadDrawable(this@LauncherNotificationService)?.let { return it.toLimitedBitmap() }
+        val views = notification.bigContentView ?: notification.contentView ?: return null
+        val root = FrameLayout(this@LauncherNotificationService)
+        val inflated = views.apply(this@LauncherNotificationService, root)
+        var best: Drawable? = null
+        var bestArea = 0
+        fun visit(view: View) {
+            if (view is ImageView && view.visibility == View.VISIBLE) {
+                val d = view.drawable
+                val area = (d?.intrinsicWidth ?: 0) * (d?.intrinsicHeight ?: 0)
+                if (d != null && area > bestArea) {
+                    best = d
+                    bestArea = area
+                }
+            }
+            if (view is ViewGroup) for (i in 0 until view.childCount) visit(view.getChildAt(i))
+        }
+        visit(inflated)
+        // Ignore tiny pictures such as status dots.
+        return best?.takeIf { bestArea >= MIN_MANEUVER_AREA }?.toLimitedBitmap()
+    }
+
+    private fun Drawable.toLimitedBitmap(): Bitmap? {
+        val w = intrinsicWidth.takeIf { it > 0 } ?: return null
+        val h = intrinsicHeight.takeIf { it > 0 } ?: return null
+        val scale = minOf(1f, MAX_MANEUVER_PX / maxOf(w, h).toFloat())
+        return toBitmap((w * scale).toInt().coerceAtLeast(1), (h * scale).toInt().coerceAtLeast(1))
     }
 
     private fun StatusBarNotification.isGroupSummary() =
@@ -135,6 +186,8 @@ class LauncherNotificationService : NotificationListenerService() {
     }
 
     private companion object {
+        const val MIN_MANEUVER_AREA = 24 * 24
+        const val MAX_MANEUVER_PX = 256
         val NAVIGATION_PACKAGES = setOf("com.google.android.apps.maps", "com.waze")
     }
 }

@@ -29,6 +29,8 @@ data class NavigationState(
     /** Trip summary such as "12 min · 5.3 km · 15:42". */
     val summary: String,
     val contentIntent: PendingIntent?,
+    /** The turn arrow / lane picture from the notification, when it could be read. */
+    val maneuver: Bitmap? = null,
 )
 
 data class MediaState(
