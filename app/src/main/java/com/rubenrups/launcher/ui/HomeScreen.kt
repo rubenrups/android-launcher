@@ -27,6 +27,9 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -115,6 +118,9 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private const val SWIPE_THRESHOLD_PX = 120f
+
+/** Rows of favourites that always stay visible, however much sits above them. */
+private const val MIN_FAVOURITE_ROWS = 3
 
 /** A swipe shorter than this shows no label yet, so ordinary taps and scrolls stay uncluttered. */
 private const val HINT_START_PX = 24f
@@ -211,7 +217,19 @@ private fun HomeContent(
     val currentDrawerDrag by rememberUpdatedState(onDrawerDrag)
     val currentDrawerRelease by rememberUpdatedState(onDrawerRelease)
 
-    Box(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // The favourites always keep room for a few rows; everything above them (clock, notifications, media,
+        // widgets) gets the rest and scrolls if it is taller, instead of squeezing the favourites away.
+        val rowHeightForMin = (settings.favouriteTextSp * 1.5f).dp + 14.dp
+        val landscapeNow = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+        val favouriteRows = if (favourites.isEmpty()) 1 else {
+            val rows = if (landscapeNow && settings.twoColumnsLandscape) (favourites.size + 1) / 2 else favourites.size
+            rows.coerceIn(1, MIN_FAVOURITE_ROWS)
+        }
+        val bars = WindowInsets.systemBars.asPaddingValues()
+        val topSectionMax = (maxHeight - bars.calculateTopPadding() - bars.calculateBottomPadding() - 32.dp -
+            rowHeightForMin * favouriteRows - 16.dp).coerceAtLeast(120.dp)
+        val topScroll = rememberScrollState()
         Column(
             Modifier
                 .fillMaxSize()
@@ -318,7 +336,11 @@ private fun HomeContent(
             horizontalAlignment = if (settings.alignEnd) Alignment.End else Alignment.Start,
         ) {
             // In landscape there is room beside the clock, so the media card moves up next to it.
-            val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+            val landscape = landscapeNow
+            Column(
+                Modifier.heightIn(max = topSectionMax).verticalScroll(topScroll, enabled = topScroll.maxValue > 0),
+                horizontalAlignment = if (settings.alignEnd) Alignment.End else Alignment.Start,
+            ) {
             val mediaState = if (settings.showMedia) media else null
             val glucoseLine: @Composable () -> Unit = {
                 if (settings.glucoseEnabled) {
@@ -391,6 +413,7 @@ private fun HomeContent(
                         }
                     }
                 }
+            }
             }
 
             // Top/bottom placement is its own setting, independent of left/right alignment.
