@@ -13,6 +13,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextDecoration
@@ -150,8 +151,18 @@ private fun GlucoseCard(viewModel: LauncherViewModel, onOpenSettings: () -> Unit
     val latest = state.snapshot?.latest
     val age = rememberAgeMs(latest?.timeMs)
     val stale = latest != null && age > GLUCOSE_STALE_MS
-    Card(onClick = { viewModel.openGlucoseApp() }) {
-        Text("Glucose · ${glucoseUnit(settings.glucoseMmol)}", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+    // Collapsed by default: the value and arrow are usually all you need. Tap the card for the graph and stats.
+    var expanded by rememberSaveable { mutableStateOf(false) }
+    Card(onClick = { expanded = !expanded }) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Glucose · ${glucoseUnit(settings.glucoseMmol)}",
+                color = Color.White.copy(alpha = 0.6f),
+                fontSize = 13.sp,
+                modifier = Modifier.weight(1f),
+            )
+            Text(if (expanded) "▴" else "▾", color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
+        }
         if (latest == null) {
             Text(if (state.error == null) "Loading…" else "No reading", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light)
         } else {
@@ -159,7 +170,7 @@ private fun GlucoseCard(viewModel: LauncherViewModel, onOpenSettings: () -> Unit
                 Text(
                     formatGlucose(latest.mgdl, settings.glucoseMmol) + " " + trendArrow(latest.trend),
                     color = if (stale) Color.White.copy(alpha = 0.5f) else glucoseColor(latest.mgdl, settings),
-                    fontSize = 56.sp,
+                    fontSize = if (expanded) 56.sp else 44.sp,
                     fontWeight = FontWeight.Light,
                 )
                 Text(
@@ -173,7 +184,7 @@ private fun GlucoseCard(viewModel: LauncherViewModel, onOpenSettings: () -> Unit
         state.error?.let {
             Text(it, color = Color(0xFFFFB74D), fontSize = 13.sp, modifier = Modifier.padding(top = 4.dp))
         }
-        state.snapshot?.let { snapshot ->
+        if (expanded) state.snapshot?.let { snapshot ->
             Spacer(Modifier.height(8.dp))
             GlucoseGraph(snapshot.history, settings, Modifier.fillMaxWidth().height(140.dp))
             val values = snapshot.history.map { it.mgdl }
@@ -188,12 +199,20 @@ private fun GlucoseCard(viewModel: LauncherViewModel, onOpenSettings: () -> Unit
                 }
             }
         }
-        Text(
-            "Display only. Not for treatment decisions: check your meter or the Libre app.",
-            color = Color.White.copy(alpha = 0.4f),
-            fontSize = 11.sp,
-            modifier = Modifier.padding(top = 10.dp),
-        )
+        if (expanded) {
+            Text(
+                "Open the Libre app ›",
+                color = Color(0xFF8AB4F8),
+                fontSize = 14.sp,
+                modifier = Modifier.clickable { viewModel.openGlucoseApp() }.padding(top = 10.dp, bottom = 2.dp),
+            )
+            Text(
+                "Display only. Not for treatment decisions: check your meter or the Libre app.",
+                color = Color.White.copy(alpha = 0.4f),
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
     }
 }
 
