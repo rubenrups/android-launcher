@@ -51,6 +51,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.roundToInt
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.data.AppInfo
@@ -88,6 +89,7 @@ private val SearchIndex = listOf(
     SettingHit("Pin list to the bottom", Page.HOME, "top bottom anchor thumb"),
     SettingHit("Two columns in landscape", Page.HOME, "grid rotate"),
     SettingHit("Open folders as a popup", Page.HOME, "inline expand folder"),
+    SettingHit("Folder popup look", Page.HOME, "grid list columns opacity text size dim background"),
     SettingHit("Search button", Page.HOME, "magnifier floating"),
     SettingHit("App drawer button in favourites", Page.HOME, "add shortcut button"),
     SettingHit("Car mode button in favourites", Page.HOME, "dashboard add shortcut button"),
@@ -310,6 +312,28 @@ private fun HomePage(viewModel: LauncherViewModel, settings: LauncherSettings) {
             settings.folderPopupOnHome,
             subtitle = "Off: folders expand in place",
         ) { v -> viewModel.update { it.copy(folderPopupOnHome = v) } }
+    }
+    Group("Folder popup") {
+        if (!settings.folderPopupOnHome) {
+            Hint("Turn on \"Open folders as a popup\" above to use these.")
+        } else {
+            ChoiceRow("List", selected = !settings.folderPopupGrid) { viewModel.update { it.copy(folderPopupGrid = false) } }
+            ChoiceRow("Grid of icons", selected = settings.folderPopupGrid) { viewModel.update { it.copy(folderPopupGrid = true) } }
+            if (settings.folderPopupGrid) {
+                SliderRow("Columns", "${settings.folderPopupColumns}", settings.folderPopupColumns.toFloat(), 2f..6f) { v ->
+                    viewModel.update { it.copy(folderPopupColumns = v.roundToInt()) }
+                }
+            }
+            SliderRow("Text size", "${settings.folderPopupTextSp} sp", settings.folderPopupTextSp.toFloat(), 14f..28f) { v ->
+                viewModel.update { it.copy(folderPopupTextSp = v.toInt()) }
+            }
+            SliderRow("Popup background", "${settings.folderPopupOpacity}% solid", settings.folderPopupOpacity.toFloat(), 0f..100f) { v ->
+                viewModel.update { it.copy(folderPopupOpacity = v.toInt()) }
+            }
+            SliderRow("Dim the screen behind", "${settings.folderPopupDim}%", settings.folderPopupDim.toFloat(), 0f..70f) { v ->
+                viewModel.update { it.copy(folderPopupDim = v.toInt()) }
+            }
+        }
     }
     Group("Buttons") {
         SwitchRow("Search button", settings.showSearchButton) { v -> viewModel.update { it.copy(showSearchButton = v) } }

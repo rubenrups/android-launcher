@@ -100,6 +100,15 @@ data class LauncherSettings(
     val dashboardOrder: List<String> = DashboardModules.all.map { it.first },
     /** Keep the screen on while car mode is open. */
     val keepScreenOn: Boolean = true,
+    /** Launch counts and last-launch times, for the folder sorts "most used" and "most recent". */
+    val usage: Map<String, AppUsage> = emptyMap(),
+    /** How a folder opened as a popup from the home screen looks. */
+    val folderPopupGrid: Boolean = false,
+    val folderPopupColumns: Int = 4,
+    val folderPopupOpacity: Int = 60,
+    val folderPopupTextSp: Int = 18,
+    /** How much the screen behind the popup is dimmed, in percent. */
+    val folderPopupDim: Int = 12,
     /** App keys shown as big buttons on the car-mode quick launch card. */
     val carApps: List<String> = emptyList(),
     /** Come back to car mode, rather than the plain home screen, after visiting another app. */
@@ -219,6 +228,12 @@ class LauncherPrefs(context: Context) {
         dashboardOrder = prefs.getString(KEY_DASH_ORDER, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }
             .let { saved -> saved.filter { k -> DashboardModules.all.any { it.first == k } } + DashboardModules.all.map { it.first }.filter { it !in saved } },
         keepScreenOn = prefs.getBoolean(KEY_KEEP_SCREEN_ON, true),
+        usage = decodeUsage(prefs.getString(KEY_USAGE, null)),
+        folderPopupGrid = prefs.getBoolean(KEY_POPUP_GRID, false),
+        folderPopupColumns = prefs.getInt(KEY_POPUP_COLUMNS, 4),
+        folderPopupOpacity = prefs.getInt(KEY_POPUP_OPACITY, 60),
+        folderPopupTextSp = prefs.getInt(KEY_POPUP_TEXT_SP, 18),
+        folderPopupDim = prefs.getInt(KEY_POPUP_DIM, 12),
         carApps = prefs.getString(KEY_CAR_APPS, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() },
         rememberCarMode = prefs.getBoolean(KEY_REMEMBER_CAR, true),
         carModeWasOpen = prefs.getBoolean(KEY_CAR_WAS_OPEN, false),
@@ -278,6 +293,12 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_DASH_HIDDEN, s.dashboardHidden.joinToString(SEPARATOR))
             .putString(KEY_DASH_ORDER, s.dashboardOrder.joinToString(SEPARATOR))
             .putBoolean(KEY_KEEP_SCREEN_ON, s.keepScreenOn)
+            .putString(KEY_USAGE, encodeUsage(s.usage))
+            .putBoolean(KEY_POPUP_GRID, s.folderPopupGrid)
+            .putInt(KEY_POPUP_COLUMNS, s.folderPopupColumns)
+            .putInt(KEY_POPUP_OPACITY, s.folderPopupOpacity)
+            .putInt(KEY_POPUP_TEXT_SP, s.folderPopupTextSp)
+            .putInt(KEY_POPUP_DIM, s.folderPopupDim)
             .putString(KEY_CAR_APPS, s.carApps.joinToString(SEPARATOR))
             .putBoolean(KEY_REMEMBER_CAR, s.rememberCarMode)
             .putBoolean(KEY_CAR_WAS_OPEN, s.carModeWasOpen)
@@ -316,6 +337,20 @@ class LauncherPrefs(context: Context) {
                 Destination(o.optString("name"), o.optString("address"), o.optString("icon").ifBlank { "📍" })
             }
         }.getOrDefault(emptyList())
+    }
+
+    private fun encodeUsage(usage: Map<String, AppUsage>): String =
+        JSONObject().apply { usage.forEach { (key, u) -> put(key, JSONArray().put(u.count).put(u.lastMs)) } }.toString()
+
+    private fun decodeUsage(json: String?): Map<String, AppUsage> {
+        if (json.isNullOrBlank()) return emptyMap()
+        return runCatching {
+            val o = JSONObject(json)
+            o.keys().asSequence().associateWith { key ->
+                val pair = o.getJSONArray(key)
+                AppUsage(pair.getInt(0), pair.getLong(1))
+            }
+        }.getOrDefault(emptyMap())
     }
 
     private fun encodeFolders(folders: List<AppFolder>): String =
@@ -390,6 +425,12 @@ class LauncherPrefs(context: Context) {
         const val KEY_DASH_HIDDEN = "dashboard_hidden"
         const val KEY_DASH_ORDER = "dashboard_order"
         const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
+        const val KEY_USAGE = "app_usage"
+        const val KEY_POPUP_GRID = "folder_popup_grid"
+        const val KEY_POPUP_COLUMNS = "folder_popup_columns"
+        const val KEY_POPUP_OPACITY = "folder_popup_opacity"
+        const val KEY_POPUP_TEXT_SP = "folder_popup_text_sp"
+        const val KEY_POPUP_DIM = "folder_popup_dim"
         const val KEY_CAR_APPS = "car_apps"
         const val KEY_REMEMBER_CAR = "remember_car_mode"
         const val KEY_CAR_WAS_OPEN = "car_mode_was_open"

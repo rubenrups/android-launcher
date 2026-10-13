@@ -6,7 +6,12 @@ enum class FolderSort(val label: String) {
     A_Z("A–Z"),
     Z_A("Z–A"),
     MANUAL("Manual"),
+    RECENT("Most recent"),
+    MOST_USED("Most used"),
 }
+
+/** How often and how recently an app was opened from the launcher. */
+data class AppUsage(val count: Int, val lastMs: Long)
 
 data class AppFolder(
     val id: String,
@@ -48,12 +53,21 @@ data class FolderEntry(val folder: AppFolder, val apps: List<AppInfo>) : Entry {
 }
 
 /** Builds the displayable folder: installed apps only, in the folder's chosen order. */
-fun AppFolder.resolve(byKey: Map<String, AppInfo>): FolderEntry {
+fun AppFolder.resolve(byKey: Map<String, AppInfo>, usage: Map<String, AppUsage> = emptyMap()): FolderEntry {
     val apps = appKeys.mapNotNull { byKey[it] }
     val ordered = when (sort) {
         FolderSort.A_Z -> apps.sortedBy { it.label.lowercase() }
         FolderSort.Z_A -> apps.sortedByDescending { it.label.lowercase() }
         FolderSort.MANUAL -> apps
+        // Apps never opened from the launcher sort last, alphabetically.
+        FolderSort.RECENT -> apps.sortedWith(
+            compareByDescending<AppInfo> { usage[it.key]?.lastMs ?: 0L }.thenBy { it.label.lowercase() },
+        )
+        FolderSort.MOST_USED -> apps.sortedWith(
+            compareByDescending<AppInfo> { usage[it.key]?.count ?: 0 }
+                .thenByDescending { usage[it.key]?.lastMs ?: 0L }
+                .thenBy { it.label.lowercase() },
+        )
     }
     return FolderEntry(this, ordered)
 }

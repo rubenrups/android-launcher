@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.rubenrups.launcher.data.AppEntry
+import com.rubenrups.launcher.data.AppUsage
 import com.rubenrups.launcher.data.AppFolder
 import com.rubenrups.launcher.data.AppInfo
 import com.rubenrups.launcher.data.Entry
@@ -72,7 +73,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 val folder = folders[key]
                 val app = byKey[key] ?: VirtualApps.byKey(key)
                 if (folder != null) {
-                    result.add(folder.resolve(byKey))
+                    result.add(folder.resolve(byKey, s.usage))
                 } else if (app != null) {
                     result.add(AppEntry(app))
                 }
@@ -82,11 +83,15 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     /** Top-level drawer rows: folders, plus every visible app that isn't inside a folder. */
     val drawerEntries: StateFlow<List<Entry>> =
-        combine(visibleApps, settings.map { it.folders }.distinctUntilChanged()) { apps, folders ->
+        combine(
+            visibleApps,
+            settings.map { it.folders }.distinctUntilChanged(),
+            settings.map { it.usage }.distinctUntilChanged(),
+        ) { apps, folders, usage ->
             val byKey = apps.associateBy { it.key }
             val inFolder = folders.flatMapTo(HashSet()) { it.appKeys }
             val all = ArrayList<Entry>()
-            folders.forEach { f -> all.add(f.resolve(byKey)) }
+            folders.forEach { f -> all.add(f.resolve(byKey, usage)) }
             // The App drawer button can sit in a folder, but listing it loose inside the drawer itself would be silly.
             apps.filter { it.key !in inFolder && it.key != VirtualApps.drawer.key }.forEach { all.add(AppEntry(it)) }
             // Folders pin to the top (by name); loose apps follow in A-Z order.
@@ -397,7 +402,15 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             if (app.key == VirtualApps.drawer.key) openDrawer(false) else setDashboardOpen(true)
             return
         }
-        update { s -> s.copy(recents = (listOf(app.key) + (s.recents - app.key)).take(MAX_RECENTS)) }
+        val now = System.currentTimeMillis()
+        update { s ->
+            val used = (s.usage[app.key]?.count ?: 0) + 1
+            // Keep the table bounded: if it grows past the limit, forget the least recently used entries.
+            val usage = (s.usage + (app.key to AppUsage(used, now))).let { all ->
+                if (all.size <= MAX_USAGE) all else all.entries.sortedByDescending { it.value.lastMs }.take(MAX_USAGE).associate { it.toPair() }
+            }
+            s.copy(recents = (listOf(app.key) + (s.recents - app.key)).take(MAX_RECENTS), usage = usage)
+        }
         if (settings.value.launchAnimation) _launchPulse.value += 1
         repository.launch(app)
         closeDrawer()
@@ -407,5 +420,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         /** Swipe-gesture target that opens the dashboard instead of an app. */
         const val ACTION_DASHBOARD = GestureActions.DASHBOARD
         private const val MAX_RECENTS = 8
+        private const val MAX_USAGE = 500
     }
 }

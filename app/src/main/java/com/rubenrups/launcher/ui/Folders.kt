@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -143,16 +144,22 @@ fun FolderDialog(
     var picking by remember { mutableStateOf(false) }
     var sorting by remember { mutableStateOf(false) }
     val favourites by viewModel.favourites.collectAsStateWithLifecycle()
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
     val favouriteKeys = remember(favourites) { favourites.mapTo(HashSet()) { it.key } }
+    // The look settings (Settings → Home screen → Folder popup) apply to the see-through popup opened from the home screen.
+    val grid = translucent && settings.folderPopupGrid
+    val columns = settings.folderPopupColumns.coerceIn(2, 6)
+    val textSp = if (translucent) settings.folderPopupTextSp else 18
     Dialog(onDismissRequest = onDismiss) {
         if (translucent) {
-            // The dialog window dims everything behind it by default; keep that light so the wallpaper shows.
+            // The dialog window dims everything behind it; how much is a setting, so the wallpaper can show through.
             val dialogWindow = (LocalView.current.parent as? DialogWindowProvider)?.window
-            SideEffect { dialogWindow?.setDimAmount(0.12f) }
+            val dim = settings.folderPopupDim / 100f
+            SideEffect { dialogWindow?.setDimAmount(dim) }
         }
         Surface(
             shape = RoundedCornerShape(24.dp),
-            color = if (translucent) Color(0xFF1A1A1A).copy(alpha = 0.6f) else Color(0xF21A1A1A),
+            color = if (translucent) Color(0xFF1A1A1A).copy(alpha = settings.folderPopupOpacity / 100f) else Color(0xF21A1A1A),
         ) {
             val scroll = rememberScrollState()
             Column(
@@ -184,62 +191,19 @@ fun FolderDialog(
                         modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
                     )
                 }
-                entry.apps.forEachIndexed { index, app ->
-                    var menuOpen by remember { mutableStateOf(false) }
-                    val isFavourite = app.key in favouriteKeys
-                    Box {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .combinedClickable(
-                                    onClick = {
-                                        onDismiss()
-                                        viewModel.launch(app)
-                                    },
-                                    onLongClick = { menuOpen = true },
-                                )
-                                .padding(horizontal = 24.dp, vertical = 10.dp),
-                        ) {
-                            AppIcon(app, viewModel)
-                            Text(app.label, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Light, maxLines = 1)
-                        }
-                        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
-                            AppShortcutItems(app, viewModel) { menuOpen = false }
-                            // Pin one app to the home screen without taking it out of its folder.
-                            DropdownMenuItem(
-                                text = { Text(if (isFavourite) "Remove from favourites" else "Add to favourites") },
-                                onClick = {
-                                    menuOpen = false
-                                    if (isFavourite) viewModel.removeFavourite(app) else viewModel.addFavourite(app)
-                                },
-                            )
-                            if (entry.folder.sort == FolderSort.MANUAL) {
-                                if (index > 0) {
-                                    DropdownMenuItem(text = { Text("Move up") }, onClick = {
-                                        menuOpen = false
-                                        viewModel.swapInFolder(entry.folder.id, app.key, entry.apps[index - 1].key)
-                                    })
-                                }
-                                if (index < entry.apps.lastIndex) {
-                                    DropdownMenuItem(text = { Text("Move down") }, onClick = {
-                                        menuOpen = false
-                                        viewModel.swapInFolder(entry.folder.id, app.key, entry.apps[index + 1].key)
-                                    })
-                                }
+                if (grid) {
+                    entry.apps.withIndex().chunked(columns).forEach { rowItems ->
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            rowItems.forEach { (index, app) ->
+                                FolderApp(entry, app, index, viewModel, favouriteKeys, textSp, true, onDismiss, Modifier.weight(1f))
                             }
-                            DropdownMenuItem(text = { Text("Remove from folder") }, onClick = {
-                                menuOpen = false
-                                viewModel.removeFromFolder(app)
-                            })
-                            if (!VirtualApps.isVirtual(app)) {
-                                DropdownMenuItem(text = { Text("App info") }, onClick = {
-                                    menuOpen = false
-                                    viewModel.repository.openAppInfo(app)
-                                })
-                            }
+                            // Keep the cells of a short last row the same width as the others.
+                            repeat(columns - rowItems.size) { Spacer(Modifier.weight(1f)) }
                         }
+                    }
+                } else {
+                    entry.apps.forEachIndexed { index, app ->
+                        FolderApp(entry, app, index, viewModel, favouriteKeys, textSp, false, onDismiss, Modifier.fillMaxWidth())
                     }
                 }
                 PickerRow("+ Add apps") { picking = true }
@@ -248,6 +212,94 @@ fun FolderDialog(
     }
     if (picking) AppPickerDialog(entry.folder.id, viewModel, onDismiss = { picking = false })
     if (sorting) FolderSortDialog(entry, viewModel, onDismiss = { sorting = false })
+}
+
+/** One app inside a folder popup, as a list row or a grid cell, with its long-press menu. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun FolderApp(
+    entry: FolderEntry,
+    app: AppInfo,
+    index: Int,
+    viewModel: LauncherViewModel,
+    favouriteKeys: Set<String>,
+    textSp: Int,
+    grid: Boolean,
+    onDismiss: () -> Unit,
+    modifier: Modifier,
+) {
+    var menuOpen by remember { mutableStateOf(false) }
+    val isFavourite = app.key in favouriteKeys
+    Box(modifier) {
+        val open = Modifier.combinedClickable(
+            onClick = {
+                onDismiss()
+                viewModel.launch(app)
+            },
+            onLongClick = { menuOpen = true },
+        )
+        if (grid) {
+            Column(
+                open.fillMaxWidth().padding(horizontal = 2.dp, vertical = 10.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                AppIcon(app, viewModel, 48.dp)
+                Text(
+                    app.label,
+                    color = Color.White,
+                    fontSize = (textSp * 0.7f).sp,
+                    fontWeight = FontWeight.Light,
+                    maxLines = 2,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    modifier = Modifier.padding(top = 4.dp),
+                )
+            }
+        } else {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = open.fillMaxWidth().padding(horizontal = 24.dp, vertical = 10.dp),
+            ) {
+                AppIcon(app, viewModel)
+                Text(app.label, color = Color.White, fontSize = textSp.sp, fontWeight = FontWeight.Light, maxLines = 1)
+            }
+        }
+        DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+            AppShortcutItems(app, viewModel) { menuOpen = false }
+            // Pin one app to the home screen without taking it out of its folder.
+            DropdownMenuItem(
+                text = { Text(if (isFavourite) "Remove from favourites" else "Add to favourites") },
+                onClick = {
+                    menuOpen = false
+                    if (isFavourite) viewModel.removeFavourite(app) else viewModel.addFavourite(app)
+                },
+            )
+            if (entry.folder.sort == FolderSort.MANUAL) {
+                if (index > 0) {
+                    DropdownMenuItem(text = { Text("Move up") }, onClick = {
+                        menuOpen = false
+                        viewModel.swapInFolder(entry.folder.id, app.key, entry.apps[index - 1].key)
+                    })
+                }
+                if (index < entry.apps.lastIndex) {
+                    DropdownMenuItem(text = { Text("Move down") }, onClick = {
+                        menuOpen = false
+                        viewModel.swapInFolder(entry.folder.id, app.key, entry.apps[index + 1].key)
+                    })
+                }
+            }
+            DropdownMenuItem(text = { Text("Remove from folder") }, onClick = {
+                menuOpen = false
+                viewModel.removeFromFolder(app)
+            })
+            if (!VirtualApps.isVirtual(app)) {
+                DropdownMenuItem(text = { Text("App info") }, onClick = {
+                    menuOpen = false
+                    viewModel.repository.openAppInfo(app)
+                })
+            }
+        }
+    }
 }
 
 /** Rounded square standing in for a folder icon: shows its emoji, or how many apps it holds. */
