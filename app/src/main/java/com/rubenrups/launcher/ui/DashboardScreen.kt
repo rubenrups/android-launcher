@@ -24,6 +24,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.platform.LocalHapticFeedback
+import com.rubenrups.launcher.data.GestureActions
+import com.rubenrups.launcher.expandNotificationShade
+import kotlin.math.abs
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -100,6 +109,11 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
         onDispose { view.keepScreenOn = false }
     }
 
+    val scroll = rememberScrollState()
+    val context = LocalContext.current
+    val haptics = LocalHapticFeedback.current
+    val currentSettings by rememberUpdatedState(settings)
+
     // The cards that currently have something to show, in the chosen order.
     val visible = settings.dashboardOrder.filter { key ->
         key !in settings.dashboardHidden && when (key) {
@@ -138,14 +152,39 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
             .background(Color(0xFF0F1215).copy(alpha = settings.dashboardOpacity / 100f))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)
             .windowInsetsPadding(WindowInsets.systemBars)
-            .verticalScroll(rememberScrollState())
+            // Swipes run the actions set in settings. Watched without consuming anything, so cards and scrolling still work.
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                    val startScroll = scroll.value
+                    var dx = 0f
+                    var dy = 0f
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        dx = change.position.x - down.position.x
+                        dy = change.position.y - down.position.y
+                        if (!change.pressed) break
+                    }
+                    val threshold = 100.dp.toPx()
+                    val s = currentSettings
+                    val action = when {
+                        abs(dx) > abs(dy) * 1.5f && abs(dx) > threshold -> if (dx < 0f) s.carSwipeLeft else s.carSwipeRight
+                        // A vertical swipe that also scrolled the list was a scroll, not a gesture.
+                        abs(dy) > abs(dx) * 1.5f && abs(dy) > threshold && scroll.value == startScroll ->
+                            if (dy < 0f) s.carSwipeUp else s.carSwipeDown
+                        else -> GestureActions.NONE
+                    }
+                    if (action.isNotBlank()) {
+                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                        runCarAction(action, viewModel, context)
+                    }
+                }
+            }
+            .verticalScroll(scroll)
             .padding(horizontal = 20.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("Car mode", color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light, modifier = Modifier.weight(1f))
-            Text("✕", color = Color.White, fontSize = 28.sp, modifier = Modifier.clickable(onClick = onClose).padding(16.dp))
-        }
         if (wide) {
             // Auto-stack: each card goes into whichever column is currently shorter.
             val left = ArrayList<String>()
@@ -164,7 +203,7 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
             visible.forEach { key(it) { slot(it) } }
         }
         Text(
-            "Hold a card to move or hide it.",
+            "Swipe to control car mode · hold a card to move or hide it",
             color = Color.White.copy(alpha = 0.3f),
             fontSize = 12.sp,
             modifier = Modifier.padding(top = 4.dp, bottom = 24.dp),
@@ -558,3 +597,22 @@ private fun RowScope.NavTile(icon: String, label: String, hint: String?, onClick
 }
 
 private const val MAPS_PACKAGE = "com.google.android.apps.maps"
+
+/** Runs a car-mode swipe: close, a media key, a launcher function, or an app. */
+private fun runCarAction(action: String, viewModel: LauncherViewModel, context: Context) {
+    val controls = NotificationStore.media.value?.controller?.transportControls
+    when (action) {
+        GestureActions.CLOSE -> viewModel.setDashboardOpen(false)
+        GestureActions.NEXT -> controls?.skipToNext()
+        GestureActions.PREVIOUS -> controls?.skipToPrevious()
+        GestureActions.PLAY_PAUSE -> {
+            val media = NotificationStore.media.value
+            if (media?.isPlaying == true) controls?.pause() else controls?.play()
+        }
+        GestureActions.DRAWER -> { viewModel.setDashboardOpen(false); viewModel.openDrawer(false) }
+        GestureActions.SEARCH -> { viewModel.setDashboardOpen(false); viewModel.openDrawer(true) }
+        GestureActions.NOTIFICATIONS -> expandNotificationShade(context)
+        GestureActions.DASHBOARD -> Unit
+        else -> viewModel.launchByKey(action)
+    }
+}

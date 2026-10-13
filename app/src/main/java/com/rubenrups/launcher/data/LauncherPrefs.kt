@@ -95,6 +95,11 @@ data class LauncherSettings(
     val dashboardOrder: List<String> = DashboardModules.all.map { it.first },
     /** Keep the screen on while car mode is open. */
     val keepScreenOn: Boolean = true,
+    /** Swipes inside car mode: a [GestureActions] key or an app key; empty = nothing. */
+    val carSwipeUp: String = GestureActions.NONE,
+    val carSwipeDown: String = GestureActions.CLOSE,
+    val carSwipeLeft: String = GestureActions.NEXT,
+    val carSwipeRight: String = GestureActions.PREVIOUS,
     /** Destinations for the car-mode navigation shortcuts. Personal, so never exported in a backup. */
     val homeAddress: String = "",
     val workAddress: String = "",
@@ -202,6 +207,10 @@ class LauncherPrefs(context: Context) {
         dashboardOrder = prefs.getString(KEY_DASH_ORDER, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }
             .let { saved -> saved.filter { k -> DashboardModules.all.any { it.first == k } } + DashboardModules.all.map { it.first }.filter { it !in saved } },
         keepScreenOn = prefs.getBoolean(KEY_KEEP_SCREEN_ON, true),
+        carSwipeUp = prefs.getString(KEY_CAR_UP, GestureActions.NONE).orEmpty(),
+        carSwipeDown = prefs.getString(KEY_CAR_DOWN, GestureActions.CLOSE).orEmpty(),
+        carSwipeLeft = prefs.getString(KEY_CAR_LEFT, GestureActions.NEXT).orEmpty(),
+        carSwipeRight = prefs.getString(KEY_CAR_RIGHT, GestureActions.PREVIOUS).orEmpty(),
         homeAddress = prefs.getString(KEY_HOME_ADDRESS, "").orEmpty(),
         workAddress = prefs.getString(KEY_WORK_ADDRESS, "").orEmpty(),
         autoCheckUpdates = prefs.getBoolean(KEY_AUTO_CHECK, true),
@@ -254,6 +263,10 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_DASH_HIDDEN, s.dashboardHidden.joinToString(SEPARATOR))
             .putString(KEY_DASH_ORDER, s.dashboardOrder.joinToString(SEPARATOR))
             .putBoolean(KEY_KEEP_SCREEN_ON, s.keepScreenOn)
+            .putString(KEY_CAR_UP, s.carSwipeUp)
+            .putString(KEY_CAR_DOWN, s.carSwipeDown)
+            .putString(KEY_CAR_LEFT, s.carSwipeLeft)
+            .putString(KEY_CAR_RIGHT, s.carSwipeRight)
             .putString(KEY_HOME_ADDRESS, s.homeAddress)
             .putString(KEY_WORK_ADDRESS, s.workAddress)
             .putBoolean(KEY_AUTO_CHECK, s.autoCheckUpdates)
@@ -333,6 +346,10 @@ class LauncherPrefs(context: Context) {
         const val KEY_DASH_HIDDEN = "dashboard_hidden"
         const val KEY_DASH_ORDER = "dashboard_order"
         const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
+        const val KEY_CAR_UP = "car_swipe_up"
+        const val KEY_CAR_DOWN = "car_swipe_down"
+        const val KEY_CAR_LEFT = "car_swipe_left"
+        const val KEY_CAR_RIGHT = "car_swipe_right"
         const val KEY_HOME_ADDRESS = "home_address"
         const val KEY_WORK_ADDRESS = "work_address"
         const val KEY_AUTO_DOWNLOAD = "auto_download_updates"

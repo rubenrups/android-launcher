@@ -106,6 +106,7 @@ private val SearchIndex = listOf(
     SettingHit("Recent apps", Page.DRAWER, "recents"),
     SettingHit("Web search when typing", Page.DRAWER, "google duckduckgo engine"),
     SettingHit("Car mode background", Page.DASHBOARD, "dashboard opacity transparency solid"),
+    SettingHit("Swipes in car mode", Page.DASHBOARD, "gesture next track close skip"),
     SettingHit("Home and work addresses", Page.DASHBOARD, "car mode navigate maps shortcut destination"),
     SettingHit("Keep screen on", Page.DASHBOARD, "awake car mode dashboard"),
     SettingHit("Car mode cards and order", Page.DASHBOARD, "dashboard reorder hide media weather navigation"),
@@ -210,7 +211,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                         Page.GESTURES -> GesturesPage(settings, visibleApps) { chooser = it }
                         Page.DRAWER -> DrawerPage(viewModel, settings)
                         Page.GLUCOSE -> GlucosePage(viewModel, settings, visibleApps) { chooser = it }
-                        Page.DASHBOARD -> DashboardPage(viewModel, settings)
+                        Page.DASHBOARD -> DashboardPage(viewModel, settings, visibleApps) { chooser = it }
                         Page.NOTIFICATIONS -> NotificationsPage(viewModel, settings, listenerConnected)
                         Page.APPS -> AppsPage(viewModel, settings) { pickWidget = true }
                         Page.BACKUP -> BackupPage(viewModel, settings, updateState)
@@ -231,6 +232,10 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                     "down" -> it.copy(swipeDown = key)
                     "left" -> it.copy(swipeLeftApp = key)
                     "right" -> it.copy(swipeRightApp = key)
+                    "carUp" -> it.copy(carSwipeUp = key)
+                    "carDown" -> it.copy(carSwipeDown = key)
+                    "carLeft" -> it.copy(carSwipeLeft = key)
+                    "carRight" -> it.copy(carSwipeRight = key)
                     else -> it.copy(glucoseApp = key)
                 }
             }
@@ -242,12 +247,20 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                 "down" -> "Swipe down"
                 "left" -> "Swipe left"
                 "right" -> "Swipe right"
+                "carUp" -> "Car mode: swipe up"
+                "carDown" -> "Car mode: swipe down"
+                "carLeft" -> "Car mode: swipe left"
+                "carRight" -> "Car mode: swipe right"
                 else -> "Tapping the glucose value opens"
             },
             viewModel = viewModel,
             onPick = { app -> set(app?.key.orEmpty()) },
             onDismiss = { chooser = null },
-            extras = if (side == "glucose") emptyList() else GestureActions.builtIn.map { (key, label) -> label to key },
+            extras = when {
+                side == "glucose" -> emptyList()
+                side.startsWith("car") -> GestureActions.carBuiltIn.map { (key, label) -> label to key }
+                else -> GestureActions.builtIn.map { (key, label) -> label to key }
+            },
             onPickExtra = { key -> set(key) },
         )
     }
@@ -391,7 +404,7 @@ private fun DrawerPage(viewModel: LauncherViewModel, settings: LauncherSettings)
 }
 
 @Composable
-private fun DashboardPage(viewModel: LauncherViewModel, settings: LauncherSettings) {
+private fun DashboardPage(viewModel: LauncherViewModel, settings: LauncherSettings, apps: List<AppInfo>, openChooser: (String) -> Unit) {
     Group("Screen") {
         SwitchRow(
             "Keep the screen on",
@@ -405,6 +418,16 @@ private fun DashboardPage(viewModel: LauncherViewModel, settings: LauncherSettin
             0f..100f,
         ) { v -> viewModel.update { it.copy(dashboardOpacity = v.toInt()) } }
         Hint("Open car mode from the long-press menu, a swipe (see Gestures), or a favourites button (see Home screen).")
+    }
+    Group("Swipes in car mode") {
+        NavRow("Swipe up", labelFor(settings.carSwipeUp, apps)) { openChooser("carUp") }
+        NavRow("Swipe down", labelFor(settings.carSwipeDown, apps)) { openChooser("carDown") }
+        NavRow("Swipe left", labelFor(settings.carSwipeLeft, apps)) { openChooser("carLeft") }
+        NavRow("Swipe right", labelFor(settings.carSwipeRight, apps)) { openChooser("carRight") }
+        Hint(
+            "There is no close button in car mode: swipe (down by default), press back, or tap empty space. " +
+                "Swipes can skip tracks, close car mode or open an app."
+        )
     }
     Group("Navigation shortcuts") {
         Field(settings.homeAddress, "Home address") { v -> viewModel.update { it.copy(homeAddress = v) } }
