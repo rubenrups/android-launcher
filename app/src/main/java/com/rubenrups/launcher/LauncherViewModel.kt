@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.rubenrups.launcher.data.AppEntry
 import com.rubenrups.launcher.data.AppUsage
+import com.rubenrups.launcher.data.CallContact
 import com.rubenrups.launcher.data.AppFolder
 import com.rubenrups.launcher.data.AppInfo
 import com.rubenrups.launcher.data.Entry
@@ -136,6 +137,16 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     init {
         if (!settings.value.onboardingDone && settings.value.favourites.isNotEmpty()) update { it.copy(onboardingDone = true) }
+        // Bluetooth / charging triggers (see CarTriggerReceiver) open and close car mode while we are running.
+        viewModelScope.launch {
+            CarMode.requests.collect { open ->
+                if (open) {
+                    closeDrawer()
+                    _dashboardEdge.value = DashboardEdge.NONE
+                }
+                _dashboardOpen.value = open
+            }
+        }
         viewModelScope.launch {
             settings.map { it.iconPack }.distinctUntilChanged().collect { repository.setIconPack(it) }
         }
@@ -186,6 +197,21 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun finishOnboarding() {
         _onboardingOpen.value = false
         update { it.copy(onboardingDone = true) }
+    }
+
+    fun addCallContact(name: String, number: String) = update { s ->
+        if (number.isBlank() || s.callContacts.any { it.number == number }) s else s.copy(callContacts = s.callContacts + CallContact(name, number))
+    }
+
+    fun removeCallContact(index: Int) = update { s -> s.copy(callContacts = s.callContacts.filterIndexed { i, _ -> i != index }) }
+
+    fun moveCallContact(index: Int, delta: Int) = update { s ->
+        val to = index + delta
+        if (index !in s.callContacts.indices || to !in s.callContacts.indices) {
+            s
+        } else {
+            s.copy(callContacts = s.callContacts.toMutableList().apply { add(to, removeAt(index)) })
+        }
     }
 
     fun addCarApp(key: String) = update { s ->
@@ -262,6 +288,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
         _dashboardOpen.value = open
         update { it.copy(carModeWasOpen = open) }
+        CarMode.noteManualChange(getApplication(), open)
     }
 
     /** One poll of LibreLinkUp; the caller decides the rhythm (see LauncherApp). No-op while the feature is off. */

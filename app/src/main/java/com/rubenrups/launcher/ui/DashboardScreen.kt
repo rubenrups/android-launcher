@@ -10,6 +10,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import com.rubenrups.launcher.data.CallContact
 import com.rubenrups.launcher.data.DashboardModules
 import com.rubenrups.launcher.data.Destination
 import com.rubenrups.launcher.data.HourlyPoint
@@ -84,6 +85,7 @@ private val CardWeight = mapOf(
     DashboardModules.MEDIA to 2.2f,
     DashboardModules.NAVIGATION to 1.1f,
     DashboardModules.APPS to 1.6f,
+    DashboardModules.CALLS to 1.5f,
     DashboardModules.WEATHER to 1.5f,
     DashboardModules.QUICK to 1.4f,
     DashboardModules.STATS to 1.0f,
@@ -132,6 +134,7 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
                 navigation?.let { NavigationCard(it, big = true) } ?: NavigateCard(settings.destinations, onOpenSettings)
             DashboardModules.WEATHER -> HourlyCard(hours, settings.weatherCity)
             DashboardModules.APPS -> QuickAppsCard(viewModel, settings.carApps, onOpenSettings)
+            DashboardModules.CALLS -> CallsCard(settings.callContacts, settings.callDirect, onOpenSettings)
             DashboardModules.QUICK -> QuickSettingsCard()
             DashboardModules.STATS -> StatTiles(battery, weather, nextEvent?.text)
             else -> Unit
@@ -674,6 +677,56 @@ private fun QuickAppsCard(viewModel: LauncherViewModel, keys: List<String>, onOp
                     }
                 }
                 repeat(NAV_TILES_PER_ROW - rowApps.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/** Big round buttons for the people you call from the car. One tap dials (or opens the dialer, see settings). */
+@Composable
+private fun CallsCard(contacts: List<CallContact>, direct: Boolean, onOpenSettings: () -> Unit) {
+    val context = LocalContext.current
+    fun call(contact: CallContact) {
+        val uri = Uri.parse("tel:" + Uri.encode(contact.number))
+        val permitted = context.checkSelfPermission(android.Manifest.permission.CALL_PHONE) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val action = if (direct && permitted) Intent.ACTION_CALL else Intent.ACTION_DIAL
+        runCatching { context.startActivity(Intent(action, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+    Card {
+        Text("📞 Call", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+        if (contacts.isEmpty()) {
+            Text(
+                "＋ Choose people to call",
+                color = Color(0xFF8AB4F8),
+                fontSize = 18.sp,
+                modifier = Modifier.clickable(onClick = onOpenSettings).padding(vertical = 14.dp),
+            )
+        }
+        contacts.chunked(NAV_TILES_PER_ROW).forEach { rowContacts ->
+            Spacer(Modifier.height(10.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                rowContacts.forEach { contact ->
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+                            .clickable { call(contact) }
+                            .padding(horizontal = 4.dp, vertical = 14.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Box(Modifier.size(56.dp).background(Color(0xFF2E7D4F), CircleShape), contentAlignment = Alignment.Center) {
+                            Text(
+                                contact.name.firstOrNull { it.isLetterOrDigit() }?.uppercase() ?: "📞",
+                                color = Color.White,
+                                fontSize = 26.sp,
+                                fontWeight = FontWeight.Medium,
+                            )
+                        }
+                        Spacer(Modifier.height(6.dp))
+                        Text(contact.name, color = Color.White, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+                repeat(NAV_TILES_PER_ROW - rowContacts.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }

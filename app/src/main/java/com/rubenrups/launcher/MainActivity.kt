@@ -54,6 +54,8 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // Started by a Bluetooth / charging trigger: go straight into car mode.
+        if (intent?.getBooleanExtra(CarMode.EXTRA_OPEN, false) == true) viewModel.setDashboardOpen(true)
         setContent {
             LauncherTheme {
                 LauncherApp(viewModel)
@@ -67,6 +69,7 @@ class MainActivity : ComponentActivity() {
      */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (intent.getBooleanExtra(CarMode.EXTRA_OPEN, false)) viewModel.setDashboardOpen(true)
         if (intent.action == Intent.ACTION_MAIN && Intent.CATEGORY_HOME in (intent.categories ?: emptySet())) {
             // Depending on the Android version the new intent arrives just before or just after we become visible
             // again, so "we were hidden" also counts when we only just came back.

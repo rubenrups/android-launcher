@@ -109,6 +109,9 @@ private val SearchIndex = listOf(
     SettingHit("Recent apps", Page.DRAWER, "recents"),
     SettingHit("Web search when typing", Page.DRAWER, "google duckduckgo engine"),
     SettingHit("Car mode background", Page.DASHBOARD, "dashboard opacity transparency solid"),
+    SettingHit("Open car mode automatically", Page.DASHBOARD, "bluetooth charging auto open trigger car"),
+    SettingHit("Do not disturb while driving", Page.DASHBOARD, "dnd silence car mode"),
+    SettingHit("Call buttons", Page.DASHBOARD, "contacts phone dial car mode"),
     SettingHit("Quick launch apps", Page.DASHBOARD, "car mode app buttons maps music phone"),
     SettingHit("Swipes in car mode", Page.DASHBOARD, "gesture next track close skip"),
     SettingHit("Navigation places", Page.DASHBOARD, "home work address destination car mode navigate maps"),
@@ -136,7 +139,7 @@ private val SearchIndex = listOf(
     SettingHit("GitHub token", Page.BACKUP, "private repository access"),
 )
 
-private val Accent = Color(0xFF8AB4F8)
+internal val Accent = Color(0xFF8AB4F8)
 private val CardColor = Color.White.copy(alpha = 0.07f)
 private val CardShape = RoundedCornerShape(20.dp)
 
@@ -528,6 +531,7 @@ private fun DashboardPage(viewModel: LauncherViewModel, settings: LauncherSettin
                 "included in backups."
         )
     }
+    CarAutomationGroups(viewModel, settings)
     Group("Cards, in order") {
         val order = settings.dashboardOrder
         order.forEachIndexed { index, key ->
@@ -857,7 +861,7 @@ private fun CategoryRow(icon: String, title: String, summary: String, onClick: (
 
 /** A titled, rounded card holding related rows. */
 @Composable
-private fun Group(title: String? = null, content: @Composable ColumnScope.() -> Unit) {
+internal fun Group(title: String? = null, content: @Composable ColumnScope.() -> Unit) {
     Column(Modifier.fillMaxWidth().padding(top = 20.dp)) {
         if (title != null) {
             Text(
@@ -874,11 +878,11 @@ private fun Group(title: String? = null, content: @Composable ColumnScope.() -> 
 }
 
 @Composable
-private fun Hint(text: String) =
+internal fun Hint(text: String) =
     Text(text, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp, lineHeight = 17.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
 
 @Composable
-private fun SwitchRow(label: String, checked: Boolean, subtitle: String? = null, onChange: (Boolean) -> Unit) {
+internal fun SwitchRow(label: String, checked: Boolean, subtitle: String? = null, onChange: (Boolean) -> Unit) {
     Row(
         Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -893,7 +897,7 @@ private fun SwitchRow(label: String, checked: Boolean, subtitle: String? = null,
 
 /** A row that does something or opens something; [value] shows the current choice on the right. */
 @Composable
-private fun NavRow(label: String, value: String? = null, onClick: () -> Unit) {
+internal fun NavRow(label: String, value: String? = null, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -906,7 +910,7 @@ private fun NavRow(label: String, value: String? = null, onClick: () -> Unit) {
 
 /** A read-only line: a label and its current state. */
 @Composable
-private fun InfoRow(label: String, value: String) {
+internal fun InfoRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
         Text(value, color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
@@ -914,7 +918,7 @@ private fun InfoRow(label: String, value: String) {
 }
 
 @Composable
-private fun SliderRow(label: String, valueLabel: String, value: Float, range: ClosedFloatingPointRange<Float>, onChange: (Float) -> Unit) {
+internal fun SliderRow(label: String, valueLabel: String, value: Float, range: ClosedFloatingPointRange<Float>, onChange: (Float) -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(label, color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
@@ -925,7 +929,7 @@ private fun SliderRow(label: String, valueLabel: String, value: Float, range: Cl
 }
 
 @Composable
-private fun ChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
+internal fun ChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -936,7 +940,7 @@ private fun ChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Field(value: String, placeholder: String, password: Boolean = false, onChange: (String) -> Unit) {
+internal fun Field(value: String, placeholder: String, password: Boolean = false, onChange: (String) -> Unit) {
     TextField(
         value = value,
         onValueChange = onChange,

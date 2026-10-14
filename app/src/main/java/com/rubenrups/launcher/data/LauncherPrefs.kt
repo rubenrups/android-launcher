@@ -14,6 +14,9 @@ enum class WebSearchEngine(val label: String, val urlTemplate: String?) {
     DUCKDUCKGO("DuckDuckGo", "https://duckduckgo.com/?q=%s"),
 }
 
+/** A contact for a car-mode call button. */
+data class CallContact(val name: String, val number: String)
+
 /** A saved place for the car-mode navigation buttons. */
 data class Destination(val name: String, val address: String, val icon: String = "📍")
 
@@ -26,6 +29,7 @@ object DashboardModules {
     const val QUICK = "quick"
     const val STATS = "stats"
     const val APPS = "apps"
+    const val CALLS = "calls"
 
     /** Default order, and the names shown in settings. */
     val all: List<Pair<String, String>> = listOf(
@@ -33,6 +37,7 @@ object DashboardModules {
         MEDIA to "Media player",
         NAVIGATION to "Navigation",
         APPS to "Quick launch apps",
+        CALLS to "Call buttons",
         WEATHER to "Hourly weather",
         QUICK to "Quick settings",
         STATS to "Battery, weather and next event",
@@ -100,6 +105,20 @@ data class LauncherSettings(
     val dashboardOrder: List<String> = DashboardModules.all.map { it.first },
     /** Keep the screen on while car mode is open. */
     val keepScreenOn: Boolean = true,
+    /** Open car mode by itself when connecting to one of [carBluetoothDevices] (device addresses). */
+    val carAutoBluetooth: Boolean = false,
+    val carBluetoothDevices: Set<String> = emptySet(),
+    /** Open car mode when the phone is plugged in (by default only when it is held in landscape). */
+    val carAutoCharging: Boolean = false,
+    val carChargingLandscapeOnly: Boolean = true,
+    /** Close car mode again when the trigger goes away, if it was opened by one of the triggers. */
+    val carAutoClose: Boolean = true,
+    /** Priority-only do-not-disturb while car mode is open. */
+    val carDnd: Boolean = false,
+    /** People for the car-mode call buttons. Private, so never in a backup. */
+    val callContacts: List<CallContact> = emptyList(),
+    /** Start the call straight away (needs the Phone permission); off = open the dialer with the number filled in. */
+    val callDirect: Boolean = false,
     /** The first-run setup guide has been shown (or skipped). */
     val onboardingDone: Boolean = false,
     /** Launch counts and last-launch times, for the folder sorts "most used" and "most recent". */
@@ -236,6 +255,14 @@ class LauncherPrefs(context: Context) {
         dashboardOrder = prefs.getString(KEY_DASH_ORDER, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }
             .let { saved -> saved.filter { k -> DashboardModules.all.any { it.first == k } } + DashboardModules.all.map { it.first }.filter { it !in saved } },
         keepScreenOn = prefs.getBoolean(KEY_KEEP_SCREEN_ON, true),
+        carAutoBluetooth = prefs.getBoolean(KEY_CAR_AUTO_BT, false),
+        carBluetoothDevices = prefs.getString(KEY_CAR_BT_DEVICES, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }.toSet(),
+        carAutoCharging = prefs.getBoolean(KEY_CAR_AUTO_CHARGE, false),
+        carChargingLandscapeOnly = prefs.getBoolean(KEY_CAR_CHARGE_LANDSCAPE, true),
+        carAutoClose = prefs.getBoolean(KEY_CAR_AUTO_CLOSE, true),
+        carDnd = prefs.getBoolean(KEY_CAR_DND, false),
+        callContacts = decodeContacts(prefs.getString(KEY_CALL_CONTACTS, null)),
+        callDirect = prefs.getBoolean(KEY_CALL_DIRECT, false),
         onboardingDone = prefs.getBoolean(KEY_ONBOARDING_DONE, false),
         usage = decodeUsage(prefs.getString(KEY_USAGE, null)),
         folderPopupGrid = prefs.getBoolean(KEY_POPUP_GRID, false),
@@ -307,6 +334,14 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_DASH_HIDDEN, s.dashboardHidden.joinToString(SEPARATOR))
             .putString(KEY_DASH_ORDER, s.dashboardOrder.joinToString(SEPARATOR))
             .putBoolean(KEY_KEEP_SCREEN_ON, s.keepScreenOn)
+            .putBoolean(KEY_CAR_AUTO_BT, s.carAutoBluetooth)
+            .putString(KEY_CAR_BT_DEVICES, s.carBluetoothDevices.joinToString(SEPARATOR))
+            .putBoolean(KEY_CAR_AUTO_CHARGE, s.carAutoCharging)
+            .putBoolean(KEY_CAR_CHARGE_LANDSCAPE, s.carChargingLandscapeOnly)
+            .putBoolean(KEY_CAR_AUTO_CLOSE, s.carAutoClose)
+            .putBoolean(KEY_CAR_DND, s.carDnd)
+            .putString(KEY_CALL_CONTACTS, encodeContacts(s.callContacts))
+            .putBoolean(KEY_CALL_DIRECT, s.callDirect)
             .putBoolean(KEY_ONBOARDING_DONE, s.onboardingDone)
             .putString(KEY_USAGE, encodeUsage(s.usage))
             .putBoolean(KEY_POPUP_GRID, s.folderPopupGrid)
@@ -332,6 +367,20 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_AUTO_DOWNLOAD, s.autoDownloadUpdates)
             .putInt(KEY_DISMISSED_UPDATE, s.dismissedUpdate)
             .apply()
+    }
+
+    private fun encodeContacts(list: List<CallContact>): String =
+        JSONArray().apply { list.forEach { put(JSONObject().put("name", it.name).put("number", it.number)) } }.toString()
+
+    private fun decodeContacts(json: String?): List<CallContact> {
+        if (json.isNullOrBlank()) return emptyList()
+        return runCatching {
+            val array = JSONArray(json)
+            (0 until array.length()).map { i ->
+                val o = array.getJSONObject(i)
+                CallContact(o.getString("name"), o.getString("number"))
+            }
+        }.getOrDefault(emptyList())
     }
 
     private fun encodeDestinations(list: List<Destination>): String =
@@ -445,6 +494,14 @@ class LauncherPrefs(context: Context) {
         const val KEY_DASH_HIDDEN = "dashboard_hidden"
         const val KEY_DASH_ORDER = "dashboard_order"
         const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
+        const val KEY_CAR_AUTO_BT = "car_auto_bluetooth"
+        const val KEY_CAR_BT_DEVICES = "car_bluetooth_devices"
+        const val KEY_CAR_AUTO_CHARGE = "car_auto_charging"
+        const val KEY_CAR_CHARGE_LANDSCAPE = "car_charging_landscape"
+        const val KEY_CAR_AUTO_CLOSE = "car_auto_close"
+        const val KEY_CAR_DND = "car_dnd"
+        const val KEY_CALL_CONTACTS = "call_contacts"
+        const val KEY_CALL_DIRECT = "call_direct"
         const val KEY_ONBOARDING_DONE = "onboarding_done"
         const val KEY_USAGE = "app_usage"
         const val KEY_POPUP_GRID = "folder_popup_grid"
@@ -470,7 +527,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_AUTO_DOWNLOAD = "auto_download_updates"
         const val KEY_DISMISSED_UPDATE = "dismissed_update"
         /** Credentials, places and live state: never written to a backup file, and a restore leaves them alone. */
-        val SECRET_KEYS = setOf(KEY_UPDATE_TOKEN, KEY_GLUCOSE_EMAIL, KEY_GLUCOSE_PASSWORD, KEY_DESTINATIONS, KEY_HOME_ADDRESS, KEY_WORK_ADDRESS, KEY_CAR_WAS_OPEN)
+        val SECRET_KEYS = setOf(KEY_UPDATE_TOKEN, KEY_GLUCOSE_EMAIL, KEY_GLUCOSE_PASSWORD, KEY_DESTINATIONS, KEY_HOME_ADDRESS, KEY_WORK_ADDRESS, KEY_CAR_WAS_OPEN, KEY_CALL_CONTACTS, KEY_CAR_BT_DEVICES)
         const val KEY_ANCHOR_BOTTOM = "anchor_bottom"
         const val KEY_SHOW_ICONS = "show_icons"
         const val KEY_SHOW_SEARCH_BUTTON = "show_search_button"
