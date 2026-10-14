@@ -64,6 +64,11 @@ data class LauncherSettings(
     val folders: List<AppFolder> = emptyList(),
     val showCalendar: Boolean = false,
     val showWeather: Boolean = false,
+    /** "stacked", "side" (details beside the time) or "inline" (one wrapping row). */
+    val headerLayout: String = "stacked",
+    val headerShowDate: Boolean = true,
+    val headerShowBattery: Boolean = true,
+    val clockSizeSp: Int = 56,
     val weatherCity: String = "",
     val weatherFahrenheit: Boolean = false,
     val webSearch: WebSearchEngine = WebSearchEngine.SYSTEM,
@@ -251,6 +256,10 @@ class LauncherPrefs(context: Context) {
         folders = decodeFolders(prefs.getString(KEY_FOLDERS, null)),
         showCalendar = prefs.getBoolean(KEY_SHOW_CALENDAR, false),
         showWeather = prefs.getBoolean(KEY_SHOW_WEATHER, false),
+        headerLayout = prefs.getString(KEY_HEADER_LAYOUT, "stacked") ?: "stacked",
+        headerShowDate = prefs.getBoolean(KEY_HEADER_DATE, true),
+        headerShowBattery = prefs.getBoolean(KEY_HEADER_BATTERY, true),
+        clockSizeSp = prefs.getInt(KEY_CLOCK_SIZE, 56),
         weatherCity = prefs.getString(KEY_WEATHER_CITY, "").orEmpty(),
         weatherFahrenheit = prefs.getBoolean(KEY_WEATHER_F, false),
         webSearch = runCatching { WebSearchEngine.valueOf(prefs.getString(KEY_WEB_SEARCH, "").orEmpty()) }
@@ -349,6 +358,10 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_FOLDERS, encodeFolders(s.folders))
             .putBoolean(KEY_SHOW_CALENDAR, s.showCalendar)
             .putBoolean(KEY_SHOW_WEATHER, s.showWeather)
+            .putString(KEY_HEADER_LAYOUT, s.headerLayout)
+            .putBoolean(KEY_HEADER_DATE, s.headerShowDate)
+            .putBoolean(KEY_HEADER_BATTERY, s.headerShowBattery)
+            .putInt(KEY_CLOCK_SIZE, s.clockSizeSp)
             .putString(KEY_WEATHER_CITY, s.weatherCity)
             .putBoolean(KEY_WEATHER_F, s.weatherFahrenheit)
             .putString(KEY_WEB_SEARCH, s.webSearch.name)
@@ -527,6 +540,10 @@ class LauncherPrefs(context: Context) {
         const val KEY_FOLDERS = "folders"
         const val KEY_SHOW_CALENDAR = "show_calendar"
         const val KEY_SHOW_WEATHER = "show_weather"
+        const val KEY_HEADER_LAYOUT = "header_layout"
+        const val KEY_HEADER_DATE = "header_date"
+        const val KEY_HEADER_BATTERY = "header_battery"
+        const val KEY_CLOCK_SIZE = "clock_size"
         const val KEY_WEATHER_CITY = "weather_city"
         const val KEY_WEATHER_F = "weather_fahrenheit"
         const val KEY_WEB_SEARCH = "web_search"

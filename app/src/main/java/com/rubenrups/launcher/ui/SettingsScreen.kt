@@ -85,6 +85,7 @@ private data class SettingHit(val title: String, val page: Page, val keywords: S
 
 private val SearchIndex = listOf(
     SettingHit("Clock", Page.HOME, "time header"),
+    SettingHit("Header layout", Page.HOME, "stacked side by side inline compact date battery time size"),
     SettingHit("Next calendar event", Page.HOME, "agenda"),
     SettingHit("Weather", Page.HOME, "city temperature fahrenheit celsius forecast"),
     SettingHit("Align to the right", Page.HOME, "left right alignment favourites"),
@@ -306,6 +307,11 @@ private fun HomePage(viewModel: LauncherViewModel, settings: LauncherSettings) {
                 viewModel.update { it.copy(showCalendar = v) }
             }
         }
+        SwitchRow("Date", settings.headerShowDate) { v -> viewModel.update { it.copy(headerShowDate = v) } }
+        SwitchRow("Battery", settings.headerShowBattery) { v -> viewModel.update { it.copy(headerShowBattery = v) } }
+        SliderRow("Time size", "${settings.clockSizeSp} sp", settings.clockSizeSp.toFloat(), 32f..96f) { v ->
+            viewModel.update { it.copy(clockSizeSp = v.toInt()) }
+        }
         SwitchRow("Weather", settings.showWeather) { v -> viewModel.update { it.copy(showWeather = v) } }
         if (settings.showWeather) {
             Field(settings.weatherCity, "City, e.g. Amsterdam") { v -> viewModel.update { it.copy(weatherCity = v) } }
@@ -314,6 +320,18 @@ private fun HomePage(viewModel: LauncherViewModel, settings: LauncherSettings) {
             }
             Hint("Weather comes from open-meteo.com and only the city name is sent.")
         }
+    }
+    Group("Header layout") {
+        ChoiceRow("Stacked (one item per row)", selected = settings.headerLayout == "stacked") {
+            viewModel.update { it.copy(headerLayout = "stacked") }
+        }
+        ChoiceRow("Details beside the time", selected = settings.headerLayout == "side") {
+            viewModel.update { it.copy(headerLayout = "side") }
+        }
+        ChoiceRow("Compact: details in one wrapping row", selected = settings.headerLayout == "inline") {
+            viewModel.update { it.copy(headerLayout = "inline") }
+        }
+        Hint("The side and compact layouts take less height, so more favourites fit on screen.")
     }
     Group("Favourites list") {
         SwitchRow("Align to the right", settings.alignEnd) { v -> viewModel.update { it.copy(alignEnd = v) } }

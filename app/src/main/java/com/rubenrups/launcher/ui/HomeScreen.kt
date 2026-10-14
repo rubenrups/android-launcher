@@ -31,6 +31,8 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -361,7 +363,7 @@ private fun HomeContent(
                         horizontalArrangement = Arrangement.spacedBy(24.dp),
                     ) {
                         val clock: @Composable () -> Unit = {
-                            Clock(settings.alignEnd, weather, settings.weatherCity, nextEvent, glucoseLine)
+                            Clock(settings, weather, nextEvent, glucoseLine)
                         }
                         val card: @Composable () -> Unit = {
                             mediaState?.let { MediaCard(it, Modifier.weight(1f)) }
@@ -370,7 +372,7 @@ private fun HomeContent(
                         if (settings.alignEnd) { card(); clock() } else { clock(); card() }
                     }
                 } else {
-                    Box(SidePadding) { Clock(settings.alignEnd, weather, settings.weatherCity, nextEvent, glucoseLine) }
+                    Box(SidePadding) { Clock(settings, weather, nextEvent, glucoseLine) }
                 }
                 Spacer(Modifier.height(16.dp))
             }
@@ -625,8 +627,15 @@ internal fun rememberBatteryPercent(): Int {
     return percent
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun Clock(alignEnd: Boolean, weather: String?, city: String, event: NextEvent?, glucoseLine: @Composable () -> Unit) {
+private fun Clock(
+    settings: LauncherSettings,
+    weather: String?,
+    event: NextEvent?,
+    glucoseLine: @Composable () -> Unit,
+) {
+    val alignEnd = settings.alignEnd
     val ink = LocalHomeInk.current
     val context = LocalContext.current
     val now by produceState(Date()) {
@@ -638,34 +647,42 @@ private fun Clock(alignEnd: Boolean, weather: String?, city: String, event: Next
     val battery = rememberBatteryPercent()
     val dateFormat = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
     val timeFormat = remember { DateFormat.getTimeInstance(DateFormat.SHORT) }
+    val horizontal = if (alignEnd) Alignment.End else Alignment.Start
     // Each piece is its own tap target: time -> clock app, date -> calendar, battery -> battery usage,
     // weather -> forecast, event -> that event.
-    Column(horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start) {
+    val time: @Composable () -> Unit = {
         Text(
             timeFormat.format(now),
             color = ink,
-            fontSize = 56.sp,
+            fontSize = settings.clockSizeSp.sp,
             fontWeight = FontWeight.Light,
             style = HomeTextStyle,
             modifier = Modifier.clickable { startSafely(context, Intent(AlarmClock.ACTION_SHOW_ALARMS)) },
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+    }
+    val date: @Composable () -> Unit = {
+        if (settings.headerShowDate) {
             HeaderText(dateFormat.format(now)) {
                 startSafely(context, Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_CALENDAR))
             }
-            if (battery >= 0) {
-                HeaderText("$battery%") { startSafely(context, Intent(Intent.ACTION_POWER_USAGE_SUMMARY)) }
-            }
-            if (weather != null) {
-                HeaderText(weather) {
-                    startSafely(
-                        context,
-                        Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode("weather $city"))),
-                    )
-                }
+        }
+    }
+    val batteryText: @Composable () -> Unit = {
+        if (settings.headerShowBattery && battery >= 0) {
+            HeaderText("$battery%") { startSafely(context, Intent(Intent.ACTION_POWER_USAGE_SUMMARY)) }
+        }
+    }
+    val weatherText: @Composable () -> Unit = {
+        if (weather != null) {
+            HeaderText(weather) {
+                startSafely(
+                    context,
+                    Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode("weather ${settings.weatherCity}"))),
+                )
             }
         }
-        glucoseLine()
+    }
+    val eventText: @Composable () -> Unit = {
         if (event != null) {
             HeaderText(event.text) {
                 startSafely(
@@ -676,6 +693,48 @@ private fun Clock(alignEnd: Boolean, weather: String?, city: String, event: Next
                         .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, event.end),
                 )
             }
+        }
+    }
+    when (settings.headerLayout) {
+        "side" -> Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val details: @Composable () -> Unit = {
+                Column(horizontalAlignment = horizontal) {
+                    date()
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        batteryText()
+                        weatherText()
+                    }
+                    glucoseLine()
+                    eventText()
+                }
+            }
+            if (alignEnd) { details(); time() } else { time(); details() }
+        }
+        "inline" -> Column(horizontalAlignment = horizontal) {
+            time()
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp, horizontal),
+                verticalArrangement = Arrangement.spacedBy(2.dp),
+            ) {
+                date()
+                batteryText()
+                weatherText()
+                glucoseLine()
+                eventText()
+            }
+        }
+        else -> Column(horizontalAlignment = horizontal) {
+            time()
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                date()
+                batteryText()
+                weatherText()
+            }
+            glucoseLine()
+            eventText()
         }
     }
 }
