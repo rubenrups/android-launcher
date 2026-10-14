@@ -105,6 +105,14 @@ data class LauncherSettings(
     val dashboardOrder: List<String> = DashboardModules.all.map { it.first },
     /** Keep the screen on while car mode is open. */
     val keepScreenOn: Boolean = true,
+    /** Theme: an accent colour key (see AccentOptions, or "wallpaper") and a font key (see FontOptions). */
+    val accentColor: String = "blue",
+    val fontFamily: String = "default",
+    /** Extra answers in the drawer's search box. */
+    val searchCalculator: Boolean = true,
+    val searchConversions: Boolean = true,
+    val searchSystemScreens: Boolean = true,
+    val searchContacts: Boolean = false,
     /** Write a backup file into [autoBackupFolder] every [autoBackupDays] days while the launcher is in use. */
     val autoBackup: Boolean = false,
     /** The chosen folder (an Android document-tree address). Device-specific, so not part of a backup. */
@@ -272,6 +280,12 @@ class LauncherPrefs(context: Context) {
         dashboardOrder = prefs.getString(KEY_DASH_ORDER, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }
             .let { saved -> saved.filter { k -> DashboardModules.all.any { it.first == k } } + DashboardModules.all.map { it.first }.filter { it !in saved } },
         keepScreenOn = prefs.getBoolean(KEY_KEEP_SCREEN_ON, true),
+        accentColor = prefs.getString(KEY_ACCENT, "blue").orEmpty(),
+        fontFamily = prefs.getString(KEY_FONT, "default").orEmpty(),
+        searchCalculator = prefs.getBoolean(KEY_SEARCH_CALC, true),
+        searchConversions = prefs.getBoolean(KEY_SEARCH_CONVERT, true),
+        searchSystemScreens = prefs.getBoolean(KEY_SEARCH_SYSTEM, true),
+        searchContacts = prefs.getBoolean(KEY_SEARCH_CONTACTS, false),
         autoBackup = prefs.getBoolean(KEY_AUTO_BACKUP, false),
         autoBackupFolder = prefs.getString(KEY_AUTO_BACKUP_FOLDER, "").orEmpty(),
         autoBackupDays = prefs.getInt(KEY_AUTO_BACKUP_DAYS, 1),
@@ -362,6 +376,12 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_DASH_HIDDEN, s.dashboardHidden.joinToString(SEPARATOR))
             .putString(KEY_DASH_ORDER, s.dashboardOrder.joinToString(SEPARATOR))
             .putBoolean(KEY_KEEP_SCREEN_ON, s.keepScreenOn)
+            .putString(KEY_ACCENT, s.accentColor)
+            .putString(KEY_FONT, s.fontFamily)
+            .putBoolean(KEY_SEARCH_CALC, s.searchCalculator)
+            .putBoolean(KEY_SEARCH_CONVERT, s.searchConversions)
+            .putBoolean(KEY_SEARCH_SYSTEM, s.searchSystemScreens)
+            .putBoolean(KEY_SEARCH_CONTACTS, s.searchContacts)
             .putBoolean(KEY_AUTO_BACKUP, s.autoBackup)
             .putString(KEY_AUTO_BACKUP_FOLDER, s.autoBackupFolder)
             .putInt(KEY_AUTO_BACKUP_DAYS, s.autoBackupDays)
@@ -533,6 +553,12 @@ class LauncherPrefs(context: Context) {
         const val KEY_DASH_HIDDEN = "dashboard_hidden"
         const val KEY_DASH_ORDER = "dashboard_order"
         const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
+        const val KEY_ACCENT = "accent_color"
+        const val KEY_FONT = "font_family"
+        const val KEY_SEARCH_CALC = "search_calculator"
+        const val KEY_SEARCH_CONVERT = "search_conversions"
+        const val KEY_SEARCH_SYSTEM = "search_system_screens"
+        const val KEY_SEARCH_CONTACTS = "search_contacts"
         const val KEY_AUTO_BACKUP = "auto_backup"
         const val KEY_AUTO_BACKUP_FOLDER = "auto_backup_folder"
         const val KEY_AUTO_BACKUP_DAYS = "auto_backup_days"

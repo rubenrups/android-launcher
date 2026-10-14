@@ -1270,7 +1270,7 @@ private fun UpdateChip(
         )
         val notesInfo = (state as? UpdateState.Ready)?.info ?: (state as? UpdateState.Available)?.info
         if (notesInfo != null && notesInfo.notes.isNotBlank()) {
-            Text("What's new", color = Color(0xFF8AB4F8), fontSize = 13.sp, modifier = Modifier.clickable { onShowNotes(notesInfo) }.padding(8.dp))
+            Text("What's new", color = Accent, fontSize = 13.sp, modifier = Modifier.clickable { onShowNotes(notesInfo) }.padding(8.dp))
         }
         if (action) {
             Text("✕", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp, modifier = Modifier.clickable { onDismiss(build) }.padding(12.dp))

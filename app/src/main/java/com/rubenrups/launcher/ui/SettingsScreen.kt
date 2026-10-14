@@ -101,6 +101,8 @@ private val SearchIndex = listOf(
     SettingHit("Text size", Page.APPEARANCE, "font favourites"),
     SettingHit("Adapt text colour to the wallpaper", Page.APPEARANCE, "dark light ink contrast"),
     SettingHit("Launch animation", Page.APPEARANCE, "motion zoom open app"),
+    SettingHit("Accent colour", Page.APPEARANCE, "theme colour highlight material you wallpaper"),
+    SettingHit("Font", Page.APPEARANCE, "typeface theme serif mono"),
     SettingHit("Icon pack", Page.APPEARANCE, "theme nova adw"),
     SettingHit("Focus mode", Page.FOCUS, "hide apps distraction schedule work"),
     SettingHit("Swipe up", Page.GESTURES, "gesture"),
@@ -109,6 +111,7 @@ private val SearchIndex = listOf(
     SettingHit("Swipe right", Page.GESTURES, "gesture"),
     SettingHit("Attach below the home screen", Page.DRAWER, "drawer one page slide"),
     SettingHit("Drawer background", Page.DRAWER, "opacity transparency solid"),
+    SettingHit("Search extras", Page.DRAWER, "calculator conversion currency units contacts system settings"),
     SettingHit("Recent apps", Page.DRAWER, "recents"),
     SettingHit("Web search when typing", Page.DRAWER, "google duckduckgo engine"),
     SettingHit("Car mode background", Page.DASHBOARD, "dashboard opacity transparency solid"),
@@ -143,7 +146,6 @@ private val SearchIndex = listOf(
     SettingHit("GitHub token", Page.BACKUP, "private repository access"),
 )
 
-internal val Accent = Color(0xFF8AB4F8)
 private val CardColor = Color.White.copy(alpha = 0.07f)
 private val CardShape = RoundedCornerShape(20.dp)
 
@@ -366,6 +368,38 @@ private fun AppearancePage(viewModel: LauncherViewModel, settings: LauncherSetti
             viewModel.update { it.copy(alignEnd = true, anchorBottom = true, showIcons = false, favouriteTextSp = 34) }
         }
     }
+    Group("Accent colour") {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            AccentOptions.forEach { option ->
+                val selected = settings.accentColor == option.key
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .height(36.dp)
+                        .background(option.color, CircleShape)
+                        .clickable { viewModel.update { it.copy(accentColor = option.key) } },
+                    contentAlignment = Alignment.Center,
+                ) { if (selected) Text("✓", color = Color(0xFF14181B), fontSize = 16.sp, fontWeight = FontWeight.Bold) }
+            }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            ChoiceRow("Match my wallpaper", selected = settings.accentColor == ACCENT_WALLPAPER) {
+                viewModel.update { it.copy(accentColor = ACCENT_WALLPAPER) }
+            }
+        }
+        Hint("Used for links, ticks, switches and small buttons across the launcher.")
+    }
+    Group("Font") {
+        FontOptions.forEach { option ->
+            Row(
+                Modifier.fillMaxWidth().clickable { viewModel.update { it.copy(fontFamily = option.key) } }.padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(option.label, color = Color.White, fontSize = 17.sp, fontFamily = option.family, modifier = Modifier.weight(1f))
+                if (settings.fontFamily == option.key) Text("✓", color = Accent, fontSize = 18.sp)
+            }
+        }
+    }
     Group("Favourites") {
         SwitchRow("Show app icons", settings.showIcons) { v -> viewModel.update { it.copy(showIcons = v) } }
         SliderRow(
@@ -444,6 +478,7 @@ private fun DrawerPage(viewModel: LauncherViewModel, settings: LauncherSettings)
             }
         }
     }
+    SearchExtrasGroup(viewModel, settings)
     Group("Content") {
         SwitchRow("Recent apps", settings.showRecents) { v -> viewModel.update { it.copy(showRecents = v) } }
     }
@@ -998,5 +1033,31 @@ private fun AutoBackupGroup(viewModel: LauncherViewModel, settings: LauncherSett
             Hint("Last backup: " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(settings.lastBackupMs)))
         }
         Hint("Runs while the launcher is on screen, keeps the newest 5 files, and never includes your logins.")
+    }
+}
+
+/** Which extra answers the drawer's search box gives besides app names. */
+@Composable
+private fun SearchExtrasGroup(viewModel: LauncherViewModel, settings: LauncherSettings) {
+    val contactsPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        viewModel.update { it.copy(searchContacts = granted) }
+    }
+    val context = LocalContext.current
+    Group("Search extras") {
+        SwitchRow("Calculator", settings.searchCalculator, subtitle = "Type 12*7 or (3+4)^2") { on -> viewModel.update { it.copy(searchCalculator = on) } }
+        SwitchRow("Unit and currency conversion", settings.searchConversions, subtitle = "Type 5 km to mi, 72 f to c or 100 usd to eur") { on ->
+            viewModel.update { it.copy(searchConversions = on) }
+        }
+        SwitchRow("Phone settings screens", settings.searchSystemScreens, subtitle = "Type wifi, battery, bluetooth…") { on ->
+            viewModel.update { it.copy(searchSystemScreens = on) }
+        }
+        SwitchRow("Contacts", settings.searchContacts, subtitle = "Finds people by name; asks for the Contacts permission") { on ->
+            if (on && context.checkSelfPermission(Manifest.permission.READ_CONTACTS) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                contactsPermission.launch(Manifest.permission.READ_CONTACTS)
+            } else {
+                viewModel.update { it.copy(searchContacts = on) }
+            }
+        }
+        Hint("Currency rates come from frankfurter.app (European Central Bank); only the amount and the two currency codes are sent.")
     }
 }

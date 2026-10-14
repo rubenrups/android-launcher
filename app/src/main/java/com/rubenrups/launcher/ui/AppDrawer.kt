@@ -190,6 +190,9 @@ fun AppDrawer(
                     if (query.isBlank()) {
                         item(key = "new-folder") { NewFolderRow(onClick = { newFolder = true }) }
                     }
+                    if (query.isNotBlank()) {
+                        item(key = "search-extras") { SearchExtras(query, settings) { viewModel.closeDrawer() } }
+                    }
                     items(entries, key = { it.key }) { entry ->
                         when (entry) {
                             is AppEntry -> DrawerRow(

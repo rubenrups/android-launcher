@@ -212,7 +212,7 @@ fun OnboardingScreen(viewModel: LauncherViewModel, onFinish: () -> Unit) {
             if (current.extraLabel != null) {
                 Text(
                     current.extraLabel,
-                    color = Color(0xFF8AB4F8),
+                    color = Accent,
                     fontSize = 14.sp,
                     modifier = Modifier.clickable(onClick = current.extraAction).padding(16.dp),
                 )
@@ -232,7 +232,7 @@ fun OnboardingScreen(viewModel: LauncherViewModel, onFinish: () -> Unit) {
             }
             Text(
                 if (last) "Finish" else "Next",
-                color = Color(0xFF8AB4F8),
+                color = Accent,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.weight(1f).clickable { if (last) onFinish() else step++ }.padding(12.dp),

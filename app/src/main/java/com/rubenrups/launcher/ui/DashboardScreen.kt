@@ -317,7 +317,7 @@ private fun GlucoseCard(viewModel: LauncherViewModel, onOpenSettings: () -> Unit
         if (expanded) {
             Text(
                 "Open the Libre app ›",
-                color = Color(0xFF8AB4F8),
+                color = Accent,
                 fontSize = 14.sp,
                 modifier = Modifier.clickable { viewModel.openGlucoseApp() }.padding(top = 10.dp, bottom = 2.dp),
             )
@@ -654,7 +654,7 @@ private fun QuickAppsCard(viewModel: LauncherViewModel, keys: List<String>, onOp
             Spacer(Modifier.height(10.dp))
             Text(
                 "＋ Choose apps for quick launch",
-                color = Color(0xFF8AB4F8),
+                color = Accent,
                 fontSize = 18.sp,
                 modifier = Modifier.clickable(onClick = onOpenSettings).padding(vertical = 10.dp),
             )
@@ -697,7 +697,7 @@ private fun CallsCard(contacts: List<CallContact>, direct: Boolean, onOpenSettin
         if (contacts.isEmpty()) {
             Text(
                 "＋ Choose people to call",
-                color = Color(0xFF8AB4F8),
+                color = Accent,
                 fontSize = 18.sp,
                 modifier = Modifier.clickable(onClick = onOpenSettings).padding(vertical = 14.dp),
             )
