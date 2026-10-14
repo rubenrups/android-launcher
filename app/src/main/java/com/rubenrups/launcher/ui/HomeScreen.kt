@@ -46,7 +46,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.TextButton
+import com.rubenrups.launcher.data.UpdateInfo
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -193,6 +196,7 @@ private fun HomeContent(
     val navigation by NotificationStore.navigation.collectAsStateWithLifecycle()
     val glucose by viewModel.glucose.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
+    val focusActive by viewModel.focusActive.collectAsStateWithLifecycle()
     val badgeCounts = remember(notifications) { notifications.groupingBy { it.packageName }.eachCount() }
     var editMode by remember { mutableStateOf(false) }
     // Where a long-press landed; non-null while the home-screen menu is showing.
@@ -202,6 +206,7 @@ private fun HomeContent(
     val weather = rememberWeather(settings.showWeather, settings.weatherCity, settings.weatherFahrenheit)
     val nextEvent = rememberNextEvent(settings.showCalendar)
     var showWidgetPicker by remember { mutableStateOf(false) }
+    var notesFor by remember { mutableStateOf<UpdateInfo?>(null) }
 
     val haptics = LocalHapticFeedback.current
     // The content leans after the finger during a configured swipe and springs back, so a swipe visibly "does something".
@@ -372,7 +377,25 @@ private fun HomeContent(
             if (settings.showNavigation) {
                 navigation?.let { Box(SidePadding.fillMaxWidth()) { NavigationCard(it) }; Spacer(Modifier.height(8.dp)) }
             }
-            UpdateChip(updateState, settings.dismissedUpdate, onInstall = viewModel::installUpdate, onDismiss = viewModel::dismissUpdate)
+            if (focusActive) {
+                Text(
+                    "🎯 Focus mode is on · tap to pause for an hour",
+                    color = Color.White,
+                    fontSize = 14.sp,
+                    modifier = SidePadding
+                        .background(Color.White.copy(alpha = 0.18f), RoundedCornerShape(12.dp))
+                        .clickable { viewModel.pauseFocus(60) }
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                )
+                Spacer(Modifier.height(8.dp))
+            }
+            UpdateChip(
+                updateState,
+                settings.dismissedUpdate,
+                onInstall = viewModel::installUpdate,
+                onDismiss = viewModel::dismissUpdate,
+                onShowNotes = { notesFor = it },
+            )
             if (settings.showNotifications) {
                 if (!listenerConnected) Box(SidePadding) { EnableNotificationsPrompt() }
                 Box(SidePadding.fillMaxWidth()) { NotificationList(notifications.take(3)) }
@@ -480,6 +503,16 @@ private fun HomeContent(
             )
         }
 
+        notesFor?.let { info ->
+            AlertDialog(
+                onDismissRequest = { notesFor = null },
+                title = { Text("What's new in build ${info.build}") },
+                text = { Text(info.notes, modifier = Modifier.verticalScroll(rememberScrollState())) },
+                confirmButton = { TextButton(onClick = { notesFor = null; viewModel.installUpdate() }) { Text("Install") } },
+                dismissButton = { TextButton(onClick = { notesFor = null }) { Text("Later") } },
+            )
+        }
+
         if (showWidgetPicker) WidgetPickerDialog(viewModel, onDismiss = { showWidgetPicker = false })
 
         homeMenuAt?.let { at ->
@@ -495,6 +528,15 @@ private fun HomeContent(
                             homeMenuAt = null
                             editMode = true
                         })
+                    }
+                    if (settings.focusApps.isNotEmpty()) {
+                        DropdownMenuItem(
+                            text = { Text(if (focusActive) "Pause focus mode (1 hour)" else "Start focus mode") },
+                            onClick = {
+                                homeMenuAt = null
+                                if (focusActive) viewModel.pauseFocus(60) else viewModel.setFocusManual(true)
+                            },
+                        )
                     }
                     DropdownMenuItem(text = { Text("Car mode") }, onClick = {
                         homeMenuAt = null
@@ -1197,7 +1239,13 @@ internal fun CustomActionButton(
 
 /** A small banner for a new build: "Build 27 ready · Install". Hidden when nothing is pending or it was dismissed. */
 @Composable
-private fun UpdateChip(state: UpdateState, dismissedBuild: Int, onInstall: () -> Unit, onDismiss: (Int) -> Unit) {
+private fun UpdateChip(
+    state: UpdateState,
+    dismissedBuild: Int,
+    onInstall: () -> Unit,
+    onDismiss: (Int) -> Unit,
+    onShowNotes: (UpdateInfo) -> Unit,
+) {
     val (text, build, action) = when (state) {
         is UpdateState.Ready -> Triple("Build ${state.info.build} is ready · Install", state.info.build, true)
         is UpdateState.Available -> Triple("Build ${state.info.build} is available · Install", state.info.build, true)
@@ -1220,6 +1268,10 @@ private fun UpdateChip(state: UpdateState, dismissedBuild: Int, onInstall: () ->
             maxLines = 2,
             modifier = Modifier.weight(1f, fill = false).clickable(enabled = action, onClick = onInstall).padding(vertical = 10.dp),
         )
+        val notesInfo = (state as? UpdateState.Ready)?.info ?: (state as? UpdateState.Available)?.info
+        if (notesInfo != null && notesInfo.notes.isNotBlank()) {
+            Text("What's new", color = Color(0xFF8AB4F8), fontSize = 13.sp, modifier = Modifier.clickable { onShowNotes(notesInfo) }.padding(8.dp))
+        }
         if (action) {
             Text("✕", color = Color.White.copy(alpha = 0.7f), fontSize = 14.sp, modifier = Modifier.clickable { onDismiss(build) }.padding(12.dp))
         } else {

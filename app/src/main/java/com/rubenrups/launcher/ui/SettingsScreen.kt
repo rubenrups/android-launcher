@@ -52,6 +52,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.roundToInt
+import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.data.AppInfo
@@ -71,6 +72,7 @@ private enum class Page(val title: String, val icon: String) {
     APPEARANCE("Appearance", "🎨"),
     GESTURES("Gestures", "👆"),
     DRAWER("App drawer", "🗂️"),
+    FOCUS("Focus mode", "🎯"),
     GLUCOSE("Glucose", "🩸"),
     DASHBOARD("Car mode", "🚗"),
     NOTIFICATIONS("Notifications & media", "🔔"),
@@ -100,6 +102,7 @@ private val SearchIndex = listOf(
     SettingHit("Adapt text colour to the wallpaper", Page.APPEARANCE, "dark light ink contrast"),
     SettingHit("Launch animation", Page.APPEARANCE, "motion zoom open app"),
     SettingHit("Icon pack", Page.APPEARANCE, "theme nova adw"),
+    SettingHit("Focus mode", Page.FOCUS, "hide apps distraction schedule work"),
     SettingHit("Swipe up", Page.GESTURES, "gesture"),
     SettingHit("Swipe down", Page.GESTURES, "gesture notification shade"),
     SettingHit("Swipe left", Page.GESTURES, "gesture"),
@@ -131,6 +134,7 @@ private val SearchIndex = listOf(
     SettingHit("Work profile", Page.APPS, "pause resume work apps"),
     SettingHit("Hidden apps", Page.APPS, "unhide"),
     SettingHit("Setup guide", Page.BACKUP, "onboarding first run default home permissions"),
+    SettingHit("Automatic backup", Page.BACKUP, "schedule folder daily weekly"),
     SettingHit("Save a backup file", Page.BACKUP, "export"),
     SettingHit("Restore from a backup file", Page.BACKUP, "import"),
     SettingHit("Check for updates", Page.BACKUP, "update install build"),
@@ -149,6 +153,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
     val visibleApps by viewModel.visibleApps.collectAsStateWithLifecycle()
     val listenerConnected by NotificationStore.listenerConnected.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
+    val focusActive by viewModel.focusActive.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val installedBuild = remember { UpdateChecker.installedBuild(context) }
 
@@ -196,6 +201,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                             Page.APPEARANCE -> "Text, icons, wallpaper colours"
                             Page.GESTURES -> "Swipe up, down, left, right"
                             Page.DRAWER -> "Search, recents, background"
+                            Page.FOCUS -> if (focusActive) "On now" else "Hide distracting apps"
                             Page.GLUCOSE -> if (settings.glucoseEnabled) "On · LibreLinkUp" else "LibreLinkUp, units, thresholds"
                             Page.DASHBOARD -> "Big glanceable screen, cards, order"
                             Page.NOTIFICATIONS -> if (listenerConnected) "Access connected ✓" else "Access not connected"
@@ -220,6 +226,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                         Page.APPEARANCE -> AppearancePage(viewModel, settings)
                         Page.GESTURES -> GesturesPage(settings, visibleApps) { chooser = it }
                         Page.DRAWER -> DrawerPage(viewModel, settings)
+                        Page.FOCUS -> FocusPage(viewModel, settings)
                         Page.GLUCOSE -> GlucosePage(viewModel, settings, visibleApps) { chooser = it }
                         Page.DASHBOARD -> DashboardPage(viewModel, settings, visibleApps) { chooser = it }
                         Page.NOTIFICATIONS -> NotificationsPage(viewModel, settings, listenerConnected)
@@ -726,6 +733,7 @@ private fun BackupPage(viewModel: LauncherViewModel, settings: LauncherSettings,
         backupStatus?.let { Hint(it) }
         Hint("Favourites, folders, hidden apps and settings. Logins and the GitHub token are never included.")
     }
+    AutoBackupGroup(viewModel, settings)
     Group("Updates") {
         InfoRow("Installed", "build $installedBuild")
         SwitchRow("Check automatically", settings.autoCheckUpdates) { v -> viewModel.update { it.copy(autoCheckUpdates = v) } }
@@ -956,4 +964,39 @@ internal fun Field(value: String, placeholder: String, password: Boolean = false
         ),
         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
     )
+}
+
+/** Automatic backups into a folder you choose, kept to the newest five. */
+@Composable
+private fun AutoBackupGroup(viewModel: LauncherViewModel, settings: LauncherSettings) {
+    val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    val status by viewModel.backupStatus.collectAsStateWithLifecycle()
+    val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) {
+            // Keep the right to write there after the picker closes (and after restarts).
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION,
+                )
+            }
+            viewModel.update { it.copy(autoBackupFolder = uri.toString()) }
+        }
+    }
+    Group("Automatic backup") {
+        SwitchRow("Back up automatically", settings.autoBackup) { on -> viewModel.update { it.copy(autoBackup = on) } }
+        NavRow(
+            "Backup folder",
+            settings.autoBackupFolder.takeIf { it.isNotBlank() }?.let { Uri.parse(it).lastPathSegment } ?: "Not chosen",
+        ) { folderPicker.launch(null) }
+        ChoiceRow("Every day", selected = settings.autoBackupDays == 1) { viewModel.update { it.copy(autoBackupDays = 1) } }
+        ChoiceRow("Every week", selected = settings.autoBackupDays == 7) { viewModel.update { it.copy(autoBackupDays = 7) } }
+        NavRow("Back up now") { scope.launch { viewModel.runBackup(force = true) } }
+        status?.let { Hint(it) }
+        if (settings.lastBackupMs > 0) {
+            Hint("Last backup: " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(settings.lastBackupMs)))
+        }
+        Hint("Runs while the launcher is on screen, keeps the newest 5 files, and never includes your logins.")
+    }
 }

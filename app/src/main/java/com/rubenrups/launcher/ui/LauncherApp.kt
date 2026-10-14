@@ -75,6 +75,17 @@ fun LauncherApp(viewModel: LauncherViewModel) {
         }
     }
 
+    // Automatic backup: look once an hour while the launcher is on screen (and shortly after it appears).
+    LaunchedEffect(lifecycleOwner, settings.autoBackup, settings.autoBackupFolder, settings.autoBackupDays) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            delay(10_000)
+            while (true) {
+                viewModel.runBackup()
+                delay(60 * 60_000L)
+            }
+        }
+    }
+
     // Poll LibreLinkUp once a minute, only while the launcher is on screen; a login change polls straight away.
     LaunchedEffect(settings.glucoseEnabled, settings.glucoseEmail, settings.glucosePassword) {
         // Typing the login restarts this effect on every keystroke; the pause keeps half-typed logins off the server.

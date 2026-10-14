@@ -105,6 +105,23 @@ data class LauncherSettings(
     val dashboardOrder: List<String> = DashboardModules.all.map { it.first },
     /** Keep the screen on while car mode is open. */
     val keepScreenOn: Boolean = true,
+    /** Write a backup file into [autoBackupFolder] every [autoBackupDays] days while the launcher is in use. */
+    val autoBackup: Boolean = false,
+    /** The chosen folder (an Android document-tree address). Device-specific, so not part of a backup. */
+    val autoBackupFolder: String = "",
+    val autoBackupDays: Int = 1,
+    val lastBackupMs: Long = 0L,
+    /** Focus mode: [focusApps] (app keys) are hidden while it is on, by hand or on a schedule. */
+    val focusApps: Set<String> = emptySet(),
+    val focusManual: Boolean = false,
+    val focusScheduleOn: Boolean = false,
+    /** Days the schedule runs, as java.util.Calendar day numbers (Sunday = 1 … Saturday = 7). */
+    val focusDays: Set<Int> = setOf(2, 3, 4, 5, 6),
+    /** Start and end of the schedule, in minutes after midnight. */
+    val focusStartMin: Int = 9 * 60,
+    val focusEndMin: Int = 17 * 60,
+    /** Focus mode is paused until this time (epoch millis). */
+    val focusSnoozeUntil: Long = 0L,
     /** Open car mode by itself when connecting to one of [carBluetoothDevices] (device addresses). */
     val carAutoBluetooth: Boolean = false,
     val carBluetoothDevices: Set<String> = emptySet(),
@@ -255,6 +272,17 @@ class LauncherPrefs(context: Context) {
         dashboardOrder = prefs.getString(KEY_DASH_ORDER, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }
             .let { saved -> saved.filter { k -> DashboardModules.all.any { it.first == k } } + DashboardModules.all.map { it.first }.filter { it !in saved } },
         keepScreenOn = prefs.getBoolean(KEY_KEEP_SCREEN_ON, true),
+        autoBackup = prefs.getBoolean(KEY_AUTO_BACKUP, false),
+        autoBackupFolder = prefs.getString(KEY_AUTO_BACKUP_FOLDER, "").orEmpty(),
+        autoBackupDays = prefs.getInt(KEY_AUTO_BACKUP_DAYS, 1),
+        lastBackupMs = prefs.getLong(KEY_LAST_BACKUP, 0L),
+        focusApps = prefs.getString(KEY_FOCUS_APPS, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }.toSet(),
+        focusManual = prefs.getBoolean(KEY_FOCUS_MANUAL, false),
+        focusScheduleOn = prefs.getBoolean(KEY_FOCUS_SCHEDULE, false),
+        focusDays = prefs.getString(KEY_FOCUS_DAYS, null)?.split(SEPARATOR)?.mapNotNull { it.toIntOrNull() }?.toSet() ?: setOf(2, 3, 4, 5, 6),
+        focusStartMin = prefs.getInt(KEY_FOCUS_START, 9 * 60),
+        focusEndMin = prefs.getInt(KEY_FOCUS_END, 17 * 60),
+        focusSnoozeUntil = prefs.getLong(KEY_FOCUS_SNOOZE, 0L),
         carAutoBluetooth = prefs.getBoolean(KEY_CAR_AUTO_BT, false),
         carBluetoothDevices = prefs.getString(KEY_CAR_BT_DEVICES, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }.toSet(),
         carAutoCharging = prefs.getBoolean(KEY_CAR_AUTO_CHARGE, false),
@@ -334,6 +362,17 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_DASH_HIDDEN, s.dashboardHidden.joinToString(SEPARATOR))
             .putString(KEY_DASH_ORDER, s.dashboardOrder.joinToString(SEPARATOR))
             .putBoolean(KEY_KEEP_SCREEN_ON, s.keepScreenOn)
+            .putBoolean(KEY_AUTO_BACKUP, s.autoBackup)
+            .putString(KEY_AUTO_BACKUP_FOLDER, s.autoBackupFolder)
+            .putInt(KEY_AUTO_BACKUP_DAYS, s.autoBackupDays)
+            .putLong(KEY_LAST_BACKUP, s.lastBackupMs)
+            .putString(KEY_FOCUS_APPS, s.focusApps.joinToString(SEPARATOR))
+            .putBoolean(KEY_FOCUS_MANUAL, s.focusManual)
+            .putBoolean(KEY_FOCUS_SCHEDULE, s.focusScheduleOn)
+            .putString(KEY_FOCUS_DAYS, s.focusDays.joinToString(SEPARATOR))
+            .putInt(KEY_FOCUS_START, s.focusStartMin)
+            .putInt(KEY_FOCUS_END, s.focusEndMin)
+            .putLong(KEY_FOCUS_SNOOZE, s.focusSnoozeUntil)
             .putBoolean(KEY_CAR_AUTO_BT, s.carAutoBluetooth)
             .putString(KEY_CAR_BT_DEVICES, s.carBluetoothDevices.joinToString(SEPARATOR))
             .putBoolean(KEY_CAR_AUTO_CHARGE, s.carAutoCharging)
@@ -494,6 +533,17 @@ class LauncherPrefs(context: Context) {
         const val KEY_DASH_HIDDEN = "dashboard_hidden"
         const val KEY_DASH_ORDER = "dashboard_order"
         const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
+        const val KEY_AUTO_BACKUP = "auto_backup"
+        const val KEY_AUTO_BACKUP_FOLDER = "auto_backup_folder"
+        const val KEY_AUTO_BACKUP_DAYS = "auto_backup_days"
+        const val KEY_LAST_BACKUP = "last_backup_ms"
+        const val KEY_FOCUS_APPS = "focus_apps"
+        const val KEY_FOCUS_MANUAL = "focus_manual"
+        const val KEY_FOCUS_SCHEDULE = "focus_schedule"
+        const val KEY_FOCUS_DAYS = "focus_days"
+        const val KEY_FOCUS_START = "focus_start_min"
+        const val KEY_FOCUS_END = "focus_end_min"
+        const val KEY_FOCUS_SNOOZE = "focus_snooze_until"
         const val KEY_CAR_AUTO_BT = "car_auto_bluetooth"
         const val KEY_CAR_BT_DEVICES = "car_bluetooth_devices"
         const val KEY_CAR_AUTO_CHARGE = "car_auto_charging"
@@ -527,7 +577,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_AUTO_DOWNLOAD = "auto_download_updates"
         const val KEY_DISMISSED_UPDATE = "dismissed_update"
         /** Credentials, places and live state: never written to a backup file, and a restore leaves them alone. */
-        val SECRET_KEYS = setOf(KEY_UPDATE_TOKEN, KEY_GLUCOSE_EMAIL, KEY_GLUCOSE_PASSWORD, KEY_DESTINATIONS, KEY_HOME_ADDRESS, KEY_WORK_ADDRESS, KEY_CAR_WAS_OPEN, KEY_CALL_CONTACTS, KEY_CAR_BT_DEVICES)
+        val SECRET_KEYS = setOf(KEY_UPDATE_TOKEN, KEY_GLUCOSE_EMAIL, KEY_GLUCOSE_PASSWORD, KEY_DESTINATIONS, KEY_HOME_ADDRESS, KEY_WORK_ADDRESS, KEY_CAR_WAS_OPEN, KEY_CALL_CONTACTS, KEY_CAR_BT_DEVICES, KEY_AUTO_BACKUP_FOLDER, KEY_LAST_BACKUP, KEY_FOCUS_SNOOZE)
         const val KEY_ANCHOR_BOTTOM = "anchor_bottom"
         const val KEY_SHOW_ICONS = "show_icons"
         const val KEY_SHOW_SEARCH_BUTTON = "show_search_button"

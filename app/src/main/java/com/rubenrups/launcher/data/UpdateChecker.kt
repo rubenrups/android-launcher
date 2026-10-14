@@ -9,7 +9,14 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /** [assetUrl] is the GitHub API URL of the APK file (works for private repositories with a token). */
-data class UpdateInfo(val build: Int, val pageUrl: String, val assetUrl: String?, val size: Long)
+data class UpdateInfo(
+    val build: Int,
+    val pageUrl: String,
+    val assetUrl: String?,
+    val size: Long,
+    /** What changed, from the release text (the commit message of that build); blank when there is none. */
+    val notes: String = "",
+)
 
 /**
  * Looks at the newest GitHub release. CI publishes each build as a release tagged "build-N", where N
@@ -64,7 +71,13 @@ object UpdateChecker {
             }
             Result.Available(
                 installed,
-                UpdateInfo(build, release.getString("html_url"), apk?.optString("url")?.ifBlank { null }, apk?.optLong("size") ?: 0L),
+                UpdateInfo(
+                    build,
+                    release.getString("html_url"),
+                    apk?.optString("url")?.ifBlank { null },
+                    apk?.optLong("size") ?: 0L,
+                    cleanNotes(release.optString("body")),
+                ),
             )
         } else {
             Result.UpToDate(installed)
@@ -126,6 +139,13 @@ object UpdateChecker {
         }
         throw IOException("too many redirects")
     }
+
+    /** Drops the attribution trailers a commit message ends with, keeping what a person wants to read. */
+    private fun cleanNotes(body: String): String =
+        body.lines()
+            .filterNot { it.startsWith("Co-Authored-By:", ignoreCase = true) || it.startsWith("Claude-Session:", ignoreCase = true) }
+            .joinToString("\n")
+            .trim()
 
     private const val MAX_REDIRECTS = 5
     private const val DOWNLOAD_TIMEOUT_MS = 30_000

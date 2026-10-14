@@ -19,7 +19,9 @@ import com.rubenrups.launcher.data.AppRepository
 import com.rubenrups.launcher.data.IconPack
 import com.rubenrups.launcher.data.LauncherPrefsHolder
 import com.rubenrups.launcher.data.Destination
+import com.rubenrups.launcher.data.BackupScheduler
 import com.rubenrups.launcher.data.GestureActions
+import com.rubenrups.launcher.data.focusActive
 import com.rubenrups.launcher.data.GlucoseState
 import com.rubenrups.launcher.data.UpdateManager
 import com.rubenrups.launcher.data.VirtualApps
@@ -31,6 +33,10 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -49,14 +55,28 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val settings: StateFlow<LauncherSettings> = prefs.settings
     val iconVersion: StateFlow<Int> = repository.iconVersion
 
+    /** True while focus mode is hiding its apps. Re-checked every 30 s so a schedule starts and ends on time. */
+    val focusActive: StateFlow<Boolean> =
+        combine(settings, flow { while (true) { emit(Unit); delay(30_000) } }) { s, _ -> s.focusActive() }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.Eagerly, settings.value.focusActive())
+
+    /** Every installed app, including the ones focus mode is hiding (settings need to be able to untick them). */
+    val installedApps: StateFlow<List<AppInfo>> = repository.apps
+
     /** Installed apps plus the launcher's own buttons (App drawer, Dashboard), which behave like apps in lists. */
     private val appsWithButtons: StateFlow<List<AppInfo>> =
         repository.apps.map { it + VirtualApps.all }.stateIn(viewModelScope, SharingStarted.Eagerly, VirtualApps.all)
 
     /** Apps the user hasn't hidden: what the drawer and search show. */
     val visibleApps: StateFlow<List<AppInfo>> =
-        combine(appsWithButtons, settings.map { it.hidden }.distinctUntilChanged()) { apps, hidden ->
-            apps.filter { it.key !in hidden }
+        combine(
+            appsWithButtons,
+            settings.map { it.hidden }.distinctUntilChanged(),
+            focusActive,
+            settings.map { it.focusApps }.distinctUntilChanged(),
+        ) { apps, hidden, focus, focusApps ->
+            apps.filter { it.key !in hidden && !(focus && it.key in focusApps) }
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     val hiddenApps: StateFlow<List<AppInfo>> =
@@ -66,7 +86,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     /** Favourites (apps and folders) in the user's order, silently dropping uninstalled apps. */
     val favourites: StateFlow<List<Entry>> =
-        combine(repository.apps, settings) { apps, s ->
+        combine(repository.apps, settings, focusActive) { allApps, s, focus ->
+            val apps = if (focus) allApps.filter { it.key !in s.focusApps } else allApps
             val byKey = apps.associateBy { it.key }
             val folders = s.folders.associateBy { it.key }
             val result = ArrayList<Entry>()
@@ -190,6 +211,27 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun installUpdate() {
         viewModelScope.launch { UpdateManager.installNow(getApplication(), settings.value.updateToken) }
+    }
+
+    // ----- focus mode -----
+
+    /** Starts focus mode by hand (and ends any pause), or turns the by-hand part off. */
+    fun setFocusManual(on: Boolean) = update { it.copy(focusManual = on, focusSnoozeUntil = if (on) 0L else it.focusSnoozeUntil) }
+
+    /** Pauses focus mode (by hand or scheduled) for [minutes]. */
+    fun pauseFocus(minutes: Int) = update { it.copy(focusSnoozeUntil = System.currentTimeMillis() + minutes * 60_000L) }
+
+    // ----- automatic backups -----
+
+    private val _backupStatus = MutableStateFlow<String?>(null)
+    val backupStatus: StateFlow<String?> = _backupStatus.asStateFlow()
+
+    /** Writes a backup if one is due (or [force]d). Called from the launcher's periodic loop and the settings button. */
+    suspend fun runBackup(force: Boolean = false) {
+        val s = settings.value
+        if (!force && !BackupScheduler.isDue(s)) return
+        val problem = withContext(Dispatchers.IO) { BackupScheduler.write(getApplication(), prefs) }
+        _backupStatus.value = problem ?: "Backed up just now."
     }
 
     fun showOnboarding() { _onboardingOpen.value = true }
