@@ -100,6 +100,8 @@ data class LauncherSettings(
     val dashboardOrder: List<String> = DashboardModules.all.map { it.first },
     /** Keep the screen on while car mode is open. */
     val keepScreenOn: Boolean = true,
+    /** The first-run setup guide has been shown (or skipped). */
+    val onboardingDone: Boolean = false,
     /** Launch counts and last-launch times, for the folder sorts "most used" and "most recent". */
     val usage: Map<String, AppUsage> = emptyMap(),
     /** How a folder opened as a popup from the home screen looks. */
@@ -234,6 +236,7 @@ class LauncherPrefs(context: Context) {
         dashboardOrder = prefs.getString(KEY_DASH_ORDER, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }
             .let { saved -> saved.filter { k -> DashboardModules.all.any { it.first == k } } + DashboardModules.all.map { it.first }.filter { it !in saved } },
         keepScreenOn = prefs.getBoolean(KEY_KEEP_SCREEN_ON, true),
+        onboardingDone = prefs.getBoolean(KEY_ONBOARDING_DONE, false),
         usage = decodeUsage(prefs.getString(KEY_USAGE, null)),
         folderPopupGrid = prefs.getBoolean(KEY_POPUP_GRID, false),
         folderPopupColumns = prefs.getInt(KEY_POPUP_COLUMNS, 4),
@@ -304,6 +307,7 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_DASH_HIDDEN, s.dashboardHidden.joinToString(SEPARATOR))
             .putString(KEY_DASH_ORDER, s.dashboardOrder.joinToString(SEPARATOR))
             .putBoolean(KEY_KEEP_SCREEN_ON, s.keepScreenOn)
+            .putBoolean(KEY_ONBOARDING_DONE, s.onboardingDone)
             .putString(KEY_USAGE, encodeUsage(s.usage))
             .putBoolean(KEY_POPUP_GRID, s.folderPopupGrid)
             .putInt(KEY_POPUP_COLUMNS, s.folderPopupColumns)
@@ -441,6 +445,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_DASH_HIDDEN = "dashboard_hidden"
         const val KEY_DASH_ORDER = "dashboard_order"
         const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
+        const val KEY_ONBOARDING_DONE = "onboarding_done"
         const val KEY_USAGE = "app_usage"
         const val KEY_POPUP_GRID = "folder_popup_grid"
         const val KEY_POPUP_COLUMNS = "folder_popup_columns"

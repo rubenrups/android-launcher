@@ -43,6 +43,7 @@ fun LauncherApp(viewModel: LauncherViewModel) {
     val drawerOpen by viewModel.drawerOpen.collectAsStateWithLifecycle()
     val settingsOpen by viewModel.settingsOpen.collectAsStateWithLifecycle()
     val dashboardOpen by viewModel.dashboardOpen.collectAsStateWithLifecycle()
+    val onboardingOpen by viewModel.onboardingOpen.collectAsStateWithLifecycle()
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val dashboardEdge by viewModel.dashboardEdge.collectAsStateWithLifecycle()
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -200,5 +201,8 @@ fun LauncherApp(viewModel: LauncherViewModel) {
         ) {
             SettingsScreen(viewModel, onClose = { viewModel.setSettingsOpen(false) })
         }
+
+        // The first-run setup guide sits on top of everything.
+        if (onboardingOpen) OnboardingScreen(viewModel, onFinish = { viewModel.finishOnboarding() })
     }
 }

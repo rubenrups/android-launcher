@@ -127,6 +127,7 @@ private val SearchIndex = listOf(
     SettingHit("Widgets", Page.APPS, "add remove"),
     SettingHit("Work profile", Page.APPS, "pause resume work apps"),
     SettingHit("Hidden apps", Page.APPS, "unhide"),
+    SettingHit("Setup guide", Page.BACKUP, "onboarding first run default home permissions"),
     SettingHit("Save a backup file", Page.BACKUP, "export"),
     SettingHit("Restore from a backup file", Page.BACKUP, "import"),
     SettingHit("Check for updates", Page.BACKUP, "update install build"),
@@ -711,6 +712,10 @@ private fun BackupPage(viewModel: LauncherViewModel, settings: LauncherSettings,
     }
     val installedBuild = remember { UpdateChecker.installedBuild(context) }
 
+    Group("Setup") {
+        NavRow("Open the setup guide") { viewModel.showOnboarding() }
+        Hint("Home app, notification access, update permission and calendar, step by step.")
+    }
     Group("Backup") {
         NavRow("Save a backup file") { exportLauncher.launch("rups-launcher-backup.json") }
         NavRow("Restore from a backup file") { importLauncher.launch(arrayOf("*/*")) }

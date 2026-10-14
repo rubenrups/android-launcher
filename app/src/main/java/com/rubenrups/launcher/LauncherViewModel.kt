@@ -122,6 +122,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val _launchPulse = MutableStateFlow(0)
     val launchPulse: StateFlow<Int> = _launchPulse.asStateFlow()
 
+    // New installs start with the setup guide; anyone who already has favourites is an existing user and skips it.
+    private val _onboardingOpen = MutableStateFlow(!settings.value.onboardingDone && settings.value.favourites.isEmpty())
+    val onboardingOpen: StateFlow<Boolean> = _onboardingOpen.asStateFlow()
+
     private val _dashboardEdge = MutableStateFlow(DashboardEdge.NONE)
     val dashboardEdge: StateFlow<DashboardEdge> = _dashboardEdge.asStateFlow()
 
@@ -131,6 +135,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val glucose: StateFlow<GlucoseState> = glucoseStore.state
 
     init {
+        if (!settings.value.onboardingDone && settings.value.favourites.isNotEmpty()) update { it.copy(onboardingDone = true) }
         viewModelScope.launch {
             settings.map { it.iconPack }.distinctUntilChanged().collect { repository.setIconPack(it) }
         }
@@ -174,6 +179,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun installUpdate() {
         viewModelScope.launch { UpdateManager.installNow(getApplication(), settings.value.updateToken) }
+    }
+
+    fun showOnboarding() { _onboardingOpen.value = true }
+
+    fun finishOnboarding() {
+        _onboardingOpen.value = false
+        update { it.copy(onboardingDone = true) }
     }
 
     fun addCarApp(key: String) = update { s ->
