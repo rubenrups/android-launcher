@@ -58,6 +58,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
@@ -75,6 +76,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.notifications.NavigationState
 import com.rubenrups.launcher.notifications.NotificationStore
+import com.rubenrups.launcher.data.AppInfo
 import java.util.Locale
 
 private val CardShape = RoundedCornerShape(16.dp)
@@ -89,6 +91,8 @@ private val CardWeight = mapOf(
     DashboardModules.WEATHER to 1.5f,
     DashboardModules.QUICK to 1.4f,
     DashboardModules.STATS to 1.0f,
+    DashboardModules.CLOCK to 1.0f,
+    DashboardModules.RECENTS to 1.6f,
 )
 
 /**
@@ -122,6 +126,7 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
     val visible = settings.dashboardOrder.filter { key ->
         key !in settings.dashboardHidden && when (key) {
             DashboardModules.WEATHER -> hours.isNotEmpty()
+            DashboardModules.RECENTS -> settings.recents.isNotEmpty()
             else -> true
         }
     }
@@ -136,6 +141,8 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
             DashboardModules.APPS -> QuickAppsCard(viewModel, settings.carApps, onOpenSettings)
             DashboardModules.CALLS -> CallsCard(settings.callContacts, settings.callDirect, onOpenSettings)
             DashboardModules.QUICK -> QuickSettingsCard()
+            DashboardModules.CLOCK -> ClockCard()
+            DashboardModules.RECENTS -> RecentAppsCard(viewModel, settings.recents)
             DashboardModules.STATS -> StatTiles(battery, weather, nextEvent?.text)
             else -> Unit
         }
@@ -659,26 +666,61 @@ private fun QuickAppsCard(viewModel: LauncherViewModel, keys: List<String>, onOp
                 modifier = Modifier.clickable(onClick = onOpenSettings).padding(vertical = 10.dp),
             )
         }
-        apps.chunked(NAV_TILES_PER_ROW).forEach { rowApps ->
-            Spacer(Modifier.height(10.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                rowApps.forEach { app ->
-                    Column(
-                        Modifier
-                            .weight(1f)
-                            .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
-                            .clickable { viewModel.launch(app) }
-                            .padding(horizontal = 4.dp, vertical = 14.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                    ) {
-                        AppIcon(app, viewModel, 56.dp)
-                        Spacer(Modifier.height(6.dp))
-                        Text(app.label, color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
+        AppTiles(viewModel, apps)
+    }
+}
+
+/** The apps used most recently (newest first), as big tiles. */
+@Composable
+private fun RecentAppsCard(viewModel: LauncherViewModel, keys: List<String>) {
+    val installed by viewModel.visibleApps.collectAsStateWithLifecycle()
+    val byKey = remember(installed) { installed.associateBy { it.key } }
+    val apps = keys.mapNotNull { byKey[it] }.take(NAV_TILES_PER_ROW * 2)
+    if (apps.isEmpty()) return
+    Card {
+        Text("Recent apps", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+        AppTiles(viewModel, apps)
+    }
+}
+
+@Composable
+private fun AppTiles(viewModel: LauncherViewModel, apps: List<AppInfo>) {
+    apps.chunked(NAV_TILES_PER_ROW).forEach { rowApps ->
+        Spacer(Modifier.height(10.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            rowApps.forEach { app ->
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+                        .clickable { viewModel.launch(app) }
+                        .padding(horizontal = 4.dp, vertical = 14.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    AppIcon(app, viewModel, 56.dp)
+                    Spacer(Modifier.height(6.dp))
+                    Text(app.label, color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                repeat(NAV_TILES_PER_ROW - rowApps.size) { Spacer(Modifier.weight(1f)) }
             }
+            repeat(NAV_TILES_PER_ROW - rowApps.size) { Spacer(Modifier.weight(1f)) }
         }
+    }
+}
+
+/** A big clock and date for the dashboard. */
+@Composable
+private fun ClockCard() {
+    val now by produceState(java.util.Date()) {
+        while (true) {
+            value = java.util.Date()
+            kotlinx.coroutines.delay(10_000)
+        }
+    }
+    val timeFormat = remember { java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT) }
+    val dateFormat = remember { java.text.SimpleDateFormat("EEEE, MMM d", Locale.getDefault()) }
+    Card {
+        Text(timeFormat.format(now), color = Color.White, fontSize = 72.sp, fontWeight = FontWeight.Light)
+        Text(dateFormat.format(now), color = Color.White.copy(alpha = 0.7f), fontSize = 20.sp)
     }
 }
 

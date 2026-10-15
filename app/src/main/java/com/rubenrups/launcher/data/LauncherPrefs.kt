@@ -30,13 +30,17 @@ object DashboardModules {
     const val STATS = "stats"
     const val APPS = "apps"
     const val CALLS = "calls"
+    const val CLOCK = "clock"
+    const val RECENTS = "recents"
 
     /** Default order, and the names shown in settings. */
     val all: List<Pair<String, String>> = listOf(
+        CLOCK to "Clock",
         GLUCOSE to "Glucose",
         MEDIA to "Media player",
         NAVIGATION to "Navigation",
         APPS to "Quick launch apps",
+        RECENTS to "Recent apps",
         CALLS to "Call buttons",
         WEATHER to "Hourly weather",
         QUICK to "Quick settings",
