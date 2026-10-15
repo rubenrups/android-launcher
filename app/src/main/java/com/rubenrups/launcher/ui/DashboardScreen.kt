@@ -58,6 +58,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -80,6 +82,9 @@ import com.rubenrups.launcher.data.AppInfo
 import java.util.Locale
 
 private val CardShape = RoundedCornerShape(16.dp)
+
+/** True while a card is drawn at half width, so it can shrink its text. */
+private val LocalHalfCard = compositionLocalOf { false }
 
 /** Rough relative heights, used to pack the cards into two columns on wide screens. */
 private val CardWeight = mapOf(
@@ -155,7 +160,34 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
             onMoveEarlier = { viewModel.swapDashboardCards(key, visible[index - 1]) },
             onMoveLater = { viewModel.swapDashboardCards(key, visible[index + 1]) },
             onHide = { viewModel.setDashboardCardHidden(key, true) },
-        ) { content(key) }
+            isHalf = key in settings.dashboardHalf,
+            onToggleHalf = { viewModel.setDashboardCardHalf(key, key !in settings.dashboardHalf) },
+        ) {
+            CompositionLocalProvider(LocalHalfCard provides (key in settings.dashboardHalf)) { content(key) }
+        }
+    }
+    // Neighbouring half-width cards share a row; everything else is a row of its own.
+    val units = ArrayList<List<String>>()
+    run {
+        var i = 0
+        while (i < visible.size) {
+            val key = visible[i]
+            if (key in settings.dashboardHalf && i + 1 < visible.size && visible[i + 1] in settings.dashboardHalf) {
+                units.add(listOf(key, visible[i + 1])); i += 2
+            } else {
+                units.add(listOf(key)); i += 1
+            }
+        }
+    }
+    val unit: @Composable (List<String>) -> Unit = { keys ->
+        if (keys.size == 2 || keys[0] in settings.dashboardHalf) {
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                keys.forEach { k -> Box(Modifier.weight(1f)) { key(k) { slot(k) } } }
+                if (keys.size == 1) Spacer(Modifier.weight(1f))
+            }
+        } else {
+            key(keys[0]) { slot(keys[0]) }
+        }
     }
 
     Column(
@@ -200,20 +232,20 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
     ) {
         if (wide) {
             // Auto-stack: each card goes into whichever column is currently shorter.
-            val left = ArrayList<String>()
-            val right = ArrayList<String>()
+            val left = ArrayList<List<String>>()
+            val right = ArrayList<List<String>>()
             var leftHeight = 0f
             var rightHeight = 0f
-            visible.forEach { key ->
-                val weight = CardWeight[key] ?: 1f
-                if (leftHeight <= rightHeight) { left.add(key); leftHeight += weight } else { right.add(key); rightHeight += weight }
+            units.forEach { keys ->
+                val weight = keys.maxOf { CardWeight[it] ?: 1f }
+                if (leftHeight <= rightHeight) { left.add(keys); leftHeight += weight } else { right.add(keys); rightHeight += weight }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) { left.forEach { key(it) { slot(it) } } }
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) { right.forEach { key(it) { slot(it) } } }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) { left.forEach { unit(it) } }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(14.dp)) { right.forEach { unit(it) } }
             }
         } else {
-            visible.forEach { key(it) { slot(it) } }
+            units.forEach { unit(it) }
         }
         Text(
             "Swipe to control car mode · hold a card to move or hide it",
@@ -232,6 +264,8 @@ private fun CardSlot(
     onMoveEarlier: () -> Unit,
     onMoveLater: () -> Unit,
     onHide: () -> Unit,
+    isHalf: Boolean,
+    onToggleHalf: () -> Unit,
     content: @Composable () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -240,6 +274,10 @@ private fun CardSlot(
         DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
             if (hasEarlier) DropdownMenuItem(text = { Text("Move earlier") }, onClick = { menuOpen = false; onMoveEarlier() })
             if (hasLater) DropdownMenuItem(text = { Text("Move later") }, onClick = { menuOpen = false; onMoveLater() })
+            DropdownMenuItem(
+                text = { Text(if (isHalf) "Full width" else "Half width") },
+                onClick = { menuOpen = false; onToggleHalf() },
+            )
             DropdownMenuItem(text = { Text("Hide card") }, onClick = { menuOpen = false; onHide() })
         }
     }
@@ -275,6 +313,7 @@ private fun GlucoseCard(viewModel: LauncherViewModel, onOpenSettings: () -> Unit
     val stale = latest != null && age > GLUCOSE_STALE_MS
     // Collapsed by default: the value and arrow are usually all you need. Tap the card for the graph and stats.
     var expanded by rememberSaveable { mutableStateOf(false) }
+    val half = LocalHalfCard.current
     Card(onClick = { expanded = !expanded }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -292,7 +331,7 @@ private fun GlucoseCard(viewModel: LauncherViewModel, onOpenSettings: () -> Unit
                 Text(
                     formatGlucose(latest.mgdl, settings.glucoseMmol) + " " + trendArrow(latest.trend),
                     color = if (stale) Color.White.copy(alpha = 0.5f) else glucoseColor(latest.mgdl, settings),
-                    fontSize = if (expanded) 56.sp else 44.sp,
+                    fontSize = if (half) (if (expanded) 40.sp else 34.sp) else if (expanded) 56.sp else 44.sp,
                     fontWeight = FontWeight.Light,
                 )
                 Text(
@@ -718,9 +757,10 @@ private fun ClockCard() {
     }
     val timeFormat = remember { java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT) }
     val dateFormat = remember { java.text.SimpleDateFormat("EEEE, MMM d", Locale.getDefault()) }
+    val half = LocalHalfCard.current
     Card {
-        Text(timeFormat.format(now), color = Color.White, fontSize = 72.sp, fontWeight = FontWeight.Light)
-        Text(dateFormat.format(now), color = Color.White.copy(alpha = 0.7f), fontSize = 20.sp)
+        Text(timeFormat.format(now), color = Color.White, fontSize = if (half) 40.sp else 72.sp, fontWeight = FontWeight.Light)
+        Text(dateFormat.format(now), color = Color.White.copy(alpha = 0.7f), fontSize = if (half) 15.sp else 20.sp, maxLines = 1)
     }
 }
 

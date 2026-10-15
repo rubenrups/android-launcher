@@ -110,6 +110,8 @@ data class LauncherSettings(
     val launchAnimation: Boolean = true,
     /** [DashboardModules] keys that are switched off. Stored as the hidden ones so new cards appear by default. */
     val dashboardHidden: Set<String> = emptySet(),
+    /** [DashboardModules] keys shown at half width; neighbouring half cards share a row. */
+    val dashboardHalf: Set<String> = emptySet(),
     /** The order of the car-mode cards ([DashboardModules] keys); missing ones are added at the end. */
     val dashboardOrder: List<String> = DashboardModules.all.map { it.first },
     /** Keep the screen on while car mode is open. */
@@ -289,6 +291,7 @@ class LauncherPrefs(context: Context) {
         drawerOpacity = prefs.getInt(KEY_DRAWER_OPACITY, 90),
         dashboardOpacity = prefs.getInt(KEY_DASHBOARD_OPACITY, 100),
         launchAnimation = prefs.getBoolean(KEY_LAUNCH_ANIMATION, true),
+        dashboardHalf = prefs.getString(KEY_DASH_HALF, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }.toSet(),
         dashboardHidden = prefs.getString(KEY_DASH_HIDDEN, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }.toSet(),
         dashboardOrder = prefs.getString(KEY_DASH_ORDER, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }
             .let { saved -> saved.filter { k -> DashboardModules.all.any { it.first == k } } + DashboardModules.all.map { it.first }.filter { it !in saved } },
@@ -391,6 +394,7 @@ class LauncherPrefs(context: Context) {
             .putInt(KEY_DASHBOARD_OPACITY, s.dashboardOpacity)
             .putBoolean(KEY_LAUNCH_ANIMATION, s.launchAnimation)
             .putString(KEY_DASH_HIDDEN, s.dashboardHidden.joinToString(SEPARATOR))
+            .putString(KEY_DASH_HALF, s.dashboardHalf.joinToString(SEPARATOR))
             .putString(KEY_DASH_ORDER, s.dashboardOrder.joinToString(SEPARATOR))
             .putBoolean(KEY_KEEP_SCREEN_ON, s.keepScreenOn)
             .putString(KEY_ACCENT, s.accentColor)
@@ -572,6 +576,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_UPDATE_MINUTES = "update_check_minutes"
         const val KEY_LAUNCH_ANIMATION = "launch_animation"
         const val KEY_DASH_HIDDEN = "dashboard_hidden"
+        const val KEY_DASH_HALF = "dashboard_half"
         const val KEY_DASH_ORDER = "dashboard_order"
         const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
         const val KEY_ACCENT = "accent_color"

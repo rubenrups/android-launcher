@@ -610,6 +610,14 @@ private fun DashboardPage(viewModel: LauncherViewModel, settings: LauncherSettin
                     fontSize = 18.sp,
                     modifier = Modifier.clickable(enabled = index < order.lastIndex) { viewModel.swapDashboardCards(key, order[index + 1]) }.padding(12.dp),
                 )
+                Text(
+                    if (key in settings.dashboardHalf) "½" else "1",
+                    color = if (key in settings.dashboardHalf) Accent else Color.White.copy(alpha = 0.6f),
+                    fontSize = 18.sp,
+                    modifier = Modifier
+                        .clickable { viewModel.setDashboardCardHalf(key, key !in settings.dashboardHalf) }
+                        .padding(horizontal = 12.dp, vertical = 12.dp),
+                )
                 Switch(
                     checked = key !in settings.dashboardHidden,
                     onCheckedChange = { on -> viewModel.setDashboardCardHidden(key, !on) },
@@ -618,7 +626,7 @@ private fun DashboardPage(viewModel: LauncherViewModel, settings: LauncherSettin
             }
         }
         Hint(
-            "You can also hold a card in car mode to move or hide it. Navigation shows the next turn while a route is active, and Home / Work / Maps buttons otherwise, " +
+            "Tap 1 / ½ to make a card half width: two half cards next to each other share a row (nice for the clock and glucose). You can also hold a card in car mode to move, resize or hide it. Navigation shows the next turn while a route is active, and Home / Work / Maps buttons otherwise, " +
                 "hourly weather needs the weather city (Home screen), and glucose is set up under its own category."
         )
     }

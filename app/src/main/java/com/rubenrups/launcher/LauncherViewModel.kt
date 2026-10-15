@@ -299,6 +299,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         s.copy(dashboardHidden = if (hidden) s.dashboardHidden + key else s.dashboardHidden - key)
     }
 
+    fun setDashboardCardHalf(key: String, half: Boolean) = update { s ->
+        s.copy(dashboardHalf = if (half) s.dashboardHalf + key else s.dashboardHalf - key)
+    }
+
     fun dismissUpdate(build: Int) = update { it.copy(dismissedUpdate = build) }
 
     /** Short text for what a swipe will do, shown while swiping; null when the swipe is set to do nothing. */
