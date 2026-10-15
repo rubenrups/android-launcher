@@ -1,0 +1,69 @@
+name: Build debug APK
+
+on:
+  # One build per push (a push already shows up as a check on its pull request, so no pull_request trigger).
+  push:
+    paths-ignore:
+      - "**.md"
+  workflow_dispatch:
+
+# A newer push to the same branch makes an unfinished older build pointless: cancel it.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # needed to publish the release below
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          # Branch builds may refresh the Gradle cache too (the default only lets the main branch write it).
+          cache-read-only: false
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rups-launcher-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+
+      # Each push becomes a pre-release "build-N" (N = the app's versionCode), which is what the in-app
+      # update check looks for. continue-on-error: a failed release must not turn a good build red.
+      - name: Publish release
+        if: github.event_name == 'push'
+        continue-on-error: true
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
+          name: Build ${{ github.run_number }}
+          # The launcher shows this as "What's new" before you install.
+          body: ${{ github.event.head_commit.message }}
+          prerelease: true
+          files: app/build/outputs/apk/debug/app-debug.apk
+
+      # Every push leaves a "build-N" pre-release behind. Keep the newest 10 (the in-app update check only
+      # ever looks at the newest) and delete the rest together with their tags.
+      - name: Prune old pre-releases
+        if: github.event_name == 'push'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release list --repo "$GITHUB_REPOSITORY" --limit 200 --json tagName,createdAt \
+            --jq 'map(select(.tagName | startswith("build-"))) | sort_by(.createdAt) | reverse | .[10:] | .[].tagName' |
+          while read -r tag; do
+            gh release delete "$tag" --repo "$GITHUB_REPOSITORY" --cleanup-tag --yes
+          done
