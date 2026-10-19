@@ -82,24 +82,46 @@ object SplitScreen {
         lastResult = "Test: notifications=$shade, split screen=$split (Android ${android.os.Build.VERSION.RELEASE}, ${android.os.Build.MODEL})"
     }
 
-    private val SPLIT_LABELS = listOf("split screen", "split-screen", "splitscreen", "split", "gesplitst scherm", "scherm splitsen", "splitscreen")
+    private val SPLIT_LABELS = listOf("split screen", "split-screen", "splitscreen", "split", "gesplitst scherm", "scherm splitsen")
+
+    /** Every window the service can see (Recents is its own window, which "the active window" does not always point at). */
+    private fun roots(service: SplitScreenService): List<AccessibilityNodeInfo> =
+        (service.windows.mapNotNull { it.root } + listOfNotNull(service.rootInActiveWindow)).distinctBy { System.identityHashCode(it) }
+
+    private fun dump(service: SplitScreenService): String =
+        roots(service).joinToString(" ; ") { r ->
+            "${r.packageName}: " + r.labels().map { it.first }.distinct().take(8).joinToString(" | ")
+        }
+
+    /** Waits up to [timeoutMs] for a labelled node to appear in any window except [excludePackage]'s. */
+    private suspend fun awaitNode(
+        service: SplitScreenService,
+        timeoutMs: Long,
+        excludePackage: String?,
+        matches: (String) -> Boolean,
+    ): AccessibilityNodeInfo? {
+        var waited = 0L
+        while (waited <= timeoutMs) {
+            roots(service)
+                .filter { it.packageName?.toString() != excludePackage }
+                .forEach { root -> root.labels().firstOrNull { matches(it.first) }?.let { return it.second } }
+            delay(250)
+            waited += 250
+        }
+        return null
+    }
 
     /** Recents → tap the app's icon → "Split screen". Returns null on success, or what went wrong and what was on screen. */
     private suspend fun splitViaRecents(service: SplitScreenService, app: AppInfo, gapMs: Long): String? {
         if (!service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_RECENTS)) return "Recents could not be opened"
-        delay(gapMs)
-        var root = service.rootInActiveWindow ?: return "Recents opened, but its contents cannot be read"
-        var labels = root.labels()
-        val icon = labels.firstOrNull { it.first.contains(app.label, ignoreCase = true) }
-            ?: return "Recents: no icon for ${app.label}. Saw: " + labels.map { it.first }.distinct().take(25).joinToString(" | ")
-        if (!icon.second.tap()) return "Recents: could not tap ${app.label}'s icon"
-        delay(gapMs / 2 + 300)
-        root = service.rootInActiveWindow ?: return "Tapped the icon, but the menu cannot be read"
-        labels = root.labels()
-        val split = labels.firstOrNull { l -> SPLIT_LABELS.any { l.first.equals(it, ignoreCase = true) } }
-            ?: labels.firstOrNull { l -> SPLIT_LABELS.any { l.first.contains(it, ignoreCase = true) } }
-            ?: return "Menu: no split-screen option. Saw: " + labels.map { it.first }.distinct().take(25).joinToString(" | ")
-        if (!split.second.tap()) return "Menu: could not tap \"${split.first}\""
+        // The icon above the app's card, in a window that is not the app's own.
+        val icon = awaitNode(service, gapMs + 3000, app.packageName) { it.contains(app.label, ignoreCase = true) }
+            ?: return "Recents: no icon for ${app.label} outside the app. Windows: " + dump(service)
+        if (!icon.tap()) return "Recents: could not tap ${app.label}'s icon"
+        val split = awaitNode(service, 2500, null) { l -> SPLIT_LABELS.any { l.equals(it, ignoreCase = true) } }
+            ?: awaitNode(service, 500, null) { l -> SPLIT_LABELS.any { l.contains(it, ignoreCase = true) } }
+            ?: return "Menu: no split-screen option. Windows: " + dump(service)
+        if (!split.tap()) return "Menu: could not tap the split-screen option"
         return null
     }
 
