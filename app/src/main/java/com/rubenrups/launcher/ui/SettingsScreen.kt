@@ -91,6 +91,7 @@ private val SearchIndex = listOf(
     SettingHit("Weather", Page.HOME, "city temperature fahrenheit celsius forecast"),
     SettingHit("Align to the right", Page.HOME, "left right alignment favourites"),
     SettingHit("Pin list to the bottom", Page.HOME, "top bottom anchor thumb"),
+    SettingHit("Scroll the whole home screen as one", Page.HOME, "scroll page together media hidden favourites minimum height"),
     SettingHit("Two columns in landscape", Page.HOME, "grid rotate"),
     SettingHit("Open folders as a popup", Page.HOME, "inline expand folder"),
     SettingHit("Folder popup look", Page.HOME, "grid list columns opacity text size dim background"),
@@ -338,6 +339,11 @@ private fun HomePage(viewModel: LauncherViewModel, settings: LauncherSettings) {
     Group("Favourites list") {
         SwitchRow("Align to the right", settings.alignEnd) { v -> viewModel.update { it.copy(alignEnd = v) } }
         SwitchRow("Pin list to the bottom", settings.anchorBottom) { v -> viewModel.update { it.copy(anchorBottom = v) } }
+        SwitchRow(
+            "Scroll the whole home screen as one",
+            settings.homeScrollAsOne,
+            subtitle = "Clock, media, widgets and favourites move together instead of the favourites having their own area",
+        ) { v -> viewModel.update { it.copy(homeScrollAsOne = v) } }
         SwitchRow("Two columns in landscape", settings.twoColumnsLandscape) { v ->
             viewModel.update { it.copy(twoColumnsLandscape = v) }
         }

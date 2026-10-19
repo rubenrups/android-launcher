@@ -208,6 +208,7 @@ private fun HomeContent(
     // Where a long-press landed; non-null while the home-screen menu is showing.
     var homeMenuAt by remember { mutableStateOf<Offset?>(null) }
     val listScroll = rememberScrollState()
+    val pageScroll = rememberScrollState()
     val favouriteKeys = remember(favourites) { favourites.mapTo(HashSet()) { it.key } }
     val weather = rememberWeather(settings.showWeather, settings.weatherCity, settings.weatherFahrenheit)
     val nextEvent = rememberNextEvent(settings.showCalendar)
@@ -352,13 +353,15 @@ private fun HomeContent(
                     translationY = shownPullY
                     alpha = 1f - (abs(shownPullX) / (PULL_MAX_PX * 4f)).coerceIn(0f, 0.4f)
                 }
-                .padding(top = 16.dp, bottom = 16.dp + recentsReserve),
+                .padding(top = 16.dp, bottom = 16.dp + recentsReserve)
+                // One scrolling page: the whole column moves, so nothing is squeezed into a small area of its own.
+                .then(if (settings.homeScrollAsOne) Modifier.verticalScroll(pageScroll, enabled = !editMode && pageScroll.maxValue > 0) else Modifier),
             horizontalAlignment = if (settings.alignEnd) Alignment.End else Alignment.Start,
         ) {
             // In landscape there is room beside the clock, so the media card moves up next to it.
             val landscape = landscapeNow
             Column(
-                Modifier.heightIn(max = topSectionMax).verticalScroll(topScroll, enabled = topScroll.maxValue > 0),
+                if (settings.homeScrollAsOne) Modifier else Modifier.heightIn(max = topSectionMax).verticalScroll(topScroll, enabled = topScroll.maxValue > 0),
                 horizontalAlignment = if (settings.alignEnd) Alignment.End else Alignment.Start,
             ) {
             val mediaState = if (settings.showMedia) media else null
@@ -483,7 +486,15 @@ private fun HomeContent(
             // Only intercept drags when the list actually overflows, so swipe-up still reaches the drawer.
             val scrollModifier = Modifier.verticalScroll(listScroll, enabled = !editMode && listScroll.maxValue > 0)
 
-            if (settings.anchorBottom) {
+            if (settings.homeScrollAsOne) {
+                // The page scrolls as a whole; pinned-to-the-bottom lists sit at the bottom while the page is short.
+                if (settings.anchorBottom) Spacer(Modifier.weight(1f))
+                Box(
+                    Modifier.fillMaxWidth(),
+                    contentAlignment = if (settings.alignEnd) Alignment.TopEnd else Alignment.TopStart,
+                ) { favouritesContent() }
+                if (settings.anchorBottom) Spacer(Modifier.height(8.dp))
+            } else if (settings.anchorBottom) {
                 Box(
                     Modifier.weight(1f).fillMaxWidth(),
                     contentAlignment = if (settings.alignEnd) Alignment.BottomEnd else Alignment.BottomStart,

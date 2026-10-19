@@ -98,6 +98,8 @@ data class LauncherSettings(
     /** Dark text when the wallpaper is light. Off by default: white text with a shadow suits most wallpapers. */
     val adaptiveText: Boolean = false,
     val twoColumnsLandscape: Boolean = true,
+    /** Scroll the clock, media, widgets and favourites as one page instead of the favourites having their own area. */
+    val homeScrollAsOne: Boolean = false,
     /** Home-screen folders open as a see-through popup; off = they expand in place under the folder row. */
     val folderPopupOnHome: Boolean = true,
     /** App keys launched by a left / right swipe on the home screen; empty = nothing. */
@@ -296,6 +298,7 @@ class LauncherPrefs(context: Context) {
         updateToken = prefs.getString(KEY_UPDATE_TOKEN, "").orEmpty(),
         adaptiveText = prefs.getBoolean(KEY_ADAPTIVE_TEXT, false),
         twoColumnsLandscape = prefs.getBoolean(KEY_TWO_COLUMNS, true),
+        homeScrollAsOne = prefs.getBoolean(KEY_HOME_SCROLL_ONE, false),
         folderPopupOnHome = prefs.getBoolean(KEY_FOLDER_POPUP, true),
         swipeLeftApp = prefs.getString(KEY_SWIPE_LEFT, "").orEmpty(),
         swipeRightApp = prefs.getString(KEY_SWIPE_RIGHT, "").orEmpty(),
@@ -405,6 +408,7 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_UPDATE_TOKEN, s.updateToken)
             .putBoolean(KEY_ADAPTIVE_TEXT, s.adaptiveText)
             .putBoolean(KEY_TWO_COLUMNS, s.twoColumnsLandscape)
+            .putBoolean(KEY_HOME_SCROLL_ONE, s.homeScrollAsOne)
             .putBoolean(KEY_FOLDER_POPUP, s.folderPopupOnHome)
             .putString(KEY_SWIPE_LEFT, s.swipeLeftApp)
             .putString(KEY_SWIPE_RIGHT, s.swipeRightApp)
@@ -595,6 +599,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_UPDATE_TOKEN = "update_token"
         const val KEY_ADAPTIVE_TEXT = "adaptive_text"
         const val KEY_TWO_COLUMNS = "two_columns_landscape"
+        const val KEY_HOME_SCROLL_ONE = "home_scroll_one"
         const val KEY_FOLDER_POPUP = "folder_popup_on_home"
         const val KEY_SWIPE_LEFT = "swipe_left_app"
         const val KEY_SWIPE_RIGHT = "swipe_right_app"
