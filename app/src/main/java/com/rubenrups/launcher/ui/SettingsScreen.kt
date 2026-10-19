@@ -62,6 +62,7 @@ import com.rubenrups.launcher.data.GestureActions
 import com.rubenrups.launcher.data.LauncherSettings
 import com.rubenrups.launcher.data.UpdateChecker
 import com.rubenrups.launcher.data.UpdateState
+import com.rubenrups.launcher.data.SplitScreen
 import com.rubenrups.launcher.data.SplitScreenService
 import com.rubenrups.launcher.data.VirtualApps
 import com.rubenrups.launcher.data.WebSearchEngine
@@ -727,6 +728,7 @@ private fun AppsPage(
 
     Group("Split-screen pairs") {
         InfoRow("Split-screen service", if (SplitScreenService.isEnabled) "On" else "Off")
+        InfoRow("Last attempt", SplitScreen.lastResult)
         if (!SplitScreenService.isEnabled) {
             NavRow("Turn on in accessibility settings") {
                 context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
