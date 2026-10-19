@@ -185,6 +185,9 @@ data class LauncherSettings(
     val carSwipeRight: String = GestureActions.PREVIOUS,
     /** Places for the car-mode navigation buttons. Personal, so never exported in a backup. */
     val destinations: List<Destination> = emptyList(),
+    /** Saved split-screen pairs and the pause (ms) between the steps of opening one. */
+    val splitPairs: List<SplitPair> = emptyList(),
+    val splitGapMs: Int = 900,
     val autoCheckUpdates: Boolean = true,
     /** How often the launcher looks for a new build while it is on screen, in minutes. */
     val updateCheckMinutes: Int = 180,
@@ -341,6 +344,8 @@ class LauncherPrefs(context: Context) {
         carSwipeLeft = prefs.getString(KEY_CAR_LEFT, GestureActions.NEXT).orEmpty(),
         carSwipeRight = prefs.getString(KEY_CAR_RIGHT, GestureActions.PREVIOUS).orEmpty(),
         destinations = loadDestinations(),
+        splitPairs = loadSplitPairs(),
+        splitGapMs = prefs.getInt(KEY_SPLIT_GAP, 900),
         autoCheckUpdates = prefs.getBoolean(KEY_AUTO_CHECK, true),
         updateCheckMinutes = prefs.getInt(KEY_UPDATE_MINUTES, 180),
         autoDownloadUpdates = prefs.getBoolean(KEY_AUTO_DOWNLOAD, true),
@@ -442,6 +447,8 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_CAR_LEFT, s.carSwipeLeft)
             .putString(KEY_CAR_RIGHT, s.carSwipeRight)
             .putString(KEY_DESTINATIONS, encodeDestinations(s.destinations))
+            .putString(KEY_SPLIT_PAIRS, encodeSplitPairs(s.splitPairs))
+            .putInt(KEY_SPLIT_GAP, s.splitGapMs)
             .putBoolean(KEY_AUTO_CHECK, s.autoCheckUpdates)
             .putInt(KEY_UPDATE_MINUTES, s.updateCheckMinutes)
             .putBoolean(KEY_AUTO_DOWNLOAD, s.autoDownloadUpdates)
@@ -462,6 +469,19 @@ class LauncherPrefs(context: Context) {
             }
         }.getOrDefault(emptyList())
     }
+
+    private fun encodeSplitPairs(list: List<SplitPair>): String =
+        JSONArray().apply {
+            list.forEach { put(JSONObject().put("id", it.id).put("name", it.name).put("a", it.firstKey).put("b", it.secondKey)) }
+        }.toString()
+
+    private fun loadSplitPairs(): List<SplitPair> = runCatching {
+        val array = JSONArray(prefs.getString(KEY_SPLIT_PAIRS, "[]"))
+        (0 until array.length()).map { i ->
+            val o = array.getJSONObject(i)
+            SplitPair(o.getString("id"), o.optString("name"), o.optString("a"), o.optString("b"))
+        }
+    }.getOrDefault(emptyList())
 
     private fun encodeDestinations(list: List<Destination>): String =
         JSONArray().apply {
@@ -624,6 +644,8 @@ class LauncherPrefs(context: Context) {
         const val KEY_CAR_LEFT = "car_swipe_left"
         const val KEY_CAR_RIGHT = "car_swipe_right"
         const val KEY_DESTINATIONS = "destinations"
+        const val KEY_SPLIT_PAIRS = "split_pairs"
+        const val KEY_SPLIT_GAP = "split_gap"
         const val KEY_HOME_ADDRESS = "home_address"
         const val KEY_WORK_ADDRESS = "work_address"
         const val KEY_AUTO_DOWNLOAD = "auto_download_updates"

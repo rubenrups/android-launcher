@@ -62,6 +62,7 @@ import com.rubenrups.launcher.data.GestureActions
 import com.rubenrups.launcher.data.LauncherSettings
 import com.rubenrups.launcher.data.UpdateChecker
 import com.rubenrups.launcher.data.UpdateState
+import com.rubenrups.launcher.data.SplitScreenService
 import com.rubenrups.launcher.data.VirtualApps
 import com.rubenrups.launcher.data.WebSearchEngine
 import com.rubenrups.launcher.notifications.NotificationStore
@@ -119,6 +120,7 @@ private val SearchIndex = listOf(
     SettingHit("Open car mode automatically", Page.DASHBOARD, "bluetooth charging auto open trigger car"),
     SettingHit("Do not disturb while driving", Page.DASHBOARD, "dnd silence car mode"),
     SettingHit("Call buttons", Page.DASHBOARD, "contacts phone dial car mode"),
+    SettingHit("Split-screen pairs", Page.APPS, "split screen two apps side by side multitask pair"),
     SettingHit("Quick launch apps", Page.DASHBOARD, "car mode app buttons maps music phone"),
     SettingHit("Swipes in car mode", Page.DASHBOARD, "gesture next track close skip"),
     SettingHit("Navigation places", Page.DASHBOARD, "home work address destination car mode navigate maps"),
@@ -208,7 +210,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                             Page.GLUCOSE -> if (settings.glucoseEnabled) "On · LibreLinkUp" else "LibreLinkUp, units, thresholds"
                             Page.DASHBOARD -> "Big glanceable screen, cards, order"
                             Page.NOTIFICATIONS -> if (listenerConnected) "Access connected ✓" else "Access not connected"
-                            Page.APPS -> "Widgets, hidden apps, work profile"
+                            Page.APPS -> "Split-screen pairs, widgets, hidden apps"
                             Page.BACKUP -> when (updateState) {
                                 is UpdateState.Ready, is UpdateState.Available -> "Update available"
                                 else -> "Backups, auto-update"
@@ -233,7 +235,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                         Page.GLUCOSE -> GlucosePage(viewModel, settings, visibleApps) { chooser = it }
                         Page.DASHBOARD -> DashboardPage(viewModel, settings, visibleApps) { chooser = it }
                         Page.NOTIFICATIONS -> NotificationsPage(viewModel, settings, listenerConnected)
-                        Page.APPS -> AppsPage(viewModel, settings) { pickWidget = true }
+                        Page.APPS -> AppsPage(viewModel, settings, visibleApps, onAddWidget = { pickWidget = true }, openChooser = { chooser = it })
                         Page.BACKUP -> BackupPage(viewModel, settings, updateState)
                     }
                     Spacer(Modifier.height(32.dp))
@@ -257,7 +259,11 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                     "carLeft" -> it.copy(carSwipeLeft = key)
                     "carRight" -> it.copy(carSwipeRight = key)
                     "carApp" -> it.copy(carApps = if (key.isBlank() || key in it.carApps) it.carApps else it.carApps + key)
-                    else -> it.copy(glucoseApp = key)
+                    "glucose" -> it.copy(glucoseApp = key)
+                    else -> when {
+                        side.startsWith("pairA:") -> it.copy(splitPairs = it.splitPairs.map { p -> if (p.id == side.removePrefix("pairA:")) p.copy(firstKey = key) else p })
+                        else -> it.copy(splitPairs = it.splitPairs.map { p -> if (p.id == side.removePrefix("pairB:")) p.copy(secondKey = key) else p })
+                    }
                 }
             }
             chooser = null
@@ -273,13 +279,14 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                 "carLeft" -> "Car mode: swipe left"
                 "carRight" -> "Car mode: swipe right"
                 "carApp" -> "Add to quick launch"
-                else -> "Tapping the glucose value opens"
+                "glucose" -> "Tapping the glucose value opens"
+                else -> "Pick an app for the split-screen pair"
             },
             viewModel = viewModel,
             onPick = { app -> set(app?.key.orEmpty()) },
             onDismiss = { chooser = null },
             extras = when {
-                side == "glucose" || side == "carApp" -> emptyList()
+                side == "glucose" || side == "carApp" || side.startsWith("pair") -> emptyList()
                 side.startsWith("carUp") || side.startsWith("carDown") || side.startsWith("carLeft") || side.startsWith("carRight") -> GestureActions.carBuiltIn.map { (key, label) -> label to key }
                 else -> GestureActions.builtIn.map { (key, label) -> label to key }
             },
@@ -705,13 +712,53 @@ private fun NotificationsPage(viewModel: LauncherViewModel, settings: LauncherSe
 }
 
 @Composable
-private fun AppsPage(viewModel: LauncherViewModel, settings: LauncherSettings, onAddWidget: () -> Unit) {
+private fun AppsPage(
+    viewModel: LauncherViewModel,
+    settings: LauncherSettings,
+    apps: List<AppInfo>,
+    onAddWidget: () -> Unit,
+    openChooser: (String) -> Unit,
+) {
     val context = LocalContext.current
     val hidden by viewModel.hiddenApps.collectAsStateWithLifecycle()
     val userManager = remember { context.getSystemService(UserManager::class.java) }
     var profileVersion by remember { mutableIntStateOf(0) }
     val otherProfiles = remember(profileVersion) { userManager.userProfiles.filter { it != Process.myUserHandle() } }
 
+    Group("Split-screen pairs") {
+        InfoRow("Split-screen service", if (SplitScreenService.isEnabled) "On" else "Off")
+        if (!SplitScreenService.isEnabled) {
+            NavRow("Turn on in accessibility settings") {
+                context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+        }
+        settings.splitPairs.forEach { pair ->
+            Field(pair.name, "Name") { v -> viewModel.updateSplitPair(pair.id) { it.copy(name = v) } }
+            NavRow("First app (top or left)", labelFor(pair.firstKey, apps)) { openChooser("pairA:" + pair.id) }
+            NavRow("Second app (bottom or right)", labelFor(pair.secondKey, apps)) { openChooser("pairB:" + pair.id) }
+            val key = VirtualApps.pair(pair).key
+            SwitchRow("Button in favourites", key in settings.favourites) { on ->
+                if (on) viewModel.addFavouriteKey(key) else viewModel.removeFavouriteKey(key)
+            }
+            NavRow("Open now") { viewModel.launchSplitPair(pair.id) }
+            Text(
+                "Delete this pair",
+                color = Accent,
+                fontSize = 13.sp,
+                modifier = Modifier.clickable { viewModel.deleteSplitPair(pair.id) }.padding(horizontal = 16.dp, vertical = 10.dp),
+            )
+        }
+        NavRow("Add a pair") { viewModel.addSplitPair() }
+        SliderRow("Pause between steps", "${settings.splitGapMs} ms", settings.splitGapMs.toFloat(), 400f..2000f) { v ->
+            viewModel.update { it.copy(splitGapMs = (v / 50f).roundToInt() * 50) }
+        }
+        Hint(
+            "Opens the first app, presses split screen, then opens the second beside it. Needs the split-screen " +
+                "accessibility service (it only presses that one button) and, to start the second app from the " +
+                "background, \"Display over other apps\". If the second app opens full screen, raise the pause. " +
+                "Apps that can't be resized won't split. Long-press the home screen to add a pair as a button."
+        )
+    }
     Group("Widgets") {
         settings.widgetIds.forEach { id ->
             val label = viewModel.widgets.info(id)?.loadLabel(context.packageManager)?.toString() ?: "Unavailable widget"
