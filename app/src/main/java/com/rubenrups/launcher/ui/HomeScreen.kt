@@ -1046,11 +1046,6 @@ private fun FavouriteRow(
                 }
             }
             if (badge > 0 && !alignEnd) Badge(badge)
-            if (entry is FolderEntry && !editMode) {
-                // Left-aligned rows span the screen, so park the arrow at the far edge.
-                if (!alignEnd) Spacer(Modifier.weight(1f))
-                Text(if (expanded) "▾" else "▸", color = ink.copy(alpha = 0.8f), fontSize = 16.sp, style = HomeTextStyle)
-            }
             if (settings.showIcons && alignEnd) icon()
             if (editMode && alignEnd) handle()
         }
