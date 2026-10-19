@@ -97,6 +97,7 @@ private val SearchIndex = listOf(
     SettingHit("Folder popup look", Page.HOME, "grid list columns opacity text size dim background"),
     SettingHit("Folder popup in the drawer", Page.DRAWER, "grid list columns opacity text size dim background"),
     SettingHit("Search button", Page.HOME, "magnifier floating"),
+    SettingHit("Recent apps on the home screen", Page.HOME, "icons bottom row last used dock"),
     SettingHit("App drawer button in favourites", Page.HOME, "add shortcut button"),
     SettingHit("Car mode button in favourites", Page.HOME, "dashboard add shortcut button"),
     SettingHit("Presets", Page.APPEARANCE, "left aligned right aligned large text layout"),
@@ -374,6 +375,11 @@ private fun HomePage(viewModel: LauncherViewModel, settings: LauncherSettings) {
     }
     Group("Buttons") {
         SwitchRow("Search button", settings.showSearchButton) { v -> viewModel.update { it.copy(showSearchButton = v) } }
+        SwitchRow(
+            "Recent apps on the home screen",
+            settings.showHomeRecents,
+            subtitle = "Icons only, along the bottom",
+        ) { v -> viewModel.update { it.copy(showHomeRecents = v) } }
         VirtualApps.all.forEach { button ->
             SwitchRow(
                 "${button.label} button in favourites",

@@ -98,6 +98,8 @@ import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.view.WindowCompat
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.DashboardEdge
 import com.rubenrups.launcher.LauncherViewModel
@@ -198,6 +200,7 @@ private fun HomeContent(
     val navigation by NotificationStore.navigation.collectAsStateWithLifecycle()
     val glucose by viewModel.glucose.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
+    val allApps by viewModel.visibleApps.collectAsStateWithLifecycle()
     val focusActive by viewModel.focusActive.collectAsStateWithLifecycle()
     val badgeCounts = remember(notifications) { notifications.groupingBy { it.packageName }.eachCount() }
     var editMode by remember { mutableStateOf(false) }
@@ -224,6 +227,15 @@ private fun HomeContent(
     val currentDrawerDrag by rememberUpdatedState(onDrawerDrag)
     val currentDrawerRelease by rememberUpdatedState(onDrawerRelease)
 
+    val homeRecents = remember(allApps, settings.recents, settings.showHomeRecents) {
+        if (!settings.showHomeRecents) emptyList() else {
+            val byKey = allApps.associateBy { it.key }
+            settings.recents.mapNotNull { byKey[it] }.take(HOME_RECENTS_SHOWN)
+        }
+    }
+    // Room the icon row takes at the bottom, so the favourites and the clock section stop above it.
+    val recentsReserve = if (homeRecents.isEmpty()) 0.dp else HOME_RECENTS_HEIGHT
+
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // The favourites always keep room for a few rows; everything above them (clock, notifications, media,
         // widgets) gets the rest and scrolls if it is taller, instead of squeezing the favourites away.
@@ -235,7 +247,7 @@ private fun HomeContent(
         }
         val bars = WindowInsets.systemBars.asPaddingValues()
         val topSectionMax = (maxHeight - bars.calculateTopPadding() - bars.calculateBottomPadding() - 32.dp -
-            rowHeightForMin * favouriteRows - 16.dp).coerceAtLeast(120.dp)
+            rowHeightForMin * favouriteRows - 16.dp - recentsReserve).coerceAtLeast(120.dp)
         val topScroll = rememberScrollState()
         Column(
             Modifier
@@ -339,7 +351,7 @@ private fun HomeContent(
                     translationY = shownPullY
                     alpha = 1f - (abs(shownPullX) / (PULL_MAX_PX * 4f)).coerceIn(0f, 0.4f)
                 }
-                .padding(vertical = 16.dp),
+                .padding(top = 16.dp, bottom = 16.dp + recentsReserve),
             horizontalAlignment = if (settings.alignEnd) Alignment.End else Alignment.Start,
         ) {
             // In landscape there is room beside the clock, so the media card moves up next to it.
@@ -567,6 +579,16 @@ private fun HomeContent(
             }
         }
 
+        if (homeRecents.isNotEmpty() && !editMode) {
+            HomeRecentsRow(
+                apps = homeRecents,
+                viewModel = viewModel,
+                // Stay clear of the floating search button in the bottom corner.
+                sidePadding = if (settings.showSearchButton) 88.dp else 24.dp,
+                modifier = Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.systemBars),
+            )
+        }
+
         if (settings.showSearchButton && !editMode) {
             SearchButton(
                 onClick = { onOpenDrawer(true) },
@@ -576,6 +598,28 @@ private fun HomeContent(
                     .padding(24.dp),
             )
         }
+    }
+}
+
+private const val HOME_RECENTS_SHOWN = 5
+private val HOME_RECENTS_HEIGHT = 64.dp
+
+/** The last launched apps as bare icons along the bottom of the home screen. */
+@Composable
+private fun HomeRecentsRow(apps: List<AppInfo>, viewModel: LauncherViewModel, sidePadding: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) {
+    Row(
+        modifier.fillMaxWidth().height(HOME_RECENTS_HEIGHT).padding(horizontal = sidePadding),
+        horizontalArrangement = Arrangement.SpaceEvenly,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        apps.forEach { app ->
+            Box(
+                Modifier.size(48.dp).clickable { viewModel.launch(app) }.semantics { contentDescription = app.label },
+                contentAlignment = Alignment.Center,
+            ) { AppIcon(app, viewModel, 40.dp) }
+        }
+        // Keep the icons where they are when fewer than five apps have been launched so far.
+        repeat(HOME_RECENTS_SHOWN - apps.size) { Spacer(Modifier.size(48.dp)) }
     }
 }
 

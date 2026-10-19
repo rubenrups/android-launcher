@@ -77,6 +77,8 @@ data class LauncherSettings(
     val weatherFahrenheit: Boolean = false,
     val webSearch: WebSearchEngine = WebSearchEngine.SYSTEM,
     val showRecents: Boolean = true,
+    /** A row of the last launched apps, icons only, along the bottom of the home screen. Off by default. */
+    val showHomeRecents: Boolean = false,
     /** Most recently launched app keys, newest first. */
     val recents: List<String> = emptyList(),
     val widgetIds: List<Int> = emptyList(),
@@ -274,6 +276,7 @@ class LauncherPrefs(context: Context) {
         webSearch = runCatching { WebSearchEngine.valueOf(prefs.getString(KEY_WEB_SEARCH, "").orEmpty()) }
             .getOrDefault(WebSearchEngine.SYSTEM),
         showRecents = prefs.getBoolean(KEY_SHOW_RECENTS, true),
+        showHomeRecents = prefs.getBoolean(KEY_SHOW_HOME_RECENTS, false),
         recents = prefs.getString(KEY_RECENTS, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() },
         widgetIds = prefs.getString(KEY_WIDGETS, "").orEmpty().split(SEPARATOR).mapNotNull { it.toIntOrNull() },
         updateToken = prefs.getString(KEY_UPDATE_TOKEN, "").orEmpty(),
@@ -378,6 +381,7 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_WEATHER_F, s.weatherFahrenheit)
             .putString(KEY_WEB_SEARCH, s.webSearch.name)
             .putBoolean(KEY_SHOW_RECENTS, s.showRecents)
+            .putBoolean(KEY_SHOW_HOME_RECENTS, s.showHomeRecents)
             .putString(KEY_RECENTS, s.recents.joinToString(SEPARATOR))
             .putString(KEY_WIDGETS, s.widgetIds.joinToString(SEPARATOR))
             .putString(KEY_UPDATE_TOKEN, s.updateToken)
@@ -576,6 +580,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_WEATHER_F = "weather_fahrenheit"
         const val KEY_WEB_SEARCH = "web_search"
         const val KEY_SHOW_RECENTS = "show_recents"
+        const val KEY_SHOW_HOME_RECENTS = "show_home_recents"
         const val KEY_RECENTS = "recents"
         const val KEY_WIDGETS = "widgets"
         const val KEY_UPDATE_TOKEN = "update_token"
