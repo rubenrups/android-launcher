@@ -25,8 +25,6 @@ import com.rubenrups.launcher.data.GestureActions
 import com.rubenrups.launcher.data.focusActive
 import com.rubenrups.launcher.data.GlucoseState
 import com.rubenrups.launcher.data.UpdateManager
-import com.rubenrups.launcher.data.SplitPair
-import com.rubenrups.launcher.data.SplitScreen
 import com.rubenrups.launcher.data.VirtualApps
 import com.rubenrups.launcher.data.UpdateState
 import com.rubenrups.launcher.data.GlucoseStore
@@ -69,9 +67,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     /** Installed apps plus the launcher's own buttons (App drawer, Dashboard), which behave like apps in lists. */
     private val appsWithButtons: StateFlow<List<AppInfo>> =
-        combine(repository.apps, settings.map { it.splitPairs }.distinctUntilChanged()) { apps, pairs ->
-            apps + VirtualApps.all + pairs.map { VirtualApps.pair(it) }
-        }.stateIn(viewModelScope, SharingStarted.Eagerly, VirtualApps.all)
+        repository.apps.map { it + VirtualApps.all }.stateIn(viewModelScope, SharingStarted.Eagerly, VirtualApps.all)
 
     /** Apps the user hasn't hidden: what the drawer and search show. */
     val visibleApps: StateFlow<List<AppInfo>> =
@@ -93,7 +89,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val favourites: StateFlow<List<Entry>> =
         combine(repository.apps, settings, focusActive) { allApps, s, focus ->
             val apps = if (focus) allApps.filter { it.key !in s.focusApps } else allApps
-            val byKey = (apps + s.splitPairs.map { VirtualApps.pair(it) }).associateBy { it.key }
+            val byKey = apps.associateBy { it.key }
             val folders = s.folders.associateBy { it.key }
             val result = ArrayList<Entry>()
             for (key in s.favourites) {
@@ -304,44 +300,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         s.copy(dashboardHidden = if (hidden) s.dashboardHidden + key else s.dashboardHidden - key)
     }
 
-    /** Opens a saved split-screen pair (needs the accessibility service, see [SplitScreen]). */
-    fun launchSplitPair(id: String) {
-        val s = settings.value
-        val pair = s.splitPairs.firstOrNull { it.id == id } ?: return
-        val apps = repository.apps.value.associateBy { it.key }
-        val first = apps[pair.firstKey]
-        val second = apps[pair.secondKey]
-        if (first == null || second == null) {
-            Toast.makeText(getApplication(), "Choose two apps for this pair in Settings → Apps", Toast.LENGTH_LONG).show()
-            return
-        }
-        closeAll(false)
-        viewModelScope.launch { SplitScreen.launch(getApplication(), repository, first, second, s.splitGapMs.toLong(), s.splitMethod) }
-    }
-
-    fun testSplitService() {
-        viewModelScope.launch { SplitScreen.diagnose() }
-    }
-
-    fun addSplitPair(): String {
-        val id = java.util.UUID.randomUUID().toString().take(8)
-        update { it.copy(splitPairs = it.splitPairs + SplitPair(id, "Split ${it.splitPairs.size + 1}", "", "")) }
-        return id
-    }
-
-    fun updateSplitPair(id: String, transform: (SplitPair) -> SplitPair) = update { s ->
-        s.copy(splitPairs = s.splitPairs.map { if (it.id == id) transform(it) else it })
-    }
-
-    fun deleteSplitPair(id: String) = update { s ->
-        val key = VirtualApps.pair(SplitPair(id, "", "", "")).key
-        s.copy(
-            splitPairs = s.splitPairs.filter { it.id != id },
-            favourites = s.favourites - key,
-            folders = s.folders.map { f -> f.copy(appKeys = f.appKeys - key) },
-        )
-    }
-
     fun setDashboardCardHalf(key: String, half: Boolean) = update { s ->
         s.copy(dashboardHalf = if (half) s.dashboardHalf + key else s.dashboardHalf - key)
     }
@@ -527,11 +485,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun launch(app: AppInfo) {
         if (VirtualApps.isVirtual(app)) {
             // A launcher function in the favourites list rather than a real app: run it, record nothing.
-            when {
-                app.key == VirtualApps.drawer.key -> openDrawer(false)
-                VirtualApps.isPair(app) -> launchSplitPair(VirtualApps.pairId(app))
-                else -> setDashboardOpen(true)
-            }
+            if (app.key == VirtualApps.drawer.key) openDrawer(false) else setDashboardOpen(true)
             return
         }
         val now = System.currentTimeMillis()

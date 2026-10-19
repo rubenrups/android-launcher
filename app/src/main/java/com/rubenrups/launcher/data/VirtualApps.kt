@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 
 /**
- * Launcher functions that can sit in the favourites list like apps: the app drawer, car mode and saved split-screen pairs.
+ * Launcher functions that can sit in the favourites list like apps: the app drawer and car mode.
  * They are ordinary [AppInfo] entries (so ordering, removal and layout all just work), but belong to no
  * installed app: [LauncherViewModel.launch] runs them and [icon] draws their picture.
  */
@@ -24,15 +24,6 @@ object VirtualApps {
 
     fun byKey(key: String): AppInfo? = all.firstOrNull { it.key == key }
 
-    private const val PAIR_PREFIX = PREFIX + "Pair."
-
-    /** A saved split-screen pair, shown like an app button. */
-    fun pair(p: SplitPair) = AppInfo(p.name.ifBlank { "Split screen" }, ComponentName(PACKAGE, PAIR_PREFIX + p.id), Process.myUserHandle())
-
-    fun isPair(app: AppInfo) = app.component.className.startsWith(PAIR_PREFIX)
-
-    fun pairId(app: AppInfo): String = app.component.className.removePrefix(PAIR_PREFIX)
-
     fun isVirtual(app: AppInfo) = app.component.className.startsWith(PREFIX)
 
     /** A round dark badge with a white glyph: a 3x3 grid of dots for the drawer, four tiles for car mode. */
@@ -44,14 +35,7 @@ object VirtualApps {
         paint.color = 0xFF2B3036.toInt()
         canvas.drawCircle(s / 2, s / 2, s / 2, paint)
         paint.color = 0xFFFFFFFF.toInt()
-        if (isPair(app)) {
-            // Two panes side by side.
-            val w = s * 0.2f
-            val h = s * 0.4f
-            val gap = s * 0.04f
-            canvas.drawRoundRect(RectF(s / 2 - gap - w, s / 2 - h / 2, s / 2 - gap, s / 2 + h / 2), s * 0.05f, s * 0.05f, paint)
-            canvas.drawRoundRect(RectF(s / 2 + gap, s / 2 - h / 2, s / 2 + gap + w, s / 2 + h / 2), s * 0.05f, s * 0.05f, paint)
-        } else if (app.component.className == drawer.component.className) {
+        if (app.component.className == drawer.component.className) {
             val step = s * 0.2f
             for (row in -1..1) for (col in -1..1) {
                 canvas.drawCircle(s / 2 + col * step, s / 2 + row * step, s * 0.055f, paint)

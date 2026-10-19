@@ -557,7 +557,7 @@ private fun HomeContent(
                         homeMenuAt = null
                         viewModel.setDashboardOpen(true)
                     })
-                    (VirtualApps.all + settings.splitPairs.map { VirtualApps.pair(it) }).filter { it.key !in favouriteKeys }.forEach { button ->
+                    VirtualApps.all.filter { it.key !in favouriteKeys }.forEach { button ->
                         DropdownMenuItem(text = { Text("Add ${button.label} button") }, onClick = {
                             homeMenuAt = null
                             viewModel.addFavourite(button)

@@ -231,16 +231,8 @@ class AppRepository(private val context: Context) {
     private fun iconFile(app: AppInfo) =
         File(iconDir, "${sanitize(app.packageName)}__${sanitize(app.key)}__${packTag()}.png")
 
-    /** [adjacent] asks for the new window to open next to the current one (the second half of a split-screen pair). */
-    fun launch(app: AppInfo, adjacent: Boolean = false) {
+    fun launch(app: AppInfo) {
         val shortcutId = app.shortcutId
-        if (adjacent && shortcutId == null && app.isMainProfile) {
-            val intent = Intent(Intent.ACTION_MAIN)
-                .addCategory(Intent.CATEGORY_LAUNCHER)
-                .setComponent(app.component)
-                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT)
-            if (runCatching { context.startActivity(intent) }.isSuccess) return
-        }
         if (shortcutId != null) {
             runCatching { launcherApps.startShortcut(app.packageName, shortcutId, null, null, app.user) }
         } else {
