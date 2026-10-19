@@ -45,6 +45,24 @@ object SplitScreen {
     var lastResult: String = "No attempt yet"
         private set
 
+    /** Presses two harmless actions and reports what the system answered, to tell "service blocked" from "split screen blocked". */
+    suspend fun diagnose() {
+        val service = SplitScreenService.instance
+        if (service == null) {
+            lastResult = "Test: the service is not connected"
+            return
+        }
+        val shade = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_NOTIFICATIONS)
+        delay(700)
+        service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK)
+        delay(300)
+        val split = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_TOGGLE_SPLIT_SCREEN)
+        delay(500)
+        // If that toggle did something on the home screen, press it again to undo it.
+        if (split) service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_TOGGLE_SPLIT_SCREEN)
+        lastResult = "Test: notifications=$shade, split screen=$split (Android ${android.os.Build.VERSION.RELEASE}, ${android.os.Build.MODEL})"
+    }
+
     /** Opens [first], toggles split screen, then opens [second] beside it. [gapMs] is how long to wait for each step. */
     suspend fun launch(context: Context, repository: AppRepository, first: AppInfo, second: AppInfo, gapMs: Long) {
         val service = SplitScreenService.instance

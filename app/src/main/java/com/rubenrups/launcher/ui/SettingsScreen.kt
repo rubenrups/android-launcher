@@ -729,6 +729,7 @@ private fun AppsPage(
     Group("Split-screen pairs") {
         InfoRow("Split-screen service", if (SplitScreenService.isEnabled) "On" else "Off")
         InfoRow("Last attempt", SplitScreen.lastResult)
+        NavRow("Test the service") { viewModel.testSplitService() }
         if (!SplitScreenService.isEnabled) {
             NavRow("Turn on in accessibility settings") {
                 context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

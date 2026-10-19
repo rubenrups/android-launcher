@@ -319,6 +319,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch { SplitScreen.launch(getApplication(), repository, first, second, s.splitGapMs.toLong()) }
     }
 
+    fun testSplitService() {
+        viewModelScope.launch { SplitScreen.diagnose() }
+    }
+
     fun addSplitPair(): String {
         val id = java.util.UUID.randomUUID().toString().take(8)
         update { it.copy(splitPairs = it.splitPairs + SplitPair(id, "Split ${it.splitPairs.size + 1}", "", "")) }
