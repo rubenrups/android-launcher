@@ -48,6 +48,7 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 ## Features (v0.6)
 
 - Next calendar event and weather in the home header (both optional, off by default)
+- **Recent apps row**: optional icon row at the bottom of home, up to 10 apps, optionally split over two rows
 - **Header layout**: stacked, details beside the time, or one compact wrapping row; toggle date/battery and set the time size (Settings → Home)
 - App shortcuts ("New message", …) at the top of an app's long-press menu
 - Home-screen widgets (long-press the home screen → Add widget)

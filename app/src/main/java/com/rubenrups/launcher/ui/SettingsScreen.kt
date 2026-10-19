@@ -390,7 +390,7 @@ private fun HomePage(viewModel: LauncherViewModel, settings: LauncherSettings) {
             subtitle = "Icons only, along the bottom",
         ) { v -> viewModel.update { it.copy(showHomeRecents = v) } }
         if (settings.showHomeRecents) {
-            SliderRow("Number of apps", "${settings.homeRecentsCount}", settings.homeRecentsCount.toFloat(), 3f..8f) { v ->
+            SliderRow("Number of apps", "${settings.homeRecentsCount}", settings.homeRecentsCount.toFloat(), 3f..10f) { v ->
                 viewModel.update { it.copy(homeRecentsCount = v.roundToInt()) }
             }
             listOf(
@@ -402,6 +402,13 @@ private fun HomePage(viewModel: LauncherViewModel, settings: LauncherSettings) {
                 ChoiceRow(label, selected = settings.homeRecentsAlign == value) {
                     viewModel.update { it.copy(homeRecentsAlign = value) }
                 }
+            }
+            if (settings.homeRecentsCount > 5) {
+                SwitchRow(
+                    "Split over two rows",
+                    settings.homeRecentsTwoRows,
+                    subtitle = "With more than 5 apps, show two even rows",
+                ) { v -> viewModel.update { it.copy(homeRecentsTwoRows = v) } }
             }
             SliderRow("Icon size", "${settings.homeRecentsIconDp} dp", settings.homeRecentsIconDp.toFloat(), 28f..64f) { v ->
                 viewModel.update { it.copy(homeRecentsIconDp = v.roundToInt()) }

@@ -551,7 +551,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     companion object {
         /** Swipe-gesture target that opens the dashboard instead of an app. */
         const val ACTION_DASHBOARD = GestureActions.DASHBOARD
-        private const val MAX_RECENTS = 8
+        private const val MAX_RECENTS = 10
         private const val MAX_USAGE = 500
     }
 }

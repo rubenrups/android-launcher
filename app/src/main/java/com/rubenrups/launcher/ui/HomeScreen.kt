@@ -235,7 +235,7 @@ private fun HomeContent(
         }
     }
     // Room the icon row takes at the bottom, so the favourites and the clock section stop above it.
-    val recentsReserve = if (homeRecents.isEmpty()) 0.dp else homeRecentsRowHeight(settings) + settings.homeRecentsBottomDp.dp
+    val recentsReserve = if (homeRecents.isEmpty()) 0.dp else homeRecentsRowHeight(settings) * homeRecentsRowCount(settings, homeRecents.size) + settings.homeRecentsBottomDp.dp
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // The favourites always keep room for a few rows; everything above them (clock, notifications, media,
@@ -609,6 +609,8 @@ private const val EDGE_PADDING_DP = 24
 
 private fun homeRecentsRowHeight(settings: LauncherSettings) = (settings.homeRecentsIconDp + 24).dp
 
+private fun homeRecentsRowCount(settings: LauncherSettings, apps: Int) = if (settings.homeRecentsTwoRows && apps > 5) 2 else 1
+
 /** The last launched apps as bare icons along the bottom of the home screen. */
 @Composable
 private fun HomeRecentsRow(apps: List<AppInfo>, viewModel: LauncherViewModel, settings: LauncherSettings, modifier: Modifier = Modifier) {
@@ -629,20 +631,27 @@ private fun HomeRecentsRow(apps: List<AppInfo>, viewModel: LauncherViewModel, se
         HomeRecentsAlign.END -> Arrangement.spacedBy(settings.homeRecentsGapDp.dp, Alignment.End)
         else -> Arrangement.SpaceEvenly
     }
-    Row(
-        modifier.fillMaxWidth().height(homeRecentsRowHeight(settings)).padding(start = startPad, end = endPad),
-        horizontalArrangement = arrangement,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        apps.forEach { app ->
-            Box(
-                Modifier.size(cell).clickable { viewModel.launch(app) }.semantics { contentDescription = app.label },
-                contentAlignment = Alignment.Center,
-            ) { AppIcon(app, viewModel, settings.homeRecentsIconDp.dp) }
-        }
-        // Spread evenly: keep the icons where they are while fewer apps than the chosen number have been launched.
-        if (settings.homeRecentsAlign == HomeRecentsAlign.SPREAD) {
-            repeat((settings.homeRecentsCount - apps.size).coerceAtLeast(0)) { Spacer(Modifier.size(cell)) }
+    val rows = homeRecentsRowCount(settings, apps.size)
+    val chunks = if (rows == 2) apps.chunked((apps.size + 1) / 2) else listOf(apps)
+    Column(modifier.fillMaxWidth().padding(start = startPad, end = endPad)) {
+        chunks.forEach { rowApps ->
+            Row(
+                Modifier.fillMaxWidth().height(homeRecentsRowHeight(settings)),
+                horizontalArrangement = arrangement,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                rowApps.forEach { app ->
+                    Box(
+                        Modifier.size(cell).clickable { viewModel.launch(app) }.semantics { contentDescription = app.label },
+                        contentAlignment = Alignment.Center,
+                    ) { AppIcon(app, viewModel, settings.homeRecentsIconDp.dp) }
+                }
+                // Spread evenly: keep the icons where they are while fewer apps than the chosen number have been launched.
+                if (settings.homeRecentsAlign == HomeRecentsAlign.SPREAD) {
+                    val slots = if (rows == 2) chunks.first().size else settings.homeRecentsCount
+                    repeat((slots - rowApps.size).coerceAtLeast(0)) { Spacer(Modifier.size(cell)) }
+                }
+            }
         }
     }
 }

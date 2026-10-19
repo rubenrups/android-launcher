@@ -79,10 +79,12 @@ data class LauncherSettings(
     val showRecents: Boolean = true,
     /** A row of the last launched apps, icons only, along the bottom of the home screen. Off by default. */
     val showHomeRecents: Boolean = false,
-    /** How many recent apps the home row shows (the launcher remembers 8). */
+    /** How many recent apps the home row shows (the launcher remembers 10). */
     val homeRecentsCount: Int = 5,
     /** One of [HomeRecentsAlign]. */
     val homeRecentsAlign: String = HomeRecentsAlign.SPREAD,
+    /** With more than 5 apps, split the row into two balanced rows. */
+    val homeRecentsTwoRows: Boolean = false,
     val homeRecentsIconDp: Int = 40,
     /** Space between icons; unused while spread evenly. */
     val homeRecentsGapDp: Int = 16,
@@ -288,7 +290,8 @@ class LauncherPrefs(context: Context) {
             .getOrDefault(WebSearchEngine.SYSTEM),
         showRecents = prefs.getBoolean(KEY_SHOW_RECENTS, true),
         showHomeRecents = prefs.getBoolean(KEY_SHOW_HOME_RECENTS, false),
-        homeRecentsCount = prefs.getInt(KEY_HOME_RECENTS_COUNT, 5).coerceIn(3, 8),
+        homeRecentsCount = prefs.getInt(KEY_HOME_RECENTS_COUNT, 5).coerceIn(3, 10),
+        homeRecentsTwoRows = prefs.getBoolean(KEY_HOME_RECENTS_TWO_ROWS, false),
         homeRecentsAlign = prefs.getString(KEY_HOME_RECENTS_ALIGN, HomeRecentsAlign.SPREAD).orEmpty(),
         homeRecentsIconDp = prefs.getInt(KEY_HOME_RECENTS_ICON, 40).coerceIn(28, 64),
         homeRecentsGapDp = prefs.getInt(KEY_HOME_RECENTS_GAP, 16).coerceIn(0, 40),
@@ -401,6 +404,7 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_SHOW_HOME_RECENTS, s.showHomeRecents)
             .putInt(KEY_HOME_RECENTS_COUNT, s.homeRecentsCount)
             .putString(KEY_HOME_RECENTS_ALIGN, s.homeRecentsAlign)
+            .putBoolean(KEY_HOME_RECENTS_TWO_ROWS, s.homeRecentsTwoRows)
             .putInt(KEY_HOME_RECENTS_ICON, s.homeRecentsIconDp)
             .putInt(KEY_HOME_RECENTS_GAP, s.homeRecentsGapDp)
             .putInt(KEY_HOME_RECENTS_BOTTOM, s.homeRecentsBottomDp)
@@ -607,6 +611,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_HOME_RECENTS_COUNT = "home_recents_count"
         const val KEY_HOME_RECENTS_ALIGN = "home_recents_align"
         const val KEY_HOME_RECENTS_ICON = "home_recents_icon_dp"
+        const val KEY_HOME_RECENTS_TWO_ROWS = "home_recents_two_rows"
         const val KEY_HOME_RECENTS_GAP = "home_recents_gap_dp"
         const val KEY_HOME_RECENTS_BOTTOM = "home_recents_bottom_dp"
         const val KEY_RECENTS = "recents"
