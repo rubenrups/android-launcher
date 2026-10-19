@@ -59,6 +59,7 @@ import com.rubenrups.launcher.data.AppInfo
 import com.rubenrups.launcher.data.CalendarReader
 import com.rubenrups.launcher.data.DashboardModules
 import com.rubenrups.launcher.data.GestureActions
+import com.rubenrups.launcher.data.HomeRecentsAlign
 import com.rubenrups.launcher.data.LauncherSettings
 import com.rubenrups.launcher.data.UpdateChecker
 import com.rubenrups.launcher.data.UpdateState
@@ -97,6 +98,7 @@ private val SearchIndex = listOf(
     SettingHit("Folder popup look", Page.HOME, "grid list columns opacity text size dim background"),
     SettingHit("Folder popup in the drawer", Page.DRAWER, "grid list columns opacity text size dim background"),
     SettingHit("Search button", Page.HOME, "magnifier floating"),
+    SettingHit("Recent apps on the home screen", Page.HOME, "icons bottom row last used dock count alignment size gap height placement"),
     SettingHit("App drawer button in favourites", Page.HOME, "add shortcut button"),
     SettingHit("Car mode button in favourites", Page.HOME, "dashboard add shortcut button"),
     SettingHit("Presets", Page.APPEARANCE, "left aligned right aligned large text layout"),
@@ -379,6 +381,40 @@ private fun HomePage(viewModel: LauncherViewModel, settings: LauncherSettings) {
                 "${button.label} button in favourites",
                 button.key in settings.favourites,
             ) { on -> if (on) viewModel.addFavourite(button) else viewModel.removeFavourite(button) }
+        }
+    }
+    Group("Recent apps row") {
+        SwitchRow(
+            "Recent apps on the home screen",
+            settings.showHomeRecents,
+            subtitle = "Icons only, along the bottom",
+        ) { v -> viewModel.update { it.copy(showHomeRecents = v) } }
+        if (settings.showHomeRecents) {
+            SliderRow("Number of apps", "${settings.homeRecentsCount}", settings.homeRecentsCount.toFloat(), 3f..8f) { v ->
+                viewModel.update { it.copy(homeRecentsCount = v.roundToInt()) }
+            }
+            listOf(
+                HomeRecentsAlign.SPREAD to "Spread across the width",
+                HomeRecentsAlign.START to "Left",
+                HomeRecentsAlign.CENTER to "Centre",
+                HomeRecentsAlign.END to "Right",
+            ).forEach { (value, label) ->
+                ChoiceRow(label, selected = settings.homeRecentsAlign == value) {
+                    viewModel.update { it.copy(homeRecentsAlign = value) }
+                }
+            }
+            SliderRow("Icon size", "${settings.homeRecentsIconDp} dp", settings.homeRecentsIconDp.toFloat(), 28f..64f) { v ->
+                viewModel.update { it.copy(homeRecentsIconDp = v.roundToInt()) }
+            }
+            if (settings.homeRecentsAlign != HomeRecentsAlign.SPREAD) {
+                SliderRow("Space between icons", "${settings.homeRecentsGapDp} dp", settings.homeRecentsGapDp.toFloat(), 0f..40f) { v ->
+                    viewModel.update { it.copy(homeRecentsGapDp = v.roundToInt()) }
+                }
+            }
+            SliderRow("Height above the bottom", "${settings.homeRecentsBottomDp} dp", settings.homeRecentsBottomDp.toFloat(), 0f..160f) { v ->
+                viewModel.update { it.copy(homeRecentsBottomDp = v.roundToInt()) }
+            }
+            Hint("The row keeps clear of the search button.")
         }
     }
 }
