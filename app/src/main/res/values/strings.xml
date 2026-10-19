@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="split_service_label">Rups Launcher split screen</string>
-    <string name="split_service_description">Lets Rups Launcher press the system split-screen button when you open a saved app pair. It does not read or collect anything from your screen.</string>
+    <string name="split_service_description">Lets Rups Launcher open a saved app pair in split screen: it presses the system split-screen action and, on phones that refuse that, taps the split-screen option in the Recents screen. Screen content is only looked at during that moment and is never stored or sent anywhere.</string>
 </resources>
