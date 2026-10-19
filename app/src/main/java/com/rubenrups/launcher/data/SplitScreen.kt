@@ -52,7 +52,13 @@ object SplitScreen {
         }
         repository.launch(first)
         delay(gapMs)
-        service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_TOGGLE_SPLIT_SCREEN)
+        val pressed = service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_TOGGLE_SPLIT_SCREEN)
+        // Shown on purpose: if the system refuses the action, the pair cannot work and this says so.
+        Toast.makeText(
+            context,
+            if (pressed) "Split screen: pressed, opening ${second.label}" else "Split screen: the system refused the action",
+            Toast.LENGTH_SHORT,
+        ).show()
         delay(gapMs)
         repository.launch(second, adjacent = true)
     }
