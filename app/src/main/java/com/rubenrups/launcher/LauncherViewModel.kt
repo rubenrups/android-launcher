@@ -485,7 +485,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun launch(app: AppInfo) {
         if (VirtualApps.isVirtual(app)) {
             // A launcher function in the favourites list rather than a real app: run it, record nothing.
-            if (app.key == VirtualApps.drawer.key) openDrawer(false) else setDashboardOpen(true)
+            when (app.key) {
+                VirtualApps.drawer.key -> openDrawer(false)
+                VirtualApps.settingsButton.key -> { closeDrawer(); setSettingsOpen(true) }
+                else -> setDashboardOpen(true)
+            }
             return
         }
         val now = System.currentTimeMillis()

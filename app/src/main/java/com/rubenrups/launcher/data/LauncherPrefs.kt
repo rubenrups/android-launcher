@@ -100,6 +100,20 @@ data class LauncherSettings(
     val twoColumnsLandscape: Boolean = true,
     /** Scroll the clock, media, widgets and favourites as one page instead of the favourites having their own area. */
     val homeScrollAsOne: Boolean = false,
+    /** "list" (icon and name), "icons" (icons only, one column) or "grid" (icons in several columns). */
+    val favouritesLayout: String = "list",
+    val favouritesIconDp: Int = 52,
+    val favouritesGridColumns: Int = 4,
+    val favouritesGridLabels: Boolean = true,
+    /** The home-screen media player. */
+    val mediaShowArt: Boolean = true,
+    val mediaShowArtist: Boolean = true,
+    val mediaShowSkip: Boolean = true,
+    val mediaShowExtras: Boolean = true,
+    val mediaSeekBar: Boolean = false,
+    val mediaLarge: Boolean = false,
+    val mediaOpacity: Int = 45,
+    val mediaHideWhenPaused: Boolean = false,
     /** Home-screen folders open as a see-through popup; off = they expand in place under the folder row. */
     val folderPopupOnHome: Boolean = true,
     /** App keys launched by a left / right swipe on the home screen; empty = nothing. */
@@ -299,6 +313,18 @@ class LauncherPrefs(context: Context) {
         adaptiveText = prefs.getBoolean(KEY_ADAPTIVE_TEXT, false),
         twoColumnsLandscape = prefs.getBoolean(KEY_TWO_COLUMNS, true),
         homeScrollAsOne = prefs.getBoolean(KEY_HOME_SCROLL_ONE, false),
+        favouritesLayout = prefs.getString(KEY_FAV_LAYOUT, "list") ?: "list",
+        favouritesIconDp = prefs.getInt(KEY_FAV_ICON, 52).coerceIn(32, 80),
+        favouritesGridColumns = prefs.getInt(KEY_FAV_COLUMNS, 4).coerceIn(2, 6),
+        favouritesGridLabels = prefs.getBoolean(KEY_FAV_LABELS, true),
+        mediaShowArt = prefs.getBoolean(KEY_MEDIA_ART, true),
+        mediaShowArtist = prefs.getBoolean(KEY_MEDIA_ARTIST, true),
+        mediaShowSkip = prefs.getBoolean(KEY_MEDIA_SKIP, true),
+        mediaShowExtras = prefs.getBoolean(KEY_MEDIA_EXTRAS, true),
+        mediaSeekBar = prefs.getBoolean(KEY_MEDIA_SEEK, false),
+        mediaLarge = prefs.getBoolean(KEY_MEDIA_LARGE, false),
+        mediaOpacity = prefs.getInt(KEY_MEDIA_OPACITY, 45).coerceIn(0, 100),
+        mediaHideWhenPaused = prefs.getBoolean(KEY_MEDIA_HIDE_PAUSED, false),
         folderPopupOnHome = prefs.getBoolean(KEY_FOLDER_POPUP, true),
         swipeLeftApp = prefs.getString(KEY_SWIPE_LEFT, "").orEmpty(),
         swipeRightApp = prefs.getString(KEY_SWIPE_RIGHT, "").orEmpty(),
@@ -409,6 +435,18 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_ADAPTIVE_TEXT, s.adaptiveText)
             .putBoolean(KEY_TWO_COLUMNS, s.twoColumnsLandscape)
             .putBoolean(KEY_HOME_SCROLL_ONE, s.homeScrollAsOne)
+            .putString(KEY_FAV_LAYOUT, s.favouritesLayout)
+            .putInt(KEY_FAV_ICON, s.favouritesIconDp)
+            .putInt(KEY_FAV_COLUMNS, s.favouritesGridColumns)
+            .putBoolean(KEY_FAV_LABELS, s.favouritesGridLabels)
+            .putBoolean(KEY_MEDIA_ART, s.mediaShowArt)
+            .putBoolean(KEY_MEDIA_ARTIST, s.mediaShowArtist)
+            .putBoolean(KEY_MEDIA_SKIP, s.mediaShowSkip)
+            .putBoolean(KEY_MEDIA_EXTRAS, s.mediaShowExtras)
+            .putBoolean(KEY_MEDIA_SEEK, s.mediaSeekBar)
+            .putBoolean(KEY_MEDIA_LARGE, s.mediaLarge)
+            .putInt(KEY_MEDIA_OPACITY, s.mediaOpacity)
+            .putBoolean(KEY_MEDIA_HIDE_PAUSED, s.mediaHideWhenPaused)
             .putBoolean(KEY_FOLDER_POPUP, s.folderPopupOnHome)
             .putString(KEY_SWIPE_LEFT, s.swipeLeftApp)
             .putString(KEY_SWIPE_RIGHT, s.swipeRightApp)
@@ -600,6 +638,18 @@ class LauncherPrefs(context: Context) {
         const val KEY_ADAPTIVE_TEXT = "adaptive_text"
         const val KEY_TWO_COLUMNS = "two_columns_landscape"
         const val KEY_HOME_SCROLL_ONE = "home_scroll_one"
+        const val KEY_FAV_LAYOUT = "fav_layout"
+        const val KEY_FAV_ICON = "fav_icon_dp"
+        const val KEY_FAV_COLUMNS = "fav_columns"
+        const val KEY_FAV_LABELS = "fav_labels"
+        const val KEY_MEDIA_ART = "media_art"
+        const val KEY_MEDIA_ARTIST = "media_artist"
+        const val KEY_MEDIA_SKIP = "media_skip"
+        const val KEY_MEDIA_EXTRAS = "media_extras"
+        const val KEY_MEDIA_SEEK = "media_seek"
+        const val KEY_MEDIA_LARGE = "media_large"
+        const val KEY_MEDIA_OPACITY = "media_opacity"
+        const val KEY_MEDIA_HIDE_PAUSED = "media_hide_paused"
         const val KEY_FOLDER_POPUP = "folder_popup_on_home"
         const val KEY_SWIPE_LEFT = "swipe_left_app"
         const val KEY_SWIPE_RIGHT = "swipe_right_app"

@@ -42,6 +42,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
@@ -241,10 +242,20 @@ private fun HomeContent(
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // The favourites always keep room for a few rows; everything above them (clock, notifications, media,
         // widgets) gets the rest and scrolls if it is taller, instead of squeezing the favourites away.
-        val rowHeightForMin = (settings.favouriteTextSp * 1.5f).dp + 14.dp
+        val tileLayout = settings.favouritesLayout != "list" && !editMode
+        val rowHeightForMin = if (tileLayout) {
+            (settings.favouritesIconDp + 12 + (if (settings.favouritesLayout == "grid" && settings.favouritesGridLabels) 18 else 0)).dp
+        } else {
+            (settings.favouriteTextSp * 1.5f).dp + 14.dp
+        }
         val landscapeNow = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
         val favouriteRows = if (favourites.isEmpty()) 1 else {
-            val rows = if (landscapeNow && settings.twoColumnsLandscape) (favourites.size + 1) / 2 else favourites.size
+            val rows = when {
+                tileLayout && settings.favouritesLayout == "grid" -> (favourites.size + settings.favouritesGridColumns - 1) / settings.favouritesGridColumns
+                tileLayout -> favourites.size
+                landscapeNow && settings.twoColumnsLandscape -> (favourites.size + 1) / 2
+                else -> favourites.size
+            }
             rows.coerceIn(1, MIN_FAVOURITE_ROWS)
         }
         val bars = WindowInsets.systemBars.asPaddingValues()
@@ -364,7 +375,7 @@ private fun HomeContent(
                 if (settings.homeScrollAsOne) Modifier else Modifier.heightIn(max = topSectionMax).verticalScroll(topScroll, enabled = topScroll.maxValue > 0),
                 horizontalAlignment = if (settings.alignEnd) Alignment.End else Alignment.Start,
             ) {
-            val mediaState = if (settings.showMedia) media else null
+            val mediaState = if (settings.showMedia && !(settings.mediaHideWhenPaused && media?.isPlaying == false)) media else null
             val glucoseLine: @Composable () -> Unit = {
                 if (settings.glucoseEnabled) {
                     GlucoseChip(glucose, settings, LocalHomeInk.current) { viewModel.openGlucoseApp() }
@@ -382,7 +393,7 @@ private fun HomeContent(
                             Clock(settings, weather, nextEvent, glucoseLine)
                         }
                         val card: @Composable () -> Unit = {
-                            mediaState?.let { MediaCard(it, Modifier.weight(1f)) }
+                            mediaState?.let { MediaCard(it, settings, Modifier.weight(1f)) }
                         }
                         // Keep the clock on the side the list is aligned to.
                         if (settings.alignEnd) { card(); clock() } else { clock(); card() }
@@ -420,7 +431,7 @@ private fun HomeContent(
             }
             if (!mediaBesideClock) {
                 mediaState?.let {
-                    Box(SidePadding.fillMaxWidth()) { MediaCard(it) }
+                    Box(SidePadding.fillMaxWidth()) { MediaCard(it, settings) }
                     Spacer(Modifier.height(8.dp))
                 }
             }
@@ -856,6 +867,8 @@ private fun FavouritesList(
     var sortFolderKey by remember { mutableStateOf<String?>(null) }
     var iconFolderKey by remember { mutableStateOf<String?>(null) }
     val alignment = if (settings.alignEnd) Alignment.End else Alignment.Start
+    // Reordering needs one straight list to drag along, so editing always shows the list layout.
+    val tileLayout = settings.favouritesLayout != "list" && !editMode
 
     Column(Modifier.fillMaxWidth(), horizontalAlignment = alignment) {
         if (editMode) {
@@ -921,7 +934,8 @@ private fun FavouritesList(
                         viewModel = viewModel,
                         onReorder = { onEditModeChange(true) },
                         onToggleFolder = {
-                            if (settings.folderPopupOnHome) {
+                            // Icon layouts have no room to expand a folder in place, so they always use the popup.
+                            if (settings.folderPopupOnHome || tileLayout) {
                                 popupFolderKey = entry.key
                             } else {
                                 expandedKeys = if (entry.key in expandedKeys) expandedKeys - entry.key else expandedKeys + entry.key
@@ -940,8 +954,20 @@ private fun FavouritesList(
                 }
             }
         }
+        if (tileLayout && settings.favouritesLayout == "grid") {
+            val columns = settings.favouritesGridColumns
+            favourites.chunked(columns).forEach { rowEntries ->
+                Row(Modifier.fillMaxWidth().padding(horizontal = 24.dp)) {
+                    rowEntries.forEach { entry ->
+                        Box(Modifier.weight(1f), contentAlignment = if (settings.alignEnd) Alignment.TopEnd else Alignment.TopStart) { renderEntry(entry) }
+                    }
+                    repeat(columns - rowEntries.size) { Spacer(Modifier.weight(1f)) }
+                }
+            }
+        } else if (tileLayout) {
+            favourites.forEach { entry -> Box(Modifier.padding(horizontal = 24.dp)) { renderEntry(entry) } }
         // Two columns only while browsing: reordering needs one straight list to drag along.
-        if (twoColumns && !editMode && favourites.size > 1) {
+        } else if (twoColumns && !editMode && favourites.size > 1) {
             val split = (favourites.size + 1) / 2
             Row(Modifier.fillMaxWidth()) {
                 Column(Modifier.weight(1f)) { favourites.take(split).forEach { renderEntry(it) } }
@@ -1011,8 +1037,46 @@ private fun FavouriteRow(
         Text("≡", color = ink.copy(alpha = 0.7f), fontSize = 24.sp, style = HomeTextStyle)
     }
 
-    Box(modifier.fillMaxWidth()) {
-        Row(
+    val tile = settings.favouritesLayout != "list" && !editMode
+    Box(if (tile) modifier else modifier.fillMaxWidth()) {
+        if (tile) {
+            val iconDp = settings.favouritesIconDp.dp
+            val labelled = settings.favouritesLayout == "grid" && settings.favouritesGridLabels
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .width(if (labelled) iconDp + 16.dp else iconDp)
+                    .pressable(
+                        onClick = {
+                            when (entry) {
+                                is AppEntry -> viewModel.launch(entry.app)
+                                is FolderEntry -> onToggleFolder()
+                            }
+                        },
+                        onLongClick = { menuOpen = true },
+                    )
+                    .padding(vertical = 6.dp),
+            ) {
+                Box {
+                    when (entry) {
+                        is AppEntry -> AppIcon(entry.app, viewModel, iconDp)
+                        is FolderEntry -> FolderGlyph(entry.apps.size, entry.folder.icon, size = iconDp)
+                    }
+                    if (badge > 0) Box(Modifier.align(Alignment.TopEnd)) { Badge(badge) }
+                }
+                if (labelled) {
+                    Text(
+                        entry.label,
+                        color = ink,
+                        fontSize = 11.sp,
+                        style = HomeTextStyle,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
+            }
+        } else Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp, if (alignEnd) Alignment.End else Alignment.Start),
             // The whole row, margins included, is the touch target; the margin is padding *inside* it.
@@ -1272,43 +1336,116 @@ private fun SwipeAwayRow(onDismiss: () -> Unit, content: @Composable () -> Unit)
 }
 
 @Composable
-internal fun MediaCard(media: MediaState, modifier: Modifier = Modifier, thumbSize: androidx.compose.ui.unit.Dp = 44.dp) {
+internal fun MediaCard(media: MediaState, settings: LauncherSettings, modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val controls = media.controller.transportControls
-    Row(
+    val large = settings.mediaLarge
+    val buttons: @Composable () -> Unit = {
+        // The player's own extra buttons (Spotify: add to / remove from liked songs). Icons come from the player app.
+        if (settings.mediaShowExtras) {
+            media.customActions.take(3).forEach { action ->
+                CustomActionButton(media.controller.packageName, action) { controls.sendCustomAction(action, null) }
+            }
+        }
+        if (settings.mediaShowSkip) MediaButton("|◀", large) { controls.skipToPrevious() }
+        MediaButton(if (media.isPlaying) "❚❚" else "▶", large) {
+            if (media.isPlaying) controls.pause() else controls.play()
+        }
+        if (settings.mediaShowSkip) MediaButton("▶|", large) { controls.skipToNext() }
+    }
+    Column(
         modifier
             .fillMaxWidth()
-            .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
+            .background(Color.Black.copy(alpha = settings.mediaOpacity / 100f), RoundedCornerShape(16.dp))
             // Tapping the card opens the player; the transport buttons below handle their own taps.
             .clickable { openMediaApp(context, media.controller) }
             .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        media.art?.let { art ->
-            val picture = remember(art) { art.asImageBitmap() }
-            androidx.compose.foundation.Image(
-                bitmap = picture,
-                contentDescription = null,
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                modifier = Modifier.padding(end = 12.dp).size(thumbSize).clip(RoundedCornerShape(8.dp)),
-            )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (settings.mediaShowArt) {
+                media.art?.let { art ->
+                    val picture = remember(art) { art.asImageBitmap() }
+                    androidx.compose.foundation.Image(
+                        bitmap = picture,
+                        contentDescription = null,
+                        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                        modifier = Modifier.padding(end = 12.dp).size(if (large) 72.dp else 44.dp).clip(RoundedCornerShape(8.dp)),
+                    )
+                }
+            }
+            Column(Modifier.weight(1f)) {
+                Text(
+                    media.title,
+                    color = Color.White,
+                    fontSize = if (large) 18.sp else 15.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (settings.mediaShowArtist && media.artist.isNotBlank()) {
+                    Text(
+                        media.artist,
+                        color = Color.White.copy(alpha = 0.75f),
+                        fontSize = if (large) 15.sp else 13.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+            // The compact card keeps its buttons on the same line; the large one gives them a row of their own below.
+            if (!large) buttons()
         }
-        Column(Modifier.weight(1f)) {
-            Text(media.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (media.artist.isNotBlank()) {
-                Text(media.artist, color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (settings.mediaSeekBar) MediaSeekBar(media)
+        if (large) {
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
+                buttons()
             }
         }
-        // The player's own extra buttons (Spotify: add to / remove from liked songs). Icons come from the player app.
-        media.customActions.take(3).forEach { action ->
-            CustomActionButton(media.controller.packageName, action) { controls.sendCustomAction(action, null) }
-        }
-        MediaButton("|◀") { controls.skipToPrevious() }
-        MediaButton(if (media.isPlaying) "❚❚" else "▶") {
-            if (media.isPlaying) controls.pause() else controls.play()
-        }
-        MediaButton("▶|") { controls.skipToNext() }
     }
+}
+
+/** A draggable position bar with elapsed and total time. Only drawn when the player has a length and allows seeking. */
+@Composable
+private fun MediaSeekBar(media: MediaState) {
+    val controller = media.controller
+    val duration = controller.metadata?.getLong(android.media.MediaMetadata.METADATA_KEY_DURATION) ?: 0L
+    val canSeek = duration > 0L &&
+        ((controller.playbackState?.actions ?: 0L) and android.media.session.PlaybackState.ACTION_SEEK_TO) != 0L
+    if (!canSeek) return
+    var dragging by remember { mutableStateOf<Float?>(null) }
+    val position by produceState(0L, controller, duration) {
+        while (true) {
+            val state = controller.playbackState
+            value = when {
+                state == null -> 0L
+                state.state == android.media.session.PlaybackState.STATE_PLAYING ->
+                    (state.position + ((android.os.SystemClock.elapsedRealtime() - state.lastPositionUpdateTime) * state.playbackSpeed).toLong())
+                        .coerceIn(0L, duration)
+                else -> state.position.coerceIn(0L, duration)
+            }
+            delay(500)
+        }
+    }
+    val shown = dragging ?: position.toFloat()
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(formatClock(shown.toLong()), color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp)
+        androidx.compose.material3.Slider(
+            value = shown.coerceIn(0f, duration.toFloat()),
+            onValueChange = { dragging = it },
+            onValueChangeFinished = {
+                dragging?.let { controller.transportControls.seekTo(it.toLong()) }
+                dragging = null
+            },
+            valueRange = 0f..duration.toFloat(),
+            modifier = Modifier.weight(1f).padding(horizontal = 8.dp).height(32.dp),
+        )
+        Text(formatClock(duration), color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp)
+    }
+}
+
+private fun formatClock(ms: Long): String {
+    val total = (ms / 1000).toInt()
+    return "%d:%02d".format(total / 60, total % 60)
 }
 
 /**
@@ -1344,11 +1481,11 @@ private fun startSafely(context: Context, intent: Intent) {
 }
 
 @Composable
-private fun MediaButton(label: String, onClick: () -> Unit) {
+private fun MediaButton(label: String, large: Boolean = false, onClick: () -> Unit) {
     Text(
         label,
         color = Color.White,
-        fontSize = 18.sp,
+        fontSize = if (large) 24.sp else 18.sp,
         modifier = Modifier.clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp),
     )
 }
@@ -1377,7 +1514,7 @@ internal fun CustomActionButton(
             modifier = Modifier.clickable(onClick = onClick).padding(horizontal = 8.dp, vertical = 4.dp).size(size),
         )
     } else {
-        MediaButton(action.name.toString().take(10), onClick)
+        MediaButton(action.name.toString().take(10), onClick = onClick)
     }
 }
 

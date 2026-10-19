@@ -136,6 +136,9 @@ private val SearchIndex = listOf(
     SettingHit("Notification access", Page.NOTIFICATIONS, "restricted settings listener permission"),
     SettingHit("Notifications on home", Page.NOTIFICATIONS, "show list"),
     SettingHit("Media player", Page.NOTIFICATIONS, "music spotify card"),
+    SettingHit("Media player look", Page.HOME, "album art artist buttons seek bar progress scrub large opacity hide paused"),
+    SettingHit("Favourites layout", Page.HOME, "icons only grid columns names icon size"),
+    SettingHit("Launcher settings button", Page.HOME, "gear add home screen drawer shortcut"),
     SettingHit("Navigation", Page.NOTIFICATIONS, "google maps waze turn next"),
     SettingHit("Widgets", Page.APPS, "add remove"),
     SettingHit("Work profile", Page.APPS, "pause resume work apps"),
@@ -336,7 +339,55 @@ private fun HomePage(viewModel: LauncherViewModel, settings: LauncherSettings) {
         }
         Hint("The side and compact layouts take less height, so more favourites fit on screen.")
     }
+    Group("Media player") {
+        SwitchRow("Album art", settings.mediaShowArt) { v -> viewModel.update { it.copy(mediaShowArt = v) } }
+        SwitchRow("Artist name", settings.mediaShowArtist) { v -> viewModel.update { it.copy(mediaShowArtist = v) } }
+        SwitchRow("Previous / next buttons", settings.mediaShowSkip) { v -> viewModel.update { it.copy(mediaShowSkip = v) } }
+        SwitchRow(
+            "The player's extra buttons",
+            settings.mediaShowExtras,
+            subtitle = "Like, shuffle, radio and so on, when the app offers them",
+        ) { v -> viewModel.update { it.copy(mediaShowExtras = v) } }
+        SwitchRow(
+            "Seek bar",
+            settings.mediaSeekBar,
+            subtitle = "Shows progress and lets you drag to a position, when the player allows it",
+        ) { v -> viewModel.update { it.copy(mediaSeekBar = v) } }
+        SwitchRow("Large card", settings.mediaLarge, subtitle = "Bigger art and text, buttons on their own row") { v ->
+            viewModel.update { it.copy(mediaLarge = v) }
+        }
+        SwitchRow("Hide while paused", settings.mediaHideWhenPaused) { v -> viewModel.update { it.copy(mediaHideWhenPaused = v) } }
+        SliderRow("Card background", "${settings.mediaOpacity}%", settings.mediaOpacity.toFloat(), 0f..100f) { v ->
+            viewModel.update { it.copy(mediaOpacity = v.roundToInt()) }
+        }
+        Hint("Turn the media player itself on or off under Notifications.")
+    }
     Group("Favourites list") {
+        ChoiceRow("Layout: list (icon and name)", selected = settings.favouritesLayout == "list") {
+            viewModel.update { it.copy(favouritesLayout = "list") }
+        }
+        ChoiceRow("Layout: icons only", selected = settings.favouritesLayout == "icons") {
+            viewModel.update { it.copy(favouritesLayout = "icons") }
+        }
+        ChoiceRow("Layout: icon grid", selected = settings.favouritesLayout == "grid") {
+            viewModel.update { it.copy(favouritesLayout = "grid") }
+        }
+        if (settings.favouritesLayout != "list") {
+            SliderRow("Icon size", "${settings.favouritesIconDp} dp", settings.favouritesIconDp.toFloat(), 32f..80f) { v ->
+                viewModel.update { it.copy(favouritesIconDp = v.roundToInt()) }
+            }
+        }
+        if (settings.favouritesLayout == "grid") {
+            SliderRow("Columns", "${settings.favouritesGridColumns}", settings.favouritesGridColumns.toFloat(), 2f..6f) { v ->
+                viewModel.update { it.copy(favouritesGridColumns = v.roundToInt()) }
+            }
+            SwitchRow("Show names under the icons", settings.favouritesGridLabels) { v ->
+                viewModel.update { it.copy(favouritesGridLabels = v) }
+            }
+        }
+        if (settings.favouritesLayout != "list") {
+            Hint("Folders open as a popup in the icon layouts. Reordering (long-press → Reorder) shows the list while you drag.")
+        }
         SwitchRow("Align to the right", settings.alignEnd) { v -> viewModel.update { it.copy(alignEnd = v) } }
         SwitchRow("Pin list to the bottom", settings.anchorBottom) { v -> viewModel.update { it.copy(anchorBottom = v) } }
         SwitchRow(
