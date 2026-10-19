@@ -614,22 +614,24 @@ private fun homeRecentsRowCount(settings: LauncherSettings, apps: Int) = if (set
 /** The last launched apps as bare icons along the bottom of the home screen. */
 @Composable
 private fun HomeRecentsRow(apps: List<AppInfo>, viewModel: LauncherViewModel, settings: LauncherSettings, modifier: Modifier = Modifier) {
-    val cell = (settings.homeRecentsIconDp + 8).dp
+    // Each icon fills its cell exactly, so the first one starts on the same left line as the favourites and the clock.
+    val cell = settings.homeRecentsIconDp.dp
     // The search button floats in one bottom corner (the one opposite the favourites); keep the icons off it.
     val clear = if (settings.showSearchButton) SEARCH_BUTTON_CLEARANCE_DP.dp else EDGE_PADDING_DP.dp
     val edge = EDGE_PADDING_DP.dp
     val searchAtEnd = !settings.alignEnd
     val (startPad, endPad) = when (settings.homeRecentsAlign) {
-        HomeRecentsAlign.START -> edge to (if (searchAtEnd) clear else edge)
+        // Left-aligned and spread rows start on the same line as the favourites; only the search-button side is kept clear.
+        HomeRecentsAlign.START, HomeRecentsAlign.SPREAD -> edge to (if (searchAtEnd) clear else edge)
         HomeRecentsAlign.END -> (if (searchAtEnd) edge else clear) to edge
-        // Evenly spread and centred rows stay symmetric, so the clearance applies on both sides.
+        // Centred rows stay symmetric, so the clearance applies on both sides.
         else -> clear to clear
     }
     val arrangement = when (settings.homeRecentsAlign) {
         HomeRecentsAlign.START -> Arrangement.spacedBy(settings.homeRecentsGapDp.dp, Alignment.Start)
         HomeRecentsAlign.CENTER -> Arrangement.spacedBy(settings.homeRecentsGapDp.dp, Alignment.CenterHorizontally)
         HomeRecentsAlign.END -> Arrangement.spacedBy(settings.homeRecentsGapDp.dp, Alignment.End)
-        else -> Arrangement.SpaceEvenly
+        else -> Arrangement.SpaceBetween
     }
     val rows = homeRecentsRowCount(settings, apps.size)
     val chunks = if (rows == 2) apps.chunked((apps.size + 1) / 2) else listOf(apps)
