@@ -114,6 +114,11 @@ data class LauncherSettings(
     val mediaLarge: Boolean = false,
     val mediaOpacity: Int = 45,
     val mediaHideWhenPaused: Boolean = false,
+    /** The car-mode media card. */
+    val carMediaShowArt: Boolean = true,
+    val carMediaShowArtist: Boolean = true,
+    val carMediaShowExtras: Boolean = true,
+    val carMediaSeekBar: Boolean = false,
     /** Home-screen folders open as a see-through popup; off = they expand in place under the folder row. */
     val folderPopupOnHome: Boolean = true,
     /** App keys launched by a left / right swipe on the home screen; empty = nothing. */
@@ -325,6 +330,10 @@ class LauncherPrefs(context: Context) {
         mediaLarge = prefs.getBoolean(KEY_MEDIA_LARGE, false),
         mediaOpacity = prefs.getInt(KEY_MEDIA_OPACITY, 45).coerceIn(0, 100),
         mediaHideWhenPaused = prefs.getBoolean(KEY_MEDIA_HIDE_PAUSED, false),
+        carMediaShowArt = prefs.getBoolean(KEY_CAR_MEDIA_ART, true),
+        carMediaShowArtist = prefs.getBoolean(KEY_CAR_MEDIA_ARTIST, true),
+        carMediaShowExtras = prefs.getBoolean(KEY_CAR_MEDIA_EXTRAS, true),
+        carMediaSeekBar = prefs.getBoolean(KEY_CAR_MEDIA_SEEK, false),
         folderPopupOnHome = prefs.getBoolean(KEY_FOLDER_POPUP, true),
         swipeLeftApp = prefs.getString(KEY_SWIPE_LEFT, "").orEmpty(),
         swipeRightApp = prefs.getString(KEY_SWIPE_RIGHT, "").orEmpty(),
@@ -447,6 +456,10 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_MEDIA_LARGE, s.mediaLarge)
             .putInt(KEY_MEDIA_OPACITY, s.mediaOpacity)
             .putBoolean(KEY_MEDIA_HIDE_PAUSED, s.mediaHideWhenPaused)
+            .putBoolean(KEY_CAR_MEDIA_ART, s.carMediaShowArt)
+            .putBoolean(KEY_CAR_MEDIA_ARTIST, s.carMediaShowArtist)
+            .putBoolean(KEY_CAR_MEDIA_EXTRAS, s.carMediaShowExtras)
+            .putBoolean(KEY_CAR_MEDIA_SEEK, s.carMediaSeekBar)
             .putBoolean(KEY_FOLDER_POPUP, s.folderPopupOnHome)
             .putString(KEY_SWIPE_LEFT, s.swipeLeftApp)
             .putString(KEY_SWIPE_RIGHT, s.swipeRightApp)
@@ -650,6 +663,10 @@ class LauncherPrefs(context: Context) {
         const val KEY_MEDIA_LARGE = "media_large"
         const val KEY_MEDIA_OPACITY = "media_opacity"
         const val KEY_MEDIA_HIDE_PAUSED = "media_hide_paused"
+        const val KEY_CAR_MEDIA_ART = "car_media_art"
+        const val KEY_CAR_MEDIA_ARTIST = "car_media_artist"
+        const val KEY_CAR_MEDIA_EXTRAS = "car_media_extras"
+        const val KEY_CAR_MEDIA_SEEK = "car_media_seek"
         const val KEY_FOLDER_POPUP = "folder_popup_on_home"
         const val KEY_SWIPE_LEFT = "swipe_left_app"
         const val KEY_SWIPE_RIGHT = "swipe_right_app"

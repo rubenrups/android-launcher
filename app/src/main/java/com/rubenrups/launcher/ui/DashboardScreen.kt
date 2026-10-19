@@ -12,6 +12,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.rubenrups.launcher.data.CallContact
 import com.rubenrups.launcher.data.DashboardModules
+import com.rubenrups.launcher.data.LauncherSettings
 import com.rubenrups.launcher.data.Destination
 import com.rubenrups.launcher.data.HourlyPoint
 import android.content.Intent
@@ -138,7 +139,7 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
     val content: @Composable (String) -> Unit = { key ->
         when (key) {
             DashboardModules.GLUCOSE -> GlucoseCard(viewModel, onOpenSettings)
-            DashboardModules.MEDIA -> CarMediaCard(media)
+            DashboardModules.MEDIA -> CarMediaCard(media, settings)
             // While a route is active: the next turn. Otherwise: one-tap destinations.
             DashboardModules.NAVIGATION ->
                 navigation?.let { NavigationCard(it, big = true) } ?: NavigateCard(settings.destinations, onOpenSettings)
@@ -162,6 +163,7 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
             onHide = { viewModel.setDashboardCardHidden(key, true) },
             isHalf = key in settings.dashboardHalf,
             onToggleHalf = { viewModel.setDashboardCardHalf(key, key !in settings.dashboardHalf) },
+            onOpenSettings = { viewModel.openSettings(settingsPageFor(key)) },
         ) {
             CompositionLocalProvider(LocalHalfCard provides (key in settings.dashboardHalf)) { content(key) }
         }
@@ -256,6 +258,14 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
     }
 }
 
+/** The settings page that configures a card (names of the pages in the settings screen). */
+private fun settingsPageFor(card: String): String = when (card) {
+    DashboardModules.GLUCOSE -> "GLUCOSE"
+    // The weather city, battery and calendar toggles live with the home-screen header settings.
+    DashboardModules.WEATHER, DashboardModules.STATS -> "HOME"
+    else -> "DASHBOARD"
+}
+
 /** Wraps a card so holding it opens Move earlier / Move later / Hide. */
 @Composable
 private fun CardSlot(
@@ -266,6 +276,7 @@ private fun CardSlot(
     onHide: () -> Unit,
     isHalf: Boolean,
     onToggleHalf: () -> Unit,
+    onOpenSettings: () -> Unit,
     content: @Composable () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
@@ -278,6 +289,7 @@ private fun CardSlot(
                 text = { Text(if (isHalf) "Full width" else "Half width") },
                 onClick = { menuOpen = false; onToggleHalf() },
             )
+            DropdownMenuItem(text = { Text("Settings for this card") }, onClick = { menuOpen = false; onOpenSettings() })
             DropdownMenuItem(text = { Text("Hide card") }, onClick = { menuOpen = false; onHide() })
         }
     }
@@ -529,7 +541,7 @@ private fun RowScope.QuickTile(icon: String, label: String, active: Boolean = fa
 
 /** A big media card for the car: large album art, large title, and big previous / play-pause / next buttons. */
 @Composable
-private fun CarMediaCard(media: MediaState?) {
+private fun CarMediaCard(media: MediaState?, settings: LauncherSettings) {
     if (media == null) {
         Card { Text("Nothing is playing", color = Color.White.copy(alpha = 0.6f), fontSize = 20.sp) }
         return
@@ -538,7 +550,7 @@ private fun CarMediaCard(media: MediaState?) {
     val controls = media.controller.transportControls
     Card(onClick = { openMediaApp(context, media.controller) }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            media.art?.let { art ->
+            media.art?.takeIf { settings.carMediaShowArt }?.let { art ->
                 val picture = remember(art) { art.asImageBitmap() }
                 androidx.compose.foundation.Image(
                     bitmap = picture,
@@ -549,11 +561,12 @@ private fun CarMediaCard(media: MediaState?) {
             }
             Column(Modifier.weight(1f)) {
                 Text(media.title, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                if (media.artist.isNotBlank()) {
+                if (settings.carMediaShowArtist && media.artist.isNotBlank()) {
                     Text(media.artist, color = Color.White.copy(alpha = 0.75f), fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
+        if (settings.carMediaSeekBar) MediaSeekBar(media, big = true)
         Spacer(Modifier.height(14.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
             TransportButton(TransportKind.PREVIOUS, 72.dp, filled = false) { controls.skipToPrevious() }
@@ -562,7 +575,7 @@ private fun CarMediaCard(media: MediaState?) {
             }
             TransportButton(TransportKind.NEXT, 72.dp, filled = false) { controls.skipToNext() }
         }
-        if (media.customActions.isNotEmpty()) {
+        if (settings.carMediaShowExtras && media.customActions.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
             // The player's own extras (Spotify: shuffle, add to liked songs…), kept smaller than the main controls.
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {

@@ -1406,7 +1406,7 @@ internal fun MediaCard(media: MediaState, settings: LauncherSettings, modifier: 
 
 /** A draggable position bar with elapsed and total time. Only drawn when the player has a length and allows seeking. */
 @Composable
-private fun MediaSeekBar(media: MediaState) {
+internal fun MediaSeekBar(media: MediaState, big: Boolean = false) {
     val controller = media.controller
     val duration = controller.metadata?.getLong(android.media.MediaMetadata.METADATA_KEY_DURATION) ?: 0L
     val canSeek = duration > 0L &&
@@ -1428,7 +1428,7 @@ private fun MediaSeekBar(media: MediaState) {
     }
     val shown = dragging ?: position.toFloat()
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(formatClock(shown.toLong()), color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp)
+        Text(formatClock(shown.toLong()), color = Color.White.copy(alpha = 0.75f), fontSize = if (big) 16.sp else 12.sp)
         androidx.compose.material3.Slider(
             value = shown.coerceIn(0f, duration.toFloat()),
             onValueChange = { dragging = it },
@@ -1437,9 +1437,9 @@ private fun MediaSeekBar(media: MediaState) {
                 dragging = null
             },
             valueRange = 0f..duration.toFloat(),
-            modifier = Modifier.weight(1f).padding(horizontal = 8.dp).height(32.dp),
+            modifier = Modifier.weight(1f).padding(horizontal = 8.dp).height(if (big) 48.dp else 32.dp),
         )
-        Text(formatClock(duration), color = Color.White.copy(alpha = 0.75f), fontSize = 12.sp)
+        Text(formatClock(duration), color = Color.White.copy(alpha = 0.75f), fontSize = if (big) 16.sp else 12.sp)
     }
 }
 

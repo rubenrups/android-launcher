@@ -327,6 +327,17 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun setSettingsOpen(open: Boolean) { _settingsOpen.value = open }
 
+    /** The settings page to show first the next time settings open ("" = the front page). Read once by the screen. */
+    private var settingsStartPage: String = ""
+
+    /** Opens settings straight at a page (a name from the settings screen, such as "DASHBOARD" or "GLUCOSE"). */
+    fun openSettings(page: String) {
+        settingsStartPage = page
+        _settingsOpen.value = true
+    }
+
+    fun takeSettingsStartPage(): String = settingsStartPage.also { settingsStartPage = "" }
+
     fun setDashboardOpen(open: Boolean, from: DashboardEdge = DashboardEdge.NONE) {
         // Closing keeps the last edge, so the dashboard leaves the way it came.
         if (open) {

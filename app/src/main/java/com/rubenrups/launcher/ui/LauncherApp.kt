@@ -201,7 +201,7 @@ fun LauncherApp(viewModel: LauncherViewModel) {
             DashboardScreen(
                 viewModel,
                 onClose = { viewModel.setDashboardOpen(false) },
-                onOpenSettings = { viewModel.setSettingsOpen(true) },
+                onOpenSettings = { viewModel.openSettings("DASHBOARD") },
             )
         }
 

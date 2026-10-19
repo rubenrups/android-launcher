@@ -167,7 +167,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
     val installedBuild = remember { UpdateChecker.installedBuild(context) }
 
     // Which category is open ("" = the front page). Saved, so rotating the phone keeps your place.
-    var pageName by rememberSaveable { mutableStateOf("") }
+    var pageName by rememberSaveable { mutableStateOf(viewModel.takeSettingsStartPage()) }
     var query by rememberSaveable { mutableStateOf("") }
     val page = Page.entries.firstOrNull { it.name == pageName }
     var chooser by remember { mutableStateOf<String?>(null) } // up / down / left / right / glucose while the app chooser is open
@@ -692,6 +692,16 @@ private fun DashboardPage(viewModel: LauncherViewModel, settings: LauncherSettin
         )
     }
     CarAutomationGroups(viewModel, settings)
+    Group("Media card") {
+        SwitchRow("Album art", settings.carMediaShowArt) { v -> viewModel.update { it.copy(carMediaShowArt = v) } }
+        SwitchRow("Artist name", settings.carMediaShowArtist) { v -> viewModel.update { it.copy(carMediaShowArtist = v) } }
+        SwitchRow("The player's extra buttons", settings.carMediaShowExtras, subtitle = "Like, shuffle and so on, when the app offers them") { v ->
+            viewModel.update { it.copy(carMediaShowExtras = v) }
+        }
+        SwitchRow("Seek bar", settings.carMediaSeekBar, subtitle = "Progress and drag-to-seek, when the player allows it") { v ->
+            viewModel.update { it.copy(carMediaSeekBar = v) }
+        }
+    }
     Group("Cards, in order") {
         val order = settings.dashboardOrder
         order.forEachIndexed { index, key ->
