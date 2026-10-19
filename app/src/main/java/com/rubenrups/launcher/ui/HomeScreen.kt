@@ -110,6 +110,7 @@ import com.rubenrups.launcher.data.FolderEntry
 import com.rubenrups.launcher.data.LauncherSettings
 import com.rubenrups.launcher.data.NextEvent
 import com.rubenrups.launcher.data.GestureActions
+import com.rubenrups.launcher.data.HomeRecentsAlign
 import com.rubenrups.launcher.data.UpdateState
 import com.rubenrups.launcher.data.VirtualApps
 import com.rubenrups.launcher.expandNotificationShade
@@ -227,14 +228,14 @@ private fun HomeContent(
     val currentDrawerDrag by rememberUpdatedState(onDrawerDrag)
     val currentDrawerRelease by rememberUpdatedState(onDrawerRelease)
 
-    val homeRecents = remember(allApps, settings.recents, settings.showHomeRecents) {
+    val homeRecents = remember(allApps, settings.recents, settings.showHomeRecents, settings.homeRecentsCount) {
         if (!settings.showHomeRecents) emptyList() else {
             val byKey = allApps.associateBy { it.key }
-            settings.recents.mapNotNull { byKey[it] }.take(HOME_RECENTS_SHOWN)
+            settings.recents.mapNotNull { byKey[it] }.take(settings.homeRecentsCount)
         }
     }
     // Room the icon row takes at the bottom, so the favourites and the clock section stop above it.
-    val recentsReserve = if (homeRecents.isEmpty()) 0.dp else HOME_RECENTS_HEIGHT
+    val recentsReserve = if (homeRecents.isEmpty()) 0.dp else homeRecentsRowHeight(settings) + settings.homeRecentsBottomDp.dp
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // The favourites always keep room for a few rows; everything above them (clock, notifications, media,
@@ -583,9 +584,11 @@ private fun HomeContent(
             HomeRecentsRow(
                 apps = homeRecents,
                 viewModel = viewModel,
-                // Stay clear of the floating search button in the bottom corner.
-                sidePadding = if (settings.showSearchButton) 88.dp else 24.dp,
-                modifier = Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.systemBars),
+                settings = settings,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .windowInsetsPadding(WindowInsets.systemBars)
+                    .padding(bottom = settings.homeRecentsBottomDp.dp),
             )
         }
 
@@ -601,25 +604,46 @@ private fun HomeContent(
     }
 }
 
-private const val HOME_RECENTS_SHOWN = 5
-private val HOME_RECENTS_HEIGHT = 64.dp
+private const val SEARCH_BUTTON_CLEARANCE_DP = 88
+private const val EDGE_PADDING_DP = 24
+
+private fun homeRecentsRowHeight(settings: LauncherSettings) = (settings.homeRecentsIconDp + 24).dp
 
 /** The last launched apps as bare icons along the bottom of the home screen. */
 @Composable
-private fun HomeRecentsRow(apps: List<AppInfo>, viewModel: LauncherViewModel, sidePadding: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier) {
+private fun HomeRecentsRow(apps: List<AppInfo>, viewModel: LauncherViewModel, settings: LauncherSettings, modifier: Modifier = Modifier) {
+    val cell = (settings.homeRecentsIconDp + 8).dp
+    // The search button floats in one bottom corner (the one opposite the favourites); keep the icons off it.
+    val clear = if (settings.showSearchButton) SEARCH_BUTTON_CLEARANCE_DP.dp else EDGE_PADDING_DP.dp
+    val edge = EDGE_PADDING_DP.dp
+    val searchAtEnd = !settings.alignEnd
+    val (startPad, endPad) = when (settings.homeRecentsAlign) {
+        HomeRecentsAlign.START -> edge to (if (searchAtEnd) clear else edge)
+        HomeRecentsAlign.END -> (if (searchAtEnd) edge else clear) to edge
+        // Evenly spread and centred rows stay symmetric, so the clearance applies on both sides.
+        else -> clear to clear
+    }
+    val arrangement = when (settings.homeRecentsAlign) {
+        HomeRecentsAlign.START -> Arrangement.spacedBy(settings.homeRecentsGapDp.dp, Alignment.Start)
+        HomeRecentsAlign.CENTER -> Arrangement.spacedBy(settings.homeRecentsGapDp.dp, Alignment.CenterHorizontally)
+        HomeRecentsAlign.END -> Arrangement.spacedBy(settings.homeRecentsGapDp.dp, Alignment.End)
+        else -> Arrangement.SpaceEvenly
+    }
     Row(
-        modifier.fillMaxWidth().height(HOME_RECENTS_HEIGHT).padding(horizontal = sidePadding),
-        horizontalArrangement = Arrangement.SpaceEvenly,
+        modifier.fillMaxWidth().height(homeRecentsRowHeight(settings)).padding(start = startPad, end = endPad),
+        horizontalArrangement = arrangement,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         apps.forEach { app ->
             Box(
-                Modifier.size(48.dp).clickable { viewModel.launch(app) }.semantics { contentDescription = app.label },
+                Modifier.size(cell).clickable { viewModel.launch(app) }.semantics { contentDescription = app.label },
                 contentAlignment = Alignment.Center,
-            ) { AppIcon(app, viewModel, 40.dp) }
+            ) { AppIcon(app, viewModel, settings.homeRecentsIconDp.dp) }
         }
-        // Keep the icons where they are when fewer than five apps have been launched so far.
-        repeat(HOME_RECENTS_SHOWN - apps.size) { Spacer(Modifier.size(48.dp)) }
+        // Spread evenly: keep the icons where they are while fewer apps than the chosen number have been launched.
+        if (settings.homeRecentsAlign == HomeRecentsAlign.SPREAD) {
+            repeat((settings.homeRecentsCount - apps.size).coerceAtLeast(0)) { Spacer(Modifier.size(cell)) }
+        }
     }
 }
 

@@ -79,6 +79,15 @@ data class LauncherSettings(
     val showRecents: Boolean = true,
     /** A row of the last launched apps, icons only, along the bottom of the home screen. Off by default. */
     val showHomeRecents: Boolean = false,
+    /** How many recent apps the home row shows (the launcher remembers 8). */
+    val homeRecentsCount: Int = 5,
+    /** One of [HomeRecentsAlign]. */
+    val homeRecentsAlign: String = HomeRecentsAlign.SPREAD,
+    val homeRecentsIconDp: Int = 40,
+    /** Space between icons; unused while spread evenly. */
+    val homeRecentsGapDp: Int = 16,
+    /** Lifts the row this far above the bottom of the screen. */
+    val homeRecentsBottomDp: Int = 0,
     /** Most recently launched app keys, newest first. */
     val recents: List<String> = emptyList(),
     val widgetIds: List<Int> = emptyList(),
@@ -277,6 +286,11 @@ class LauncherPrefs(context: Context) {
             .getOrDefault(WebSearchEngine.SYSTEM),
         showRecents = prefs.getBoolean(KEY_SHOW_RECENTS, true),
         showHomeRecents = prefs.getBoolean(KEY_SHOW_HOME_RECENTS, false),
+        homeRecentsCount = prefs.getInt(KEY_HOME_RECENTS_COUNT, 5).coerceIn(3, 8),
+        homeRecentsAlign = prefs.getString(KEY_HOME_RECENTS_ALIGN, HomeRecentsAlign.SPREAD).orEmpty(),
+        homeRecentsIconDp = prefs.getInt(KEY_HOME_RECENTS_ICON, 40).coerceIn(28, 64),
+        homeRecentsGapDp = prefs.getInt(KEY_HOME_RECENTS_GAP, 16).coerceIn(0, 40),
+        homeRecentsBottomDp = prefs.getInt(KEY_HOME_RECENTS_BOTTOM, 0).coerceIn(0, 160),
         recents = prefs.getString(KEY_RECENTS, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() },
         widgetIds = prefs.getString(KEY_WIDGETS, "").orEmpty().split(SEPARATOR).mapNotNull { it.toIntOrNull() },
         updateToken = prefs.getString(KEY_UPDATE_TOKEN, "").orEmpty(),
@@ -382,6 +396,11 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_WEB_SEARCH, s.webSearch.name)
             .putBoolean(KEY_SHOW_RECENTS, s.showRecents)
             .putBoolean(KEY_SHOW_HOME_RECENTS, s.showHomeRecents)
+            .putInt(KEY_HOME_RECENTS_COUNT, s.homeRecentsCount)
+            .putString(KEY_HOME_RECENTS_ALIGN, s.homeRecentsAlign)
+            .putInt(KEY_HOME_RECENTS_ICON, s.homeRecentsIconDp)
+            .putInt(KEY_HOME_RECENTS_GAP, s.homeRecentsGapDp)
+            .putInt(KEY_HOME_RECENTS_BOTTOM, s.homeRecentsBottomDp)
             .putString(KEY_RECENTS, s.recents.joinToString(SEPARATOR))
             .putString(KEY_WIDGETS, s.widgetIds.joinToString(SEPARATOR))
             .putString(KEY_UPDATE_TOKEN, s.updateToken)
@@ -581,6 +600,11 @@ class LauncherPrefs(context: Context) {
         const val KEY_WEB_SEARCH = "web_search"
         const val KEY_SHOW_RECENTS = "show_recents"
         const val KEY_SHOW_HOME_RECENTS = "show_home_recents"
+        const val KEY_HOME_RECENTS_COUNT = "home_recents_count"
+        const val KEY_HOME_RECENTS_ALIGN = "home_recents_align"
+        const val KEY_HOME_RECENTS_ICON = "home_recents_icon_dp"
+        const val KEY_HOME_RECENTS_GAP = "home_recents_gap_dp"
+        const val KEY_HOME_RECENTS_BOTTOM = "home_recents_bottom_dp"
         const val KEY_RECENTS = "recents"
         const val KEY_WIDGETS = "widgets"
         const val KEY_UPDATE_TOKEN = "update_token"
@@ -675,4 +699,12 @@ object LauncherPrefsHolder {
         instance ?: synchronized(this) {
             instance ?: LauncherPrefs(context.applicationContext).also { instance = it }
         }
+}
+
+/** Where the recent-apps icons sit along the bottom of the home screen. */
+object HomeRecentsAlign {
+    const val SPREAD = "spread"
+    const val START = "start"
+    const val CENTER = "center"
+    const val END = "end"
 }
