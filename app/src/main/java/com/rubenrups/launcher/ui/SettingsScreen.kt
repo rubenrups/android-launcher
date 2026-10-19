@@ -41,6 +41,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.delay
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -168,6 +175,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
 
     // Which category is open ("" = the front page). Saved, so rotating the phone keeps your place.
     var pageName by rememberSaveable { mutableStateOf(viewModel.takeSettingsStartPage()) }
+    val startSection = rememberSaveable { viewModel.takeSettingsStartSection() }
     var query by rememberSaveable { mutableStateOf("") }
     val page = Page.entries.firstOrNull { it.name == pageName }
     var chooser by remember { mutableStateOf<String?>(null) } // up / down / left / right / glucose while the app chooser is open
@@ -230,6 +238,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                     )
                 } else {
                     Header(current.title, backLabel = "‹", onBack = { pageName = "" })
+                    CompositionLocalProvider(LocalSettingsSection provides startSection) {
                     when (current) {
                         Page.HOME -> HomePage(viewModel, settings)
                         Page.APPEARANCE -> AppearancePage(viewModel, settings)
@@ -241,6 +250,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                         Page.NOTIFICATIONS -> NotificationsPage(viewModel, settings, listenerConnected)
                         Page.APPS -> AppsPage(viewModel, settings) { pickWidget = true }
                         Page.BACKUP -> BackupPage(viewModel, settings, updateState)
+                    }
                     }
                     Spacer(Modifier.height(32.dp))
                 }
@@ -692,6 +702,12 @@ private fun DashboardPage(viewModel: LauncherViewModel, settings: LauncherSettin
         )
     }
     CarAutomationGroups(viewModel, settings)
+    Group("Notifications card") {
+        SliderRow("Notifications shown", "${settings.carNotificationCount}", settings.carNotificationCount.toFloat(), 2f..8f) { v ->
+            viewModel.update { it.copy(carNotificationCount = v.roundToInt()) }
+        }
+        Hint("Lists your latest notifications in car mode: tap one to open it, ✕ to clear it. Needs notification access (see Notifications & media).")
+    }
     Group("Media card") {
         SwitchRow("Album art", settings.carMediaShowArt) { v -> viewModel.update { it.copy(carMediaShowArt = v) } }
         SwitchRow("Artist name", settings.carMediaShowArtist) { v -> viewModel.update { it.copy(carMediaShowArtist = v) } }
@@ -1039,9 +1055,23 @@ private fun CategoryRow(icon: String, title: String, summary: String, onClick: (
 }
 
 /** A titled, rounded card holding related rows. */
+/** The title of the group to scroll to when a page is opened from a shortcut (see LauncherViewModel.openSettings). */
+internal val LocalSettingsSection = compositionLocalOf { "" }
+
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun Group(title: String? = null, content: @Composable ColumnScope.() -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(top = 20.dp)) {
+    val target = LocalSettingsSection.current
+    val isTarget = title != null && target.isNotBlank() && title.equals(target, ignoreCase = true)
+    val requester = remember { BringIntoViewRequester() }
+    if (isTarget) {
+        LaunchedEffect(Unit) {
+            // Give the page a moment to lay out before scrolling to the group.
+            delay(300)
+            requester.bringIntoView()
+        }
+    }
+    Column(Modifier.fillMaxWidth().padding(top = 20.dp).then(if (isTarget) Modifier.bringIntoViewRequester(requester) else Modifier)) {
         if (title != null) {
             Text(
                 title.uppercase(),

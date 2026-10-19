@@ -78,6 +78,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.notifications.NavigationState
+import com.rubenrups.launcher.notifications.NotificationItem
 import com.rubenrups.launcher.notifications.NotificationStore
 import com.rubenrups.launcher.data.AppInfo
 import java.util.Locale
@@ -99,6 +100,7 @@ private val CardWeight = mapOf(
     DashboardModules.STATS to 1.0f,
     DashboardModules.CLOCK to 1.0f,
     DashboardModules.RECENTS to 1.6f,
+    DashboardModules.NOTIFICATIONS to 1.8f,
 )
 
 /**
@@ -109,6 +111,8 @@ private val CardWeight = mapOf(
 fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSettings: () -> Unit) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val media by NotificationStore.media.collectAsStateWithLifecycle()
+    val notifications by NotificationStore.notifications.collectAsStateWithLifecycle()
+    val listenerConnected by NotificationStore.listenerConnected.collectAsStateWithLifecycle()
     val navigation by NotificationStore.navigation.collectAsStateWithLifecycle()
     val battery = rememberBatteryPercent()
     val weather = rememberWeather(settings.showWeather, settings.weatherCity, settings.weatherFahrenheit)
@@ -133,20 +137,30 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
         key !in settings.dashboardHidden && when (key) {
             DashboardModules.WEATHER -> hours.isNotEmpty()
             DashboardModules.RECENTS -> settings.recents.isNotEmpty()
+            // Empty and connected: nothing to show, so the card stays out of the way.
+            DashboardModules.NOTIFICATIONS -> notifications.isNotEmpty() || !listenerConnected
             else -> true
+        }
+    }
+    // Taps on empty cards and the hold menu both land on the group of settings that configures that card.
+    val openSettingsFor: (String) -> (() -> Unit) = { card ->
+        {
+            val (page, section) = settingsTargetFor(card)
+            viewModel.openSettings(page, section)
         }
     }
     val content: @Composable (String) -> Unit = { key ->
         when (key) {
-            DashboardModules.GLUCOSE -> GlucoseCard(viewModel, onOpenSettings)
+            DashboardModules.GLUCOSE -> GlucoseCard(viewModel, openSettingsFor(key))
             DashboardModules.MEDIA -> CarMediaCard(media, settings)
             // While a route is active: the next turn. Otherwise: one-tap destinations.
             DashboardModules.NAVIGATION ->
-                navigation?.let { NavigationCard(it, big = true) } ?: NavigateCard(settings.destinations, onOpenSettings)
+                navigation?.let { NavigationCard(it, big = true) } ?: NavigateCard(settings.destinations, openSettingsFor(key))
             DashboardModules.WEATHER -> HourlyCard(hours, settings.weatherCity)
-            DashboardModules.APPS -> QuickAppsCard(viewModel, settings.carApps, onOpenSettings)
-            DashboardModules.CALLS -> CallsCard(settings.callContacts, settings.callDirect, onOpenSettings)
+            DashboardModules.APPS -> QuickAppsCard(viewModel, settings.carApps, openSettingsFor(key))
+            DashboardModules.CALLS -> CallsCard(settings.callContacts, settings.callDirect, openSettingsFor(key))
             DashboardModules.QUICK -> QuickSettingsCard()
+            DashboardModules.NOTIFICATIONS -> NotificationsCard(notifications, listenerConnected, settings.carNotificationCount, openSettingsFor(key))
             DashboardModules.CLOCK -> ClockCard()
             DashboardModules.RECENTS -> RecentAppsCard(viewModel, settings.recents)
             DashboardModules.STATS -> StatTiles(battery, weather, nextEvent?.text)
@@ -163,7 +177,7 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
             onHide = { viewModel.setDashboardCardHidden(key, true) },
             isHalf = key in settings.dashboardHalf,
             onToggleHalf = { viewModel.setDashboardCardHalf(key, key !in settings.dashboardHalf) },
-            onOpenSettings = { viewModel.openSettings(settingsPageFor(key)) },
+            onOpenSettings = openSettingsFor(key),
         ) {
             CompositionLocalProvider(LocalHalfCard provides (key in settings.dashboardHalf)) { content(key) }
         }
@@ -258,12 +272,17 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
     }
 }
 
-/** The settings page that configures a card (names of the pages in the settings screen). */
-private fun settingsPageFor(card: String): String = when (card) {
-    DashboardModules.GLUCOSE -> "GLUCOSE"
+/** Where a card is configured: the settings page (a page name in the settings screen) and the group on it. */
+private fun settingsTargetFor(card: String): Pair<String, String> = when (card) {
+    DashboardModules.GLUCOSE -> "GLUCOSE" to "LibreLinkUp"
     // The weather city, battery and calendar toggles live with the home-screen header settings.
-    DashboardModules.WEATHER, DashboardModules.STATS -> "HOME"
-    else -> "DASHBOARD"
+    DashboardModules.WEATHER, DashboardModules.STATS -> "HOME" to "Header"
+    DashboardModules.MEDIA -> "DASHBOARD" to "Media card"
+    DashboardModules.NAVIGATION -> "DASHBOARD" to "Navigation places"
+    DashboardModules.APPS -> "DASHBOARD" to "Quick launch apps"
+    DashboardModules.CALLS -> "DASHBOARD" to "Call buttons"
+    DashboardModules.NOTIFICATIONS -> "DASHBOARD" to "Notifications card"
+    else -> "DASHBOARD" to "Cards, in order"
 }
 
 /** Wraps a card so holding it opens Move earlier / Move later / Hide. */
@@ -822,6 +841,64 @@ private fun CallsCard(contacts: List<CallContact>, direct: Boolean, onOpenSettin
                     }
                 }
                 repeat(NAV_TILES_PER_ROW - rowContacts.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+
+/** The latest notifications, big enough to read at a glance: tap to open, ✕ to clear, "Clear all" for the lot. */
+@Composable
+private fun NotificationsCard(items: List<NotificationItem>, connected: Boolean, count: Int, onOpenSettings: () -> Unit) {
+    val context = LocalContext.current
+    Card {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                if (items.isEmpty()) "Notifications" else "Notifications · ${items.size}",
+                color = Color.White.copy(alpha = 0.6f),
+                fontSize = 13.sp,
+                modifier = Modifier.weight(1f),
+            )
+            if (items.isNotEmpty()) {
+                Text(
+                    "Clear all",
+                    color = Accent,
+                    fontSize = 15.sp,
+                    modifier = Modifier.clickable { items.forEach { NotificationStore.dismiss(it.key) } }.padding(8.dp),
+                )
+            }
+        }
+        if (!connected) {
+            Text(
+                "Turn on notification access →",
+                color = Accent,
+                fontSize = 18.sp,
+                modifier = Modifier.clickable(onClick = onOpenSettings).padding(vertical = 10.dp),
+            )
+        } else if (items.isEmpty()) {
+            Text("No notifications", color = Color.White.copy(alpha = 0.6f), fontSize = 18.sp, modifier = Modifier.padding(vertical = 10.dp))
+        }
+        items.take(count).forEach { item ->
+            key(item.key) {
+                Row(
+                    Modifier.fillMaxWidth().clickable { openNotification(context, item) }.padding(start = 4.dp, top = 8.dp, bottom = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        if (item.title.isNotBlank()) {
+                            Text(item.title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        if (item.text.isNotBlank()) {
+                            Text(item.text, color = Color.White.copy(alpha = 0.75f), fontSize = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    Text(
+                        "✕",
+                        color = Color.White.copy(alpha = 0.7f),
+                        fontSize = 20.sp,
+                        modifier = Modifier.clickable { NotificationStore.dismiss(item.key) }.padding(14.dp),
+                    )
+                }
             }
         }
     }
