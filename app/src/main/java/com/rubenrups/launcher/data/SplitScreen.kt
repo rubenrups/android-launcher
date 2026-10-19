@@ -126,7 +126,20 @@ object SplitScreen {
     }
 
     /** Opens [first], toggles split screen, then opens [second] beside it. [gapMs] is how long to wait for each step. */
-    suspend fun launch(context: Context, repository: AppRepository, first: AppInfo, second: AppInfo, gapMs: Long) {
+    suspend fun launch(context: Context, repository: AppRepository, first: AppInfo, second: AppInfo, gapMs: Long, method: String) {
+        val plain = { a: AppInfo -> a.shortcutId == null && a.isMainProfile }
+        if (method != "action" && plain(first) && plain(second)) {
+            // No service needed: a stop-over activity starts the first app, then the second one next to it.
+            lastResult = "Adjacent launch: ${first.label} + ${second.label}"
+            context.startActivity(
+                Intent(context, com.rubenrups.launcher.SplitLaunchActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                    .putExtra(com.rubenrups.launcher.SplitLaunchActivity.EXTRA_FIRST, first.component.flattenToString())
+                    .putExtra(com.rubenrups.launcher.SplitLaunchActivity.EXTRA_SECOND, second.component.flattenToString())
+                    .putExtra(com.rubenrups.launcher.SplitLaunchActivity.EXTRA_DELAY, gapMs.coerceAtMost(900L).coerceAtLeast(500L))
+            )
+            return
+        }
         val service = SplitScreenService.instance
         if (service == null) {
             lastResult = "Service is not connected: turn it on in accessibility settings"

@@ -188,6 +188,8 @@ data class LauncherSettings(
     /** Saved split-screen pairs and the pause (ms) between the steps of opening one. */
     val splitPairs: List<SplitPair> = emptyList(),
     val splitGapMs: Int = 900,
+    /** "adjacent" (a stop-over activity, no service) or "action" (the accessibility service presses split screen). */
+    val splitMethod: String = "adjacent",
     val autoCheckUpdates: Boolean = true,
     /** How often the launcher looks for a new build while it is on screen, in minutes. */
     val updateCheckMinutes: Int = 180,
@@ -346,6 +348,7 @@ class LauncherPrefs(context: Context) {
         destinations = loadDestinations(),
         splitPairs = loadSplitPairs(),
         splitGapMs = prefs.getInt(KEY_SPLIT_GAP, 900),
+        splitMethod = prefs.getString(KEY_SPLIT_METHOD, "adjacent") ?: "adjacent",
         autoCheckUpdates = prefs.getBoolean(KEY_AUTO_CHECK, true),
         updateCheckMinutes = prefs.getInt(KEY_UPDATE_MINUTES, 180),
         autoDownloadUpdates = prefs.getBoolean(KEY_AUTO_DOWNLOAD, true),
@@ -449,6 +452,7 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_DESTINATIONS, encodeDestinations(s.destinations))
             .putString(KEY_SPLIT_PAIRS, encodeSplitPairs(s.splitPairs))
             .putInt(KEY_SPLIT_GAP, s.splitGapMs)
+            .putString(KEY_SPLIT_METHOD, s.splitMethod)
             .putBoolean(KEY_AUTO_CHECK, s.autoCheckUpdates)
             .putInt(KEY_UPDATE_MINUTES, s.updateCheckMinutes)
             .putBoolean(KEY_AUTO_DOWNLOAD, s.autoDownloadUpdates)
@@ -646,6 +650,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_DESTINATIONS = "destinations"
         const val KEY_SPLIT_PAIRS = "split_pairs"
         const val KEY_SPLIT_GAP = "split_gap"
+        const val KEY_SPLIT_METHOD = "split_method"
         const val KEY_HOME_ADDRESS = "home_address"
         const val KEY_WORK_ADDRESS = "work_address"
         const val KEY_AUTO_DOWNLOAD = "auto_download_updates"

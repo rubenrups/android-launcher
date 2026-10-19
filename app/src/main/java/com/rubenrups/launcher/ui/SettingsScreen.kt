@@ -727,6 +727,12 @@ private fun AppsPage(
     val otherProfiles = remember(profileVersion) { userManager.userProfiles.filter { it != Process.myUserHandle() } }
 
     Group("Split-screen pairs") {
+        ChoiceRow("Method: adjacent launch (no service needed)", selected = settings.splitMethod != "action") {
+            viewModel.update { it.copy(splitMethod = "adjacent") }
+        }
+        ChoiceRow("Method: press split screen (accessibility service)", selected = settings.splitMethod == "action") {
+            viewModel.update { it.copy(splitMethod = "action") }
+        }
         InfoRow("Split-screen service", if (SplitScreenService.isEnabled) "On" else "Off")
         InfoRow("Last attempt", SplitScreen.lastResult)
         NavRow("Test the service") { viewModel.testSplitService() }

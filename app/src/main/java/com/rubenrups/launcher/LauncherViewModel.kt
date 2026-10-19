@@ -316,7 +316,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             return
         }
         closeAll(false)
-        viewModelScope.launch { SplitScreen.launch(getApplication(), repository, first, second, s.splitGapMs.toLong()) }
+        viewModelScope.launch { SplitScreen.launch(getApplication(), repository, first, second, s.splitGapMs.toLong(), s.splitMethod) }
     }
 
     fun testSplitService() {
