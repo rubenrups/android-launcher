@@ -95,6 +95,7 @@ private data class SettingHit(val title: String, val page: Page, val keywords: S
 private val SearchIndex = listOf(
     SettingHit("Clock", Page.HOME, "time header"),
     SettingHit("Header order and text", Page.HOME, "clock date time format 12 24 hour weight size order items"),
+    SettingHit("Full screen", Page.APPEARANCE, "immersive hide status bar navigation bar clock battery"),
     SettingHit("Drawer layout", Page.DRAWER, "icons only grid columns names icon size"),
     SettingHit("Header layout", Page.HOME, "stacked side by side inline compact date battery time size"),
     SettingHit("Next calendar event", Page.HOME, "agenda"),
@@ -584,6 +585,12 @@ private fun AppearancePage(viewModel: LauncherViewModel, settings: LauncherSetti
             settings.adaptiveText,
             subtitle = "Dark text on light wallpapers",
         ) { v -> viewModel.update { it.copy(adaptiveText = v) } }
+    }
+    Group("Full screen") {
+        ChoiceRow("Off", selected = settings.fullscreenMode == "off") { viewModel.update { it.copy(fullscreenMode = "off") } }
+        ChoiceRow("Hide the status bar", selected = settings.fullscreenMode == "status") { viewModel.update { it.copy(fullscreenMode = "status") } }
+        ChoiceRow("Hide the status and navigation bars", selected = settings.fullscreenMode == "both") { viewModel.update { it.copy(fullscreenMode = "both") } }
+        Hint("Swipe in from the screen edge to show the bars for a moment. Phones with a camera notch may keep a thin black strip at the top. Other apps are not affected.")
     }
     Group("Motion") {
         SwitchRow(

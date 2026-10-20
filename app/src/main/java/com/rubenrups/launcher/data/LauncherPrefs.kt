@@ -99,6 +99,8 @@ data class LauncherSettings(
     /** "short" (Mon, Oct 19), "long" (Monday 19 October), "day_month" (19 Oct) or "numeric" (the phone's short date). */
     val dateFormat: String = "short",
     val headerTextSp: Int = 16,
+    /** "off", "status" (hide the status bar) or "both" (hide the status and navigation bars); swipe from the edge to peek. */
+    val fullscreenMode: String = "off",
     /** "light", "normal" or "bold". */
     val clockWeight: String = "light",
     /** The app drawer: "list" or "grid", with icon size, columns and whether names show under the icons. */
@@ -367,6 +369,7 @@ class LauncherPrefs(context: Context) {
         timeFormat = prefs.getString(KEY_TIME_FORMAT, "system") ?: "system",
         dateFormat = prefs.getString(KEY_DATE_FORMAT, "short") ?: "short",
         headerTextSp = prefs.getInt(KEY_HEADER_TEXT, 16).coerceIn(12, 28),
+        fullscreenMode = prefs.getString(KEY_FULLSCREEN, "off") ?: "off",
         clockWeight = prefs.getString(KEY_CLOCK_WEIGHT, "light") ?: "light",
         drawerLayout = prefs.getString(KEY_DRAWER_LAYOUT, "list") ?: "list",
         drawerIconDp = prefs.getInt(KEY_DRAWER_ICON, 52).coerceIn(32, 80),
@@ -504,6 +507,7 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_TIME_FORMAT, s.timeFormat)
             .putString(KEY_DATE_FORMAT, s.dateFormat)
             .putInt(KEY_HEADER_TEXT, s.headerTextSp)
+            .putString(KEY_FULLSCREEN, s.fullscreenMode)
             .putString(KEY_CLOCK_WEIGHT, s.clockWeight)
             .putString(KEY_DRAWER_LAYOUT, s.drawerLayout)
             .putInt(KEY_DRAWER_ICON, s.drawerIconDp)
@@ -721,6 +725,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_TIME_FORMAT = "time_format"
         const val KEY_DATE_FORMAT = "date_format"
         const val KEY_HEADER_TEXT = "header_text_sp"
+        const val KEY_FULLSCREEN = "fullscreen_mode"
         const val KEY_CLOCK_WEIGHT = "clock_weight"
         const val KEY_DRAWER_LAYOUT = "drawer_layout"
         const val KEY_DRAWER_ICON = "drawer_icon_dp"
