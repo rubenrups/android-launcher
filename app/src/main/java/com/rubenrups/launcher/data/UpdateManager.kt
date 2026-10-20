@@ -81,6 +81,12 @@ object UpdateManager {
         }
         val file = updateFile(context, info.build)
         if (file.length() == 0L && !download(context, token, info)) return@withLock
+        if (!withContext(Dispatchers.IO) { ApkInstaller.isSignedLikeThisApp(context, file) }) {
+            // Android would refuse it as well; failing here gives a clear reason and discards the file.
+            file.delete()
+            _state.value = UpdateState.Failed("The downloaded file is not signed by the same key as this app, so it was discarded.", info)
+            return@withLock
+        }
         _state.value = UpdateState.Installing(info)
         runCatching { withContext(Dispatchers.IO) { ApkInstaller.install(context, file) } }
             .onFailure { _state.value = UpdateState.Failed("Could not start the install.", info) }

@@ -5,12 +5,30 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageInstaller
+import android.content.pm.PackageManager
 import android.os.Build
 import java.io.File
 
 /** Hands a downloaded APK to Android's package installer and reports the outcome to [UpdateManager]. */
 object ApkInstaller {
     const val ACTION_RESULT = "com.rubenrups.launcher.INSTALL_RESULT"
+
+    /**
+     * True when [apk] is this app's package, signed by the certificate(s) of the installed copy. A cheap early check:
+     * it does not replace Android's own signature test at install time, and it is only as strong as the signing key.
+     */
+    @Suppress("DEPRECATION")
+    fun isSignedLikeThisApp(context: Context, apk: File): Boolean = try {
+        val pm = context.packageManager
+        val flags = PackageManager.GET_SIGNING_CERTIFICATES
+        val archive = pm.getPackageArchiveInfo(apk.path, flags)
+        val installed = pm.getPackageInfo(context.packageName, flags)
+        val installedCerts = installed.signingInfo?.apkContentsSigners?.map { it.toCharsString() }?.toSet().orEmpty()
+        val offeredCerts = archive?.signingInfo?.apkContentsSigners?.map { it.toCharsString() }?.toSet().orEmpty()
+        archive?.packageName == context.packageName && installedCerts.isNotEmpty() && installedCerts == offeredCerts
+    } catch (_: Exception) {
+        false
+    }
 
     /** Blocking (copies the file); call from a background dispatcher. Android still asks the user to confirm. */
     fun install(context: Context, apk: File) {
