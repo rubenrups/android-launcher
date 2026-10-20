@@ -87,7 +87,7 @@ data class LauncherSettings(
     val folders: List<AppFolder> = emptyList(),
     val showCalendar: Boolean = false,
     val showWeather: Boolean = false,
-    /** "stacked", "side" (details beside the time) or "inline" (one wrapping row). */
+    /** "stacked", "side" (a column beside the time), "wrap" (details wrapped beside the time) or "inline" (one wrapping row). */
     val headerLayout: String = "stacked",
     val headerShowDate: Boolean = true,
     val headerShowBattery: Boolean = true,

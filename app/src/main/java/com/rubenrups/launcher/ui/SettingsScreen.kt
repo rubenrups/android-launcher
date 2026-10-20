@@ -347,6 +347,9 @@ private fun HomePage(viewModel: LauncherViewModel, settings: LauncherSettings) {
         ChoiceRow("Details beside the time", selected = settings.headerLayout == "side") {
             viewModel.update { it.copy(headerLayout = "side") }
         }
+        ChoiceRow("Time with the details wrapped beside it (fits the most)", selected = settings.headerLayout == "wrap") {
+            viewModel.update { it.copy(headerLayout = "wrap") }
+        }
         ChoiceRow("Compact: details in one wrapping row", selected = settings.headerLayout == "inline") {
             viewModel.update { it.copy(headerLayout = "inline") }
         }

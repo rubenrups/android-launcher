@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -853,6 +854,22 @@ private fun Clock(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             val details: @Composable () -> Unit = { Column(horizontalAlignment = horizontal) { grouped() } }
+            if (alignEnd) { details(); time() } else { time(); details() }
+        }
+        // The time with every detail wrapped in the space beside it: as many per line as fit, so the header stays short.
+        "wrap" -> Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val details: @Composable RowScope.() -> Unit = {
+                FlowRow(
+                    modifier = Modifier.weight(1f, fill = false),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp, horizontal),
+                    verticalArrangement = Arrangement.spacedBy(0.dp, Alignment.CenterVertically),
+                ) {
+                    settings.headerOrder.forEach { parts[it]?.invoke() }
+                }
+            }
             if (alignEnd) { details(); time() } else { time(); details() }
         }
         "inline" -> Column(horizontalAlignment = horizontal) {
