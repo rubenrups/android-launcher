@@ -271,6 +271,33 @@ class LauncherPrefs(context: Context) {
     private val _settings = MutableStateFlow(load())
     val settings: StateFlow<LauncherSettings> = _settings.asStateFlow()
 
+    init {
+        upgradePlainSecrets()
+    }
+
+    /**
+     * The credentials are stored encrypted (see [SecretBox]). A value that is not ciphertext is how older versions
+     * saved it: it is used as is, and [upgradePlainSecrets] rewrites it encrypted right away.
+     * A value that cannot be opened (the Keystore key is gone) reads as empty, so the user is asked again.
+     */
+    private fun readSecret(key: String): String {
+        val stored = prefs.getString(key, "").orEmpty()
+        return if (SecretBox.isEncrypted(stored)) SecretBox.decrypt(stored).orEmpty() else stored
+    }
+
+    /** Never falls back to plain text: if the Keystore is unavailable the secret is simply not kept. */
+    private fun sealSecret(plain: String): String = SecretBox.encrypt(plain).orEmpty()
+
+    private fun upgradePlainSecrets() {
+        val legacy = SECRET_CREDENTIAL_KEYS.filter { key ->
+            prefs.getString(key, "").orEmpty().let { it.isNotEmpty() && !SecretBox.isEncrypted(it) }
+        }
+        if (legacy.isEmpty()) return
+        val editor = prefs.edit()
+        legacy.forEach { key -> editor.putString(key, sealSecret(prefs.getString(key, "").orEmpty())) }
+        editor.apply()
+    }
+
     /**
      * Everything the user set up (favourites, folders, hidden apps, every setting), as JSON.
      * The GitHub token is left out on purpose: a backup file is easy to share by accident.
@@ -359,7 +386,7 @@ class LauncherPrefs(context: Context) {
         homeRecentsBottomDp = prefs.getInt(KEY_HOME_RECENTS_BOTTOM, 0).coerceIn(0, 160),
         recents = prefs.getString(KEY_RECENTS, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() },
         widgetIds = prefs.getString(KEY_WIDGETS, "").orEmpty().split(SEPARATOR).mapNotNull { it.toIntOrNull() },
-        updateToken = prefs.getString(KEY_UPDATE_TOKEN, "").orEmpty(),
+        updateToken = readSecret(KEY_UPDATE_TOKEN),
         adaptiveText = prefs.getBoolean(KEY_ADAPTIVE_TEXT, false),
         twoColumnsLandscape = prefs.getBoolean(KEY_TWO_COLUMNS, true),
         homeScrollAsOne = prefs.getBoolean(KEY_HOME_SCROLL_ONE, false),
@@ -384,8 +411,8 @@ class LauncherPrefs(context: Context) {
         swipeLeftApp = prefs.getString(KEY_SWIPE_LEFT, "").orEmpty(),
         swipeRightApp = prefs.getString(KEY_SWIPE_RIGHT, "").orEmpty(),
         glucoseEnabled = prefs.getBoolean(KEY_GLUCOSE_ON, false),
-        glucoseEmail = prefs.getString(KEY_GLUCOSE_EMAIL, "").orEmpty(),
-        glucosePassword = prefs.getString(KEY_GLUCOSE_PASSWORD, "").orEmpty(),
+        glucoseEmail = readSecret(KEY_GLUCOSE_EMAIL),
+        glucosePassword = readSecret(KEY_GLUCOSE_PASSWORD),
         glucoseMmol = prefs.getBoolean(KEY_GLUCOSE_MMOL, false),
         glucoseLow = prefs.getInt(KEY_GLUCOSE_LOW, 70),
         glucoseHigh = prefs.getInt(KEY_GLUCOSE_HIGH, 180),
@@ -495,7 +522,7 @@ class LauncherPrefs(context: Context) {
             .putInt(KEY_HOME_RECENTS_BOTTOM, s.homeRecentsBottomDp)
             .putString(KEY_RECENTS, s.recents.joinToString(SEPARATOR))
             .putString(KEY_WIDGETS, s.widgetIds.joinToString(SEPARATOR))
-            .putString(KEY_UPDATE_TOKEN, s.updateToken)
+            .putString(KEY_UPDATE_TOKEN, sealSecret(s.updateToken))
             .putBoolean(KEY_ADAPTIVE_TEXT, s.adaptiveText)
             .putBoolean(KEY_TWO_COLUMNS, s.twoColumnsLandscape)
             .putBoolean(KEY_HOME_SCROLL_ONE, s.homeScrollAsOne)
@@ -520,8 +547,8 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_SWIPE_LEFT, s.swipeLeftApp)
             .putString(KEY_SWIPE_RIGHT, s.swipeRightApp)
             .putBoolean(KEY_GLUCOSE_ON, s.glucoseEnabled)
-            .putString(KEY_GLUCOSE_EMAIL, s.glucoseEmail)
-            .putString(KEY_GLUCOSE_PASSWORD, s.glucosePassword)
+            .putString(KEY_GLUCOSE_EMAIL, sealSecret(s.glucoseEmail))
+            .putString(KEY_GLUCOSE_PASSWORD, sealSecret(s.glucosePassword))
             .putBoolean(KEY_GLUCOSE_MMOL, s.glucoseMmol)
             .putInt(KEY_GLUCOSE_LOW, s.glucoseLow)
             .putInt(KEY_GLUCOSE_HIGH, s.glucoseHigh)
@@ -801,6 +828,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_AUTO_DOWNLOAD = "auto_download_updates"
         const val KEY_DISMISSED_UPDATE = "dismissed_update"
         /** Credentials, places and live state: never written to a backup file, and a restore leaves them alone. */
+        private val SECRET_CREDENTIAL_KEYS = listOf(KEY_UPDATE_TOKEN, KEY_GLUCOSE_EMAIL, KEY_GLUCOSE_PASSWORD)
         val SECRET_KEYS = setOf(KEY_UPDATE_TOKEN, KEY_GLUCOSE_EMAIL, KEY_GLUCOSE_PASSWORD, KEY_DESTINATIONS, KEY_HOME_ADDRESS, KEY_WORK_ADDRESS, KEY_CAR_WAS_OPEN, KEY_CALL_CONTACTS, KEY_CAR_BT_DEVICES, KEY_AUTO_BACKUP_FOLDER, KEY_LAST_BACKUP, KEY_FOCUS_SNOOZE)
         const val KEY_ANCHOR_BOTTOM = "anchor_bottom"
         const val KEY_SHOW_ICONS = "show_icons"

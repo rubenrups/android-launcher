@@ -91,15 +91,28 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 
 ## Build
 
-CI builds a debug APK on every push. Open the repo's **Actions** tab, click the latest
-"Build debug APK" run, and download `rups-launcher-debug-apk` from the **Artifacts** section
-at the bottom of the run summary (a zip containing `app-debug.apk`).
+CI builds on every push. Only pushes to `main` publish an installable update, and only when the release
+signing key is configured; other branches just prove that the code builds (a debug APK is attached to the run).
+
+**One-time signing setup.** Updates install over each other only when every build is signed with the same private
+key, and that key must never be committed. Create it once and store it as repository secrets:
+
+```
+keytool -genkeypair -v -keystore release.keystore -alias rups -keyalg RSA -keysize 4096 -validity 10000
+base64 -w0 release.keystore      # paste into the secret RELEASE_KEYSTORE_BASE64
+```
+
+Secrets to add (Settings → Secrets and variables → Actions): `RELEASE_KEYSTORE_BASE64`, `RELEASE_KEYSTORE_PASSWORD`,
+`RELEASE_KEY_ALIAS`, `RELEASE_KEY_PASSWORD`. Keep a second copy of the keystore somewhere safe: lose it and every
+installed copy has to be uninstalled before the next build can be installed. Builds signed with an older key (the
+former public debug key) cannot be updated in place; uninstall once, then install the first release-signed build.
+Download it from the latest "Build APK" run (artifact `rups-launcher-apk`) or from the build-N pre-release.
 
 Locally, with Android Studio or the Android SDK installed:
 
 ```
 ./gradlew assembleDebug
-adb install app/build/outputs/apk/debug/app-debug.apk
+adb install app/build/outputs/apk/debug/app-debug.apk   # signed with your local debug key
 ```
 
 Then press Home and choose **Rups Launcher** as the default home app. For notifications and

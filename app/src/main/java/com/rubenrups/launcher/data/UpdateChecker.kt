@@ -127,8 +127,12 @@ object UpdateChecker {
                         if (total > 0 && done != total) throw IOException("incomplete download")
                         return
                     }
-                    301, 302, 303, 307, 308 ->
-                        url = connection.getHeaderField("Location") ?: throw IOException("bad redirect")
+                    301, 302, 303, 307, 308 -> {
+                        val next = URL(URL(url), connection.getHeaderField("Location") ?: throw IOException("bad redirect"))
+                        // Never let a redirect move the APK onto an unencrypted connection.
+                        if (next.protocol != "https") throw IOException("redirect to a non-HTTPS address")
+                        url = next.toString()
+                    }
                     404 -> throw IOException(if (token.isBlank()) "not found (private repository? add a token)" else "not found")
                     401, 403 -> throw IOException("GitHub refused the token (HTTP $code)")
                     else -> throw IOException("HTTP $code")

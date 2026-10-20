@@ -17,21 +17,29 @@ android {
         versionName = "0.1.0"
     }
 
-    // A fixed debug key. Without it every CI machine generates its own random one, and Android refuses
-    // to update an installed app with a build signed by a different key ("App not installed").
-    // This key is deliberately public: it only signs debug builds.
+    // Updates install over each other only when every build is signed with the same key, so CI signs with a
+    // private release key kept in repository secrets (never in the repo): RELEASE_KEYSTORE_FILE (path),
+    // RELEASE_KEYSTORE_PASSWORD, RELEASE_KEY_ALIAS and RELEASE_KEY_PASSWORD. Without them (a local build, a fork)
+    // the release build stays unsigned and the debug build uses Android's own per-machine debug key.
+    val releaseKeystore = System.getenv("RELEASE_KEYSTORE_FILE")?.takeIf { it.isNotBlank() }
     signingConfigs {
-        getByName("debug") {
-            storeFile = file("debug.keystore")
-            storePassword = "android"
-            keyAlias = "androiddebugkey"
-            keyPassword = "android"
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
         }
     }
 
     buildTypes {
         release {
+            // Not debuggable: `adb run-as` cannot read the app's private data. Shrinking (R8) stays off until a
+            // release build has been tried on a device, because it can break reflection-based code at run time.
+            isDebuggable = false
             isMinifyEnabled = false
+            if (releaseKeystore != null) signingConfig = signingConfigs.getByName("release")
         }
     }
     compileOptions {
