@@ -347,13 +347,13 @@ private fun HomePage(viewModel: LauncherViewModel, settings: LauncherSettings) {
         ChoiceRow("Details beside the time", selected = settings.headerLayout == "side") {
             viewModel.update { it.copy(headerLayout = "side") }
         }
-        ChoiceRow("Time with the details wrapped beside it (fits the most)", selected = settings.headerLayout == "wrap") {
+        ChoiceRow("Details wrap around the time (fits the most)", selected = settings.headerLayout == "wrap") {
             viewModel.update { it.copy(headerLayout = "wrap") }
         }
         ChoiceRow("Compact: details in one wrapping row", selected = settings.headerLayout == "inline") {
             viewModel.update { it.copy(headerLayout = "inline") }
         }
-        Hint("The side and compact layouts take less height, so more favourites fit on screen.")
+        Hint("The beside, wrap-around and compact layouts take less height, so more favourites fit on screen. Wrap-around starts the details next to the time and continues under it.")
     }
     Group("Header text") {
         ChoiceRow("Time: follow the phone", selected = settings.timeFormat == "system") { viewModel.update { it.copy(timeFormat = "system") } }

@@ -94,6 +94,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.layout.Placeable
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.core.content.ContextCompat
@@ -730,6 +733,62 @@ internal fun rememberBatteryPercent(): Int {
     return percent
 }
 
+/**
+ * Lays out the first child (the time) in a corner and flows the other children around it: lines that start beside
+ * the time are indented past it, lines below it use the full width. [alignEnd] mirrors everything to the right.
+ */
+@Composable
+private fun WrapAroundClock(alignEnd: Boolean, content: @Composable () -> Unit) {
+    Layout(content = content, modifier = Modifier.fillMaxWidth()) { measurables, constraints ->
+        val gap = 16.dp.roundToPx()
+        val itemGap = 12.dp.roundToPx()
+        val clock = measurables.first().measure(Constraints())
+        val bounded = constraints.maxWidth != Constraints.Infinity
+        // Every item is measured once, narrow enough to fit beside the time, so it fits on any line.
+        val narrow = if (bounded) (constraints.maxWidth - clock.width - gap).coerceAtLeast(0) else Constraints.Infinity
+        val items = measurables.drop(1).map { it.measure(Constraints(maxWidth = narrow)) }
+        val width = if (bounded) constraints.maxWidth else clock.width + gap + items.sumOf { it.width + itemGap }
+
+        // Greedy line breaking: a line may use the width beside the time only while it starts above the time's bottom.
+        class Line(val items: List<Placeable>, val y: Int, val indented: Boolean, val width: Int)
+        val lines = ArrayList<Line>()
+        var current = ArrayList<Placeable>()
+        var currentWidth = 0
+        var currentHeight = 0
+        var y = 0
+        fun flush() {
+            if (current.isEmpty()) return
+            lines.add(Line(current, y, y < clock.height, currentWidth))
+            y += currentHeight
+            current = ArrayList()
+            currentWidth = 0
+            currentHeight = 0
+        }
+        items.forEach { item ->
+            val available = if (y < clock.height) width - clock.width - gap else width
+            val needed = if (current.isEmpty()) item.width else currentWidth + itemGap + item.width
+            if (current.isNotEmpty() && needed > available) flush()
+            currentWidth = if (current.isEmpty()) item.width else currentWidth + itemGap + item.width
+            current.add(item)
+            currentHeight = maxOf(currentHeight, item.height)
+        }
+        flush()
+        val height = maxOf(clock.height, y)
+
+        layout(width, height) {
+            clock.placeRelative(if (alignEnd) width - clock.width else 0, 0)
+            lines.forEach { line ->
+                val indent = if (line.indented) clock.width + gap else 0
+                var x = if (alignEnd) width - indent - line.width else indent
+                line.items.forEach { item ->
+                    item.placeRelative(x, line.y)
+                    x += item.width + itemGap
+                }
+            }
+        }
+    }
+}
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Clock(
@@ -856,21 +915,11 @@ private fun Clock(
             val details: @Composable () -> Unit = { Column(horizontalAlignment = horizontal) { grouped() } }
             if (alignEnd) { details(); time() } else { time(); details() }
         }
-        // The time with every detail wrapped in the space beside it: as many per line as fit, so the header stays short.
-        "wrap" -> Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            val details: @Composable RowScope.() -> Unit = {
-                FlowRow(
-                    modifier = Modifier.weight(1f, fill = false),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp, horizontal),
-                    verticalArrangement = Arrangement.spacedBy(0.dp, Alignment.CenterVertically),
-                ) {
-                    settings.headerOrder.forEach { parts[it]?.invoke() }
-                }
-            }
-            if (alignEnd) { details(); time() } else { time(); details() }
+        // The details flow around the time like text around a floated picture: they start beside it, and once a line
+        // reaches below the clock the next lines start under it, at the edge.
+        "wrap" -> WrapAroundClock(alignEnd) {
+            time()
+            settings.headerOrder.forEach { parts[it]?.invoke() }
         }
         "inline" -> Column(horizontalAlignment = horizontal) {
             time()
