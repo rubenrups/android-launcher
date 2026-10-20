@@ -300,6 +300,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         s.copy(dashboardHidden = if (hidden) s.dashboardHidden + key else s.dashboardHidden - key)
     }
 
+    fun moveHeaderItem(key: String, by: Int) = update { s ->
+        val i = s.headerOrder.indexOf(key)
+        val j = i + by
+        if (i < 0 || j !in s.headerOrder.indices) s else s.copy(headerOrder = s.headerOrder.toMutableList().apply { add(j, removeAt(i)) })
+    }
+
     fun setDashboardCardHalf(key: String, half: Boolean) = update { s ->
         s.copy(dashboardHalf = if (half) s.dashboardHalf + key else s.dashboardHalf - key)
     }

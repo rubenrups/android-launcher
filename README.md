@@ -52,6 +52,7 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 - **Favourites as icons or a grid**, **media player settings** (art, buttons, seek bar, size, opacity), and a **Launcher settings button** for home or the drawer
 - **Car mode media card** options (art, artist, extras, seek bar) and a "Settings for this card" entry when you hold a car-mode card
 - **Car mode notifications card** (tap to open, ✕ to clear), and card shortcuts that open settings scrolled to the right group
+- **More header control** (item order, 12/24-hour time, date styles, text size and weight), an **icon grid for the app drawer**, and a fixed-width seek-bar time
 - **Header layout**: stacked, details beside the time, or one compact wrapping row; toggle date/battery and set the time size (Settings → Home)
 - App shortcuts ("New message", …) at the top of an app's long-press menu
 - Home-screen widgets (long-press the home screen → Add widget)

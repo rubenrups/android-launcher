@@ -20,6 +20,23 @@ data class CallContact(val name: String, val number: String)
 /** A saved place for the car-mode navigation buttons. */
 data class Destination(val name: String, val address: String, val icon: String = "📍")
 
+/** The items that can sit under the time on the home screen, in their default order. */
+object HeaderItems {
+    const val DATE = "date"
+    const val BATTERY = "battery"
+    const val WEATHER = "weather"
+    const val GLUCOSE = "glucose"
+    const val EVENT = "event"
+
+    val all: List<Pair<String, String>> = listOf(
+        DATE to "Date",
+        BATTERY to "Battery",
+        WEATHER to "Weather",
+        GLUCOSE to "Glucose",
+        EVENT to "Next calendar event",
+    )
+}
+
 /** The cards of the car-mode screen: each can be switched off and reordered. */
 object DashboardModules {
     const val GLUCOSE = "glucose"
@@ -75,6 +92,20 @@ data class LauncherSettings(
     val headerShowDate: Boolean = true,
     val headerShowBattery: Boolean = true,
     val clockSizeSp: Int = 56,
+    /** Order of the items under the time ([HeaderItems] keys); missing ones are added at the end. */
+    val headerOrder: List<String> = HeaderItems.all.map { it.first },
+    /** "system", "24h" or "12h". */
+    val timeFormat: String = "system",
+    /** "short" (Mon, Oct 19), "long" (Monday 19 October), "day_month" (19 Oct) or "numeric" (the phone's short date). */
+    val dateFormat: String = "short",
+    val headerTextSp: Int = 16,
+    /** "light", "normal" or "bold". */
+    val clockWeight: String = "light",
+    /** The app drawer: "list" or "grid", with icon size, columns and whether names show under the icons. */
+    val drawerLayout: String = "list",
+    val drawerIconDp: Int = 52,
+    val drawerGridColumns: Int = 4,
+    val drawerGridLabels: Boolean = true,
     val weatherCity: String = "",
     val weatherFahrenheit: Boolean = false,
     val webSearch: WebSearchEngine = WebSearchEngine.SYSTEM,
@@ -304,6 +335,16 @@ class LauncherPrefs(context: Context) {
         headerShowDate = prefs.getBoolean(KEY_HEADER_DATE, true),
         headerShowBattery = prefs.getBoolean(KEY_HEADER_BATTERY, true),
         clockSizeSp = prefs.getInt(KEY_CLOCK_SIZE, 56),
+        headerOrder = prefs.getString(KEY_HEADER_ORDER, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }
+            .let { saved -> saved.filter { k -> HeaderItems.all.any { it.first == k } } + HeaderItems.all.map { it.first }.filter { it !in saved } },
+        timeFormat = prefs.getString(KEY_TIME_FORMAT, "system") ?: "system",
+        dateFormat = prefs.getString(KEY_DATE_FORMAT, "short") ?: "short",
+        headerTextSp = prefs.getInt(KEY_HEADER_TEXT, 16).coerceIn(12, 28),
+        clockWeight = prefs.getString(KEY_CLOCK_WEIGHT, "light") ?: "light",
+        drawerLayout = prefs.getString(KEY_DRAWER_LAYOUT, "list") ?: "list",
+        drawerIconDp = prefs.getInt(KEY_DRAWER_ICON, 52).coerceIn(32, 80),
+        drawerGridColumns = prefs.getInt(KEY_DRAWER_COLUMNS, 4).coerceIn(3, 7),
+        drawerGridLabels = prefs.getBoolean(KEY_DRAWER_LABELS, true),
         weatherCity = prefs.getString(KEY_WEATHER_CITY, "").orEmpty(),
         weatherFahrenheit = prefs.getBoolean(KEY_WEATHER_F, false),
         webSearch = runCatching { WebSearchEngine.valueOf(prefs.getString(KEY_WEB_SEARCH, "").orEmpty()) }
@@ -432,6 +473,15 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_HEADER_DATE, s.headerShowDate)
             .putBoolean(KEY_HEADER_BATTERY, s.headerShowBattery)
             .putInt(KEY_CLOCK_SIZE, s.clockSizeSp)
+            .putString(KEY_HEADER_ORDER, s.headerOrder.joinToString(SEPARATOR))
+            .putString(KEY_TIME_FORMAT, s.timeFormat)
+            .putString(KEY_DATE_FORMAT, s.dateFormat)
+            .putInt(KEY_HEADER_TEXT, s.headerTextSp)
+            .putString(KEY_CLOCK_WEIGHT, s.clockWeight)
+            .putString(KEY_DRAWER_LAYOUT, s.drawerLayout)
+            .putInt(KEY_DRAWER_ICON, s.drawerIconDp)
+            .putInt(KEY_DRAWER_COLUMNS, s.drawerGridColumns)
+            .putBoolean(KEY_DRAWER_LABELS, s.drawerGridLabels)
             .putString(KEY_WEATHER_CITY, s.weatherCity)
             .putBoolean(KEY_WEATHER_F, s.weatherFahrenheit)
             .putString(KEY_WEB_SEARCH, s.webSearch.name)
@@ -640,6 +690,15 @@ class LauncherPrefs(context: Context) {
         const val KEY_HEADER_DATE = "header_date"
         const val KEY_HEADER_BATTERY = "header_battery"
         const val KEY_CLOCK_SIZE = "clock_size"
+        const val KEY_HEADER_ORDER = "header_order"
+        const val KEY_TIME_FORMAT = "time_format"
+        const val KEY_DATE_FORMAT = "date_format"
+        const val KEY_HEADER_TEXT = "header_text_sp"
+        const val KEY_CLOCK_WEIGHT = "clock_weight"
+        const val KEY_DRAWER_LAYOUT = "drawer_layout"
+        const val KEY_DRAWER_ICON = "drawer_icon_dp"
+        const val KEY_DRAWER_COLUMNS = "drawer_columns"
+        const val KEY_DRAWER_LABELS = "drawer_labels"
         const val KEY_WEATHER_CITY = "weather_city"
         const val KEY_WEATHER_F = "weather_fahrenheit"
         const val KEY_WEB_SEARCH = "web_search"

@@ -66,6 +66,7 @@ import com.rubenrups.launcher.data.AppInfo
 import com.rubenrups.launcher.data.CalendarReader
 import com.rubenrups.launcher.data.DashboardModules
 import com.rubenrups.launcher.data.GestureActions
+import com.rubenrups.launcher.data.HeaderItems
 import com.rubenrups.launcher.data.HomeRecentsAlign
 import com.rubenrups.launcher.data.LauncherSettings
 import com.rubenrups.launcher.data.UpdateChecker
@@ -93,6 +94,8 @@ private data class SettingHit(val title: String, val page: Page, val keywords: S
 
 private val SearchIndex = listOf(
     SettingHit("Clock", Page.HOME, "time header"),
+    SettingHit("Header order and text", Page.HOME, "clock date time format 12 24 hour weight size order items"),
+    SettingHit("Drawer layout", Page.DRAWER, "icons only grid columns names icon size"),
     SettingHit("Header layout", Page.HOME, "stacked side by side inline compact date battery time size"),
     SettingHit("Next calendar event", Page.HOME, "agenda"),
     SettingHit("Weather", Page.HOME, "city temperature fahrenheit celsius forecast"),
@@ -349,6 +352,43 @@ private fun HomePage(viewModel: LauncherViewModel, settings: LauncherSettings) {
         }
         Hint("The side and compact layouts take less height, so more favourites fit on screen.")
     }
+    Group("Header text") {
+        ChoiceRow("Time: follow the phone", selected = settings.timeFormat == "system") { viewModel.update { it.copy(timeFormat = "system") } }
+        ChoiceRow("Time: 24-hour", selected = settings.timeFormat == "24h") { viewModel.update { it.copy(timeFormat = "24h") } }
+        ChoiceRow("Time: 12-hour", selected = settings.timeFormat == "12h") { viewModel.update { it.copy(timeFormat = "12h") } }
+        ChoiceRow("Date: Mon, Oct 19", selected = settings.dateFormat == "short") { viewModel.update { it.copy(dateFormat = "short") } }
+        ChoiceRow("Date: Monday 19 October", selected = settings.dateFormat == "long") { viewModel.update { it.copy(dateFormat = "long") } }
+        ChoiceRow("Date: 19 Oct", selected = settings.dateFormat == "day_month") { viewModel.update { it.copy(dateFormat = "day_month") } }
+        ChoiceRow("Date: numeric (the phone's format)", selected = settings.dateFormat == "numeric") { viewModel.update { it.copy(dateFormat = "numeric") } }
+        ChoiceRow("Time weight: light", selected = settings.clockWeight == "light") { viewModel.update { it.copy(clockWeight = "light") } }
+        ChoiceRow("Time weight: regular", selected = settings.clockWeight == "normal") { viewModel.update { it.copy(clockWeight = "normal") } }
+        ChoiceRow("Time weight: bold", selected = settings.clockWeight == "bold") { viewModel.update { it.copy(clockWeight = "bold") } }
+        SliderRow("Text size under the time", "${settings.headerTextSp} sp", settings.headerTextSp.toFloat(), 12f..28f) { v ->
+            viewModel.update { it.copy(headerTextSp = v.roundToInt()) }
+        }
+    }
+    Group("Header order") {
+        val order = settings.headerOrder
+        order.forEachIndexed { index, key ->
+            val label = HeaderItems.all.firstOrNull { it.first == key }?.second ?: key
+            Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 2.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(label, color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
+                Text(
+                    "▲",
+                    color = if (index > 0) Color.White else Color.White.copy(alpha = 0.2f),
+                    fontSize = 18.sp,
+                    modifier = Modifier.clickable(enabled = index > 0) { viewModel.moveHeaderItem(key, -1) }.padding(12.dp),
+                )
+                Text(
+                    "▼",
+                    color = if (index < order.lastIndex) Color.White else Color.White.copy(alpha = 0.2f),
+                    fontSize = 18.sp,
+                    modifier = Modifier.clickable(enabled = index < order.lastIndex) { viewModel.moveHeaderItem(key, 1) }.padding(12.dp),
+                )
+            }
+        }
+        Hint("Whether each one shows is set above (and under Glucose). In the stacked and beside layouts, date, battery and weather next to each other share a line.")
+    }
     Group("Media player") {
         SwitchRow("Album art", settings.mediaShowArt) { v -> viewModel.update { it.copy(mediaShowArt = v) } }
         SwitchRow("Artist name", settings.mediaShowArtist) { v -> viewModel.update { it.copy(mediaShowArtist = v) } }
@@ -578,6 +618,21 @@ private fun GesturesPage(settings: LauncherSettings, apps: List<AppInfo>, openCh
 
 @Composable
 private fun DrawerPage(viewModel: LauncherViewModel, settings: LauncherSettings) {
+    Group("Layout") {
+        ChoiceRow("List (icon and name)", selected = settings.drawerLayout == "list") { viewModel.update { it.copy(drawerLayout = "list") } }
+        ChoiceRow("Icon grid", selected = settings.drawerLayout == "grid") { viewModel.update { it.copy(drawerLayout = "grid") } }
+        if (settings.drawerLayout == "grid") {
+            SliderRow("Icon size", "${settings.drawerIconDp} dp", settings.drawerIconDp.toFloat(), 32f..80f) { v ->
+                viewModel.update { it.copy(drawerIconDp = v.roundToInt()) }
+            }
+            SliderRow("Columns", "${settings.drawerGridColumns}", settings.drawerGridColumns.toFloat(), 3f..7f) { v ->
+                viewModel.update { it.copy(drawerGridColumns = v.roundToInt()) }
+            }
+            SwitchRow("Show names under the icons", settings.drawerGridLabels, subtitle = "Off: icons only") { v ->
+                viewModel.update { it.copy(drawerGridLabels = v) }
+            }
+        }
+    }
     Group("Look") {
         SwitchRow(
             "Attach below the home screen",

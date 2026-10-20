@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import com.rubenrups.launcher.data.LauncherSettings
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -152,6 +154,10 @@ fun AppDrawer(
     val showRecentsRow = query.isBlank() && recentApps.isNotEmpty()
     val headerRows = (if (query.isBlank()) 1 else 0) + (if (showRecentsRow) 1 else 0)
 
+    // In the grid layout one list item is a whole row of icons.
+    val grid = settings.drawerLayout == "grid"
+    val perRow = if (grid) settings.drawerGridColumns else 1
+
     fun jumpTo(letter: Char) {
         activeLetter = letter
         // '#' means "top" (folders live there). Otherwise jump to the first app at or after the letter,
@@ -160,7 +166,7 @@ fun AppDrawer(
             0
         } else {
             val appIndex = entries.indexOfFirst { it is AppEntry && it.letter >= letter }
-            (if (appIndex >= 0) appIndex else entries.lastIndex) + headerRows
+            (if (appIndex >= 0) appIndex else entries.lastIndex) / perRow + headerRows
         }
         if (index >= 0) scope.launch { listState.scrollToItem(index) }
     }
@@ -193,7 +199,7 @@ fun AppDrawer(
                     if (query.isNotBlank()) {
                         item(key = "search-extras") { SearchExtras(query, settings) { viewModel.closeDrawer() } }
                     }
-                    items(entries, key = { it.key }) { entry ->
+                    val entryContent: @Composable (Entry) -> Unit = { entry ->
                         when (entry) {
                             is AppEntry -> DrawerRow(
                                 app = entry.app,
@@ -201,14 +207,28 @@ fun AppDrawer(
                                 isFavourite = entry.key in favouriteKeys,
                                 folders = settings.folders,
                                 viewModel = viewModel,
+                                tile = grid,
+                                settings = settings,
                             )
                             is FolderEntry -> FolderRow(
                                 entry = entry,
                                 badge = entry.apps.sumOf { badgeCounts[it.packageName] ?: 0 },
                                 isFavourite = entry.key in favouriteKeys,
                                 viewModel = viewModel,
+                                tile = grid,
+                                settings = settings,
                             )
                         }
+                    }
+                    if (grid) {
+                        items(entries.chunked(perRow), key = { row -> row.first().key }) { row ->
+                            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp)) {
+                                row.forEach { entry -> Box(Modifier.weight(1f), contentAlignment = Alignment.Center) { entryContent(entry) } }
+                                repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
+                            }
+                        }
+                    } else {
+                        items(entries, key = { it.key }) { entry -> entryContent(entry) }
                     }
                     if (query.isNotBlank() && settings.webSearch != WebSearchEngine.OFF) {
                         item(key = "web-search") { WebSearchRow(query) { viewModel.webSearch(query) } }
@@ -292,6 +312,8 @@ private fun DrawerRow(
     isFavourite: Boolean,
     folders: List<AppFolder>,
     viewModel: LauncherViewModel,
+    tile: Boolean = false,
+    settings: LauncherSettings? = null,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     var pickFolder by remember { mutableStateOf(false) }
@@ -299,7 +321,15 @@ private fun DrawerRow(
     val currentFolder = folders.firstOrNull { app.key in it.appKeys }
 
     Box {
-        Row(
+        if (tile && settings != null) {
+            DrawerTile(
+                badge = badge,
+                label = app.label + if (app.isMainProfile) "" else " 💼",
+                settings = settings,
+                onClick = { viewModel.launch(app) },
+                onLongClick = { menuOpen = true },
+            ) { AppIcon(app, viewModel, settings.drawerIconDp.dp) }
+        } else Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier
@@ -396,7 +426,14 @@ private fun DrawerRow(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun FolderRow(entry: FolderEntry, badge: Int, isFavourite: Boolean, viewModel: LauncherViewModel) {
+private fun FolderRow(
+    entry: FolderEntry,
+    badge: Int,
+    isFavourite: Boolean,
+    viewModel: LauncherViewModel,
+    tile: Boolean = false,
+    settings: LauncherSettings? = null,
+) {
     var menuOpen by remember { mutableStateOf(false) }
     var open by remember { mutableStateOf(false) }
     var rename by remember { mutableStateOf(false) }
@@ -405,7 +442,15 @@ private fun FolderRow(entry: FolderEntry, badge: Int, isFavourite: Boolean, view
     var pickingIcon by remember { mutableStateOf(false) }
 
     Box {
-        Row(
+        if (tile && settings != null) {
+            DrawerTile(
+                badge = badge,
+                label = entry.label,
+                settings = settings,
+                onClick = { open = true },
+                onLongClick = { menuOpen = true },
+            ) { FolderGlyph(entry.apps.size, entry.folder.icon, size = settings.drawerIconDp.dp) }
+        } else Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier
@@ -466,6 +511,42 @@ private fun FolderRow(entry: FolderEntry, badge: Int, isFavourite: Boolean, view
             },
             onDismiss = { rename = false },
         )
+    }
+}
+
+/** One icon (with an optional name) of the drawer's grid layout. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun DrawerTile(
+    badge: Int,
+    label: String,
+    settings: LauncherSettings,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    icon: @Composable () -> Unit,
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .width(settings.drawerIconDp.dp + 20.dp)
+            .pressable(onClick = onClick, onLongClick = onLongClick)
+            .padding(vertical = 8.dp),
+    ) {
+        Box {
+            icon()
+            if (badge > 0) Box(Modifier.align(Alignment.TopEnd)) { Badge(badge) }
+        }
+        if (settings.drawerGridLabels) {
+            Text(
+                label,
+                color = Color.White,
+                fontSize = 12.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
     }
 }
 

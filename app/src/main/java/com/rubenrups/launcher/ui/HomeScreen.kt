@@ -111,6 +111,7 @@ import com.rubenrups.launcher.data.FolderEntry
 import com.rubenrups.launcher.data.LauncherSettings
 import com.rubenrups.launcher.data.NextEvent
 import com.rubenrups.launcher.data.GestureActions
+import com.rubenrups.launcher.data.HeaderItems
 import com.rubenrups.launcher.data.HomeRecentsAlign
 import com.rubenrups.launcher.data.UpdateState
 import com.rubenrups.launcher.data.VirtualApps
@@ -746,8 +747,22 @@ private fun Clock(
         }
     }
     val battery = rememberBatteryPercent()
-    val dateFormat = remember { SimpleDateFormat("EEE, MMM d", Locale.getDefault()) }
-    val timeFormat = remember { DateFormat.getTimeInstance(DateFormat.SHORT) }
+    val dateFormat = remember(settings.dateFormat) {
+        when (settings.dateFormat) {
+            "long" -> SimpleDateFormat("EEEE d MMMM", Locale.getDefault())
+            "day_month" -> SimpleDateFormat("d MMM", Locale.getDefault())
+            "numeric" -> DateFormat.getDateInstance(DateFormat.SHORT)
+            else -> SimpleDateFormat("EEE, MMM d", Locale.getDefault())
+        }
+    }
+    val timeFormat = remember(settings.timeFormat) {
+        when (settings.timeFormat) {
+            "24h" -> SimpleDateFormat("HH:mm", Locale.getDefault())
+            "12h" -> SimpleDateFormat("h:mm a", Locale.getDefault())
+            else -> DateFormat.getTimeInstance(DateFormat.SHORT)
+        }
+    }
+    val textSp = settings.headerTextSp
     val horizontal = if (alignEnd) Alignment.End else Alignment.Start
     // Each piece is its own tap target: time -> clock app, date -> calendar, battery -> battery usage,
     // weather -> forecast, event -> that event.
@@ -756,26 +771,30 @@ private fun Clock(
             timeFormat.format(now),
             color = ink,
             fontSize = settings.clockSizeSp.sp,
-            fontWeight = FontWeight.Light,
+            fontWeight = when (settings.clockWeight) {
+                "bold" -> FontWeight.Bold
+                "normal" -> FontWeight.Normal
+                else -> FontWeight.Light
+            },
             style = HomeTextStyle,
             modifier = Modifier.clickable { startSafely(context, Intent(AlarmClock.ACTION_SHOW_ALARMS)) },
         )
     }
     val date: @Composable () -> Unit = {
         if (settings.headerShowDate) {
-            HeaderText(dateFormat.format(now)) {
+            HeaderText(dateFormat.format(now), textSp) {
                 startSafely(context, Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_CALENDAR))
             }
         }
     }
     val batteryText: @Composable () -> Unit = {
         if (settings.headerShowBattery && battery >= 0) {
-            HeaderText("$battery%") { startSafely(context, Intent(Intent.ACTION_POWER_USAGE_SUMMARY)) }
+            HeaderText("$battery%", textSp) { startSafely(context, Intent(Intent.ACTION_POWER_USAGE_SUMMARY)) }
         }
     }
     val weatherText: @Composable () -> Unit = {
         if (weather != null) {
-            HeaderText(weather) {
+            HeaderText(weather, textSp) {
                 startSafely(
                     context,
                     Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com/search?q=" + Uri.encode("weather ${settings.weatherCity}"))),
@@ -785,7 +804,7 @@ private fun Clock(
     }
     val eventText: @Composable () -> Unit = {
         if (event != null) {
-            HeaderText(event.text) {
+            HeaderText(event.text, textSp) {
                 startSafely(
                     context,
                     Intent(Intent.ACTION_VIEW)
@@ -796,22 +815,44 @@ private fun Clock(
             }
         }
     }
+    val parts = mapOf(
+        HeaderItems.DATE to date,
+        HeaderItems.BATTERY to batteryText,
+        HeaderItems.WEATHER to weatherText,
+        HeaderItems.GLUCOSE to glucoseLine,
+        HeaderItems.EVENT to eventText,
+    )
+    // In the stacked and side layouts the short items (date, battery, weather) that follow each other share a line;
+    // glucose and the event each get a line of their own. The order is the user's.
+    val grouped: @Composable () -> Unit = {
+        val shortItems = setOf(HeaderItems.DATE, HeaderItems.BATTERY, HeaderItems.WEATHER)
+        val groups = ArrayList<List<String>>()
+        var run = ArrayList<String>()
+        settings.headerOrder.forEach { key ->
+            if (key in shortItems) {
+                run.add(key)
+            } else {
+                if (run.isNotEmpty()) { groups.add(run); run = ArrayList() }
+                groups.add(listOf(key))
+            }
+        }
+        if (run.isNotEmpty()) groups.add(run)
+        groups.forEach { group ->
+            if (group.size == 1 && group[0] !in shortItems) {
+                parts[group[0]]?.invoke()
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    group.forEach { parts[it]?.invoke() }
+                }
+            }
+        }
+    }
     when (settings.headerLayout) {
         "side" -> Row(
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            val details: @Composable () -> Unit = {
-                Column(horizontalAlignment = horizontal) {
-                    date()
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        batteryText()
-                        weatherText()
-                    }
-                    glucoseLine()
-                    eventText()
-                }
-            }
+            val details: @Composable () -> Unit = { Column(horizontalAlignment = horizontal) { grouped() } }
             if (alignEnd) { details(); time() } else { time(); details() }
         }
         "inline" -> Column(horizontalAlignment = horizontal) {
@@ -820,22 +861,12 @@ private fun Clock(
                 horizontalArrangement = Arrangement.spacedBy(12.dp, horizontal),
                 verticalArrangement = Arrangement.spacedBy(2.dp),
             ) {
-                date()
-                batteryText()
-                weatherText()
-                glucoseLine()
-                eventText()
+                settings.headerOrder.forEach { parts[it]?.invoke() }
             }
         }
         else -> Column(horizontalAlignment = horizontal) {
             time()
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                date()
-                batteryText()
-                weatherText()
-            }
-            glucoseLine()
-            eventText()
+            grouped()
         }
     }
 }
@@ -1427,8 +1458,11 @@ internal fun MediaSeekBar(media: MediaState, big: Boolean = false) {
         }
     }
     val shown = dragging ?: position.toFloat()
+    // Fixed-width time labels, wide enough for the longest time of this track, so the bar never shifts as digits change.
+    val sp = if (big) 16 else 12
+    val labelWidth = (if (duration >= 3_600_000L) sp * 4.4f else sp * 3.1f).dp
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(formatClock(shown.toLong()), color = Color.White.copy(alpha = 0.75f), fontSize = if (big) 16.sp else 12.sp)
+        Text(formatClock(shown.toLong()), color = Color.White.copy(alpha = 0.75f), fontSize = sp.sp, maxLines = 1, textAlign = TextAlign.Start, modifier = Modifier.width(labelWidth))
         androidx.compose.material3.Slider(
             value = shown.coerceIn(0f, duration.toFloat()),
             onValueChange = { dragging = it },
@@ -1439,13 +1473,13 @@ internal fun MediaSeekBar(media: MediaState, big: Boolean = false) {
             valueRange = 0f..duration.toFloat(),
             modifier = Modifier.weight(1f).padding(horizontal = 8.dp).height(if (big) 48.dp else 32.dp),
         )
-        Text(formatClock(duration), color = Color.White.copy(alpha = 0.75f), fontSize = if (big) 16.sp else 12.sp)
+        Text(formatClock(duration), color = Color.White.copy(alpha = 0.75f), fontSize = sp.sp, maxLines = 1, textAlign = TextAlign.End, modifier = Modifier.width(labelWidth))
     }
 }
 
 private fun formatClock(ms: Long): String {
     val total = (ms / 1000).toInt()
-    return "%d:%02d".format(total / 60, total % 60)
+    return if (total >= 3600) "%d:%02d:%02d".format(total / 3600, total / 60 % 60, total % 60) else "%d:%02d".format(total / 60, total % 60)
 }
 
 /**
@@ -1463,12 +1497,12 @@ internal fun openMediaApp(context: Context, controller: MediaController) {
 
 /** One line of header text that opens something when tapped; the padding makes the target comfortable. */
 @Composable
-private fun HeaderText(text: String, onClick: () -> Unit) {
+private fun HeaderText(text: String, sizeSp: Int = 16, onClick: () -> Unit) {
     val ink = LocalHomeInk.current
     Text(
         text,
         color = ink.copy(alpha = 0.9f),
-        fontSize = 16.sp,
+        fontSize = sizeSp.sp,
         style = HomeTextStyle,
         maxLines = 1,
         modifier = Modifier.clickable(onClick = onClick).padding(vertical = 4.dp),
