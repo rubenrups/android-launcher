@@ -98,6 +98,7 @@ private val SearchIndex = listOf(
     SettingHit("Header order and text", Page.HOME, "clock date time format 12 24 hour weight size order items"),
     SettingHit("Full screen", Page.APPEARANCE, "immersive hide status bar navigation bar clock battery"),
     SettingHit("Drawer layout", Page.DRAWER, "icons only grid columns names icon size"),
+    SettingHit("Search button look", Page.HOME, "search style round pill bar position size background opacity"),
     SettingHit("Header layout", Page.HOME, "stacked side by side inline compact date battery time size"),
     SettingHit("Next calendar event", Page.HOME, "agenda"),
     SettingHit("Weather", Page.HOME, "city temperature fahrenheit celsius forecast"),
@@ -273,6 +274,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                     "down" -> it.copy(swipeDown = key)
                     "left" -> it.copy(swipeLeftApp = key)
                     "right" -> it.copy(swipeRightApp = key)
+                    "doubleTap" -> it.copy(doubleTapAction = key)
                     "carUp" -> it.copy(carSwipeUp = key)
                     "carDown" -> it.copy(carSwipeDown = key)
                     "carLeft" -> it.copy(carSwipeLeft = key)
@@ -289,6 +291,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                 "down" -> "Swipe down"
                 "left" -> "Swipe left"
                 "right" -> "Swipe right"
+                "doubleTap" -> "Double tap"
                 "carUp" -> "Car mode: swipe up"
                 "carDown" -> "Car mode: swipe down"
                 "carLeft" -> "Car mode: swipe left"
@@ -480,6 +483,22 @@ private fun HomePage(viewModel: LauncherViewModel, settings: LauncherSettings) {
     }
     Group("Buttons") {
         SwitchRow("Search button", settings.showSearchButton) { v -> viewModel.update { it.copy(showSearchButton = v) } }
+        if (settings.showSearchButton) {
+            ChoiceRow("Search style: round button", selected = settings.searchButtonStyle == "round") { viewModel.update { it.copy(searchButtonStyle = "round") } }
+            ChoiceRow("Search style: pill with a label", selected = settings.searchButtonStyle == "pill") { viewModel.update { it.copy(searchButtonStyle = "pill") } }
+            ChoiceRow("Search style: bar along the bottom", selected = settings.searchButtonStyle == "bar") { viewModel.update { it.copy(searchButtonStyle = "bar") } }
+            if (settings.searchButtonStyle != "bar") {
+                ChoiceRow("Position: opposite the favourites", selected = settings.searchButtonPosition == "auto") { viewModel.update { it.copy(searchButtonPosition = "auto") } }
+                ChoiceRow("Position: bottom left", selected = settings.searchButtonPosition == "left") { viewModel.update { it.copy(searchButtonPosition = "left") } }
+                ChoiceRow("Position: bottom right", selected = settings.searchButtonPosition == "right") { viewModel.update { it.copy(searchButtonPosition = "right") } }
+            }
+            SliderRow("Search size", "${settings.searchButtonSizeDp} dp", settings.searchButtonSizeDp.toFloat(), 40f..80f) { v ->
+                viewModel.update { it.copy(searchButtonSizeDp = v.roundToInt()) }
+            }
+            SliderRow("Search background", "${settings.searchButtonOpacity}%", settings.searchButtonOpacity.toFloat(), 10f..100f) { v ->
+                viewModel.update { it.copy(searchButtonOpacity = v.roundToInt()) }
+            }
+        }
         VirtualApps.all.forEach { button ->
             SwitchRow(
                 "${button.label} button in favourites",
@@ -632,6 +651,10 @@ private fun GesturesPage(settings: LauncherSettings, apps: List<AppInfo>, openCh
             "Each swipe can open the drawer, search, the notification shade, car mode or any app. " +
                 "A short label shows what it will do while you swipe."
         )
+    }
+    Group("Taps on the home screen") {
+        NavRow("Double tap", labelFor(settings.doubleTapAction, apps)) { openChooser("doubleTap") }
+        Hint("Double-tap empty space on the home screen. Long-press still opens the home menu.")
     }
 }
 

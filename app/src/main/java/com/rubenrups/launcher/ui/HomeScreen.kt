@@ -242,7 +242,9 @@ private fun HomeContent(
         }
     }
     // Room the icon row takes at the bottom, so the favourites and the clock section stop above it.
-    val recentsReserve = if (homeRecents.isEmpty()) 0.dp else homeRecentsRowHeight(settings) * homeRecentsRowCount(settings, homeRecents.size) + settings.homeRecentsBottomDp.dp
+    // A search bar along the bottom takes the whole width, so everything else stops above it.
+    val searchBarReserve = if (settings.showSearchButton && settings.searchButtonStyle == "bar") (settings.searchButtonSizeDp + 24).dp else 0.dp
+    val recentsReserve = (if (homeRecents.isEmpty()) 0.dp else homeRecentsRowHeight(settings) * homeRecentsRowCount(settings, homeRecents.size) + settings.homeRecentsBottomDp.dp) + searchBarReserve
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // The favourites always keep room for a few rows; everything above them (clock, notifications, media,
@@ -274,7 +276,21 @@ private fun HomeContent(
                 // Long-press on empty space opens settings (child rows consume their own presses).
                 .pointerInput(editMode) {
                     if (editMode) return@pointerInput
-                    detectTapGestures(onLongPress = { homeMenuAt = it })
+                    detectTapGestures(
+                        onLongPress = { homeMenuAt = it },
+                        onDoubleTap = {
+                            val action = currentSettings.doubleTapAction
+                            if (action.isNotBlank()) {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                when (action) {
+                                    GestureActions.DRAWER -> currentOpenDrawer(false)
+                                    GestureActions.SEARCH -> currentOpenDrawer(true)
+                                    GestureActions.NOTIFICATIONS -> expandNotificationShade(context)
+                                    else -> viewModel.launchByKey(action)
+                                }
+                            }
+                        },
+                    )
                 }
                 // Each direction runs the action chosen in settings. When swipe-up is the drawer, it follows the finger.
                 .pointerInput(editMode) {
@@ -494,7 +510,7 @@ private fun HomeContent(
                         editMode = editMode,
                         onEditModeChange = { editMode = it },
                         // A top-anchored list can run under the floating search button; keep the last rows clear of it.
-                        bottomPadding = if (!settings.anchorBottom && settings.showSearchButton) 88.dp else 0.dp,
+                        bottomPadding = if (!settings.anchorBottom && settings.showSearchButton && settings.searchButtonStyle != "bar") (settings.searchButtonSizeDp + 32).dp else 0.dp,
                         twoColumns = landscape && settings.twoColumnsLandscape,
                     )
                 }
@@ -615,20 +631,38 @@ private fun HomeContent(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .windowInsetsPadding(launcherInsets())
-                    .padding(bottom = settings.homeRecentsBottomDp.dp),
+                    .padding(bottom = settings.homeRecentsBottomDp.dp + searchBarReserve),
             )
         }
 
         if (settings.showSearchButton && !editMode) {
+            val bar = settings.searchButtonStyle == "bar"
             SearchButton(
                 onClick = { onOpenDrawer(true) },
+                style = settings.searchButtonStyle,
+                sizeDp = settings.searchButtonSizeDp,
+                opacity = settings.searchButtonOpacity,
                 modifier = Modifier
-                    .align(if (settings.alignEnd) Alignment.BottomStart else Alignment.BottomEnd)
+                    .align(if (bar) Alignment.BottomCenter else if (searchButtonAtEnd(settings)) Alignment.BottomEnd else Alignment.BottomStart)
                     .windowInsetsPadding(launcherInsets())
                     .padding(24.dp),
             )
         }
     }
+}
+
+/** Whether the round / pill search button sits at the right: "auto" puts it in the corner opposite the favourites. */
+private fun searchButtonAtEnd(settings: LauncherSettings) = when (settings.searchButtonPosition) {
+    "left" -> false
+    "right" -> true
+    else -> !settings.alignEnd
+}
+
+/** How far (dp) other bottom items keep from the search button's side of the screen. */
+private fun searchClearanceDp(settings: LauncherSettings): Int = when {
+    !settings.showSearchButton || settings.searchButtonStyle == "bar" -> EDGE_PADDING_DP
+    settings.searchButtonStyle == "pill" -> 24 + 140 + 16
+    else -> 24 + settings.searchButtonSizeDp + 8
 }
 
 private const val SEARCH_BUTTON_CLEARANCE_DP = 88
@@ -644,9 +678,9 @@ private fun HomeRecentsRow(apps: List<AppInfo>, viewModel: LauncherViewModel, se
     // Each icon fills its cell exactly, so the first one starts on the same left line as the favourites and the clock.
     val cell = settings.homeRecentsIconDp.dp
     // The search button floats in one bottom corner (the one opposite the favourites); keep the icons off it.
-    val clear = if (settings.showSearchButton) SEARCH_BUTTON_CLEARANCE_DP.dp else EDGE_PADDING_DP.dp
+    val clear = searchClearanceDp(settings).dp
     val edge = EDGE_PADDING_DP.dp
-    val searchAtEnd = !settings.alignEnd
+    val searchAtEnd = searchButtonAtEnd(settings)
     val (startPad, endPad) = when (settings.homeRecentsAlign) {
         // Left-aligned and spread rows start on the same line as the favourites; only the search-button side is kept clear.
         HomeRecentsAlign.START, HomeRecentsAlign.SPREAD -> edge to (if (searchAtEnd) clear else edge)
@@ -685,30 +719,63 @@ private fun HomeRecentsRow(apps: List<AppInfo>, viewModel: LauncherViewModel, se
     }
 }
 
-/** Round floating button with a hand-drawn magnifier, so we don't need the icons library. */
+/** The search entry on the home screen: a round button, a pill with the word Search, or a bar along the bottom. */
 @Composable
-private fun SearchButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(
-        modifier
-            .size(56.dp)
-            .background(Color.Black.copy(alpha = 0.35f), CircleShape)
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Canvas(Modifier.size(22.dp)) {
-            val stroke = 2.5.dp.toPx()
-            val radius = size.minDimension * 0.32f
-            val centre = Offset(size.width * 0.42f, size.height * 0.42f)
-            drawCircle(Color.White, radius = radius, center = centre, style = Stroke(width = stroke))
-            val handleStart = Offset(centre.x + radius * 0.71f, centre.y + radius * 0.71f)
-            drawLine(
-                Color.White,
-                start = handleStart,
-                end = Offset(size.width * 0.92f, size.height * 0.92f),
-                strokeWidth = stroke,
-                cap = StrokeCap.Round,
-            )
+private fun SearchButton(onClick: () -> Unit, style: String, sizeDp: Int, opacity: Int, modifier: Modifier = Modifier) {
+    val fill = Color.Black.copy(alpha = opacity / 100f)
+    val glyph = (sizeDp * 0.4f).dp
+    when (style) {
+        "bar" -> Row(
+            modifier
+                .fillMaxWidth()
+                .height(sizeDp.dp)
+                .background(fill, RoundedCornerShape((sizeDp / 2).dp))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            SearchGlyph(glyph)
+            Text("Search apps", color = Color.White.copy(alpha = 0.85f), fontSize = 16.sp)
         }
+        "pill" -> Row(
+            modifier
+                .height(sizeDp.dp)
+                .background(fill, RoundedCornerShape((sizeDp / 2).dp))
+                .clickable(onClick = onClick)
+                .padding(horizontal = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            SearchGlyph(glyph)
+            Text("Search", color = Color.White, fontSize = 16.sp)
+        }
+        else -> Box(
+            modifier
+                .size(sizeDp.dp)
+                .background(fill, CircleShape)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) { SearchGlyph(glyph) }
+    }
+}
+
+/** A hand-drawn magnifier, so we don't need the icons library. */
+@Composable
+private fun SearchGlyph(size: androidx.compose.ui.unit.Dp) {
+    Canvas(Modifier.size(size)) {
+        val stroke = size.toPx() * 0.11f
+        val radius = this.size.minDimension * 0.32f
+        val centre = Offset(this.size.width * 0.42f, this.size.height * 0.42f)
+        drawCircle(Color.White, radius = radius, center = centre, style = Stroke(width = stroke))
+        val handleStart = Offset(centre.x + radius * 0.71f, centre.y + radius * 0.71f)
+        drawLine(
+            Color.White,
+            start = handleStart,
+            end = Offset(this.size.width * 0.92f, this.size.height * 0.92f),
+            strokeWidth = stroke,
+            cap = StrokeCap.Round,
+        )
     }
 }
 

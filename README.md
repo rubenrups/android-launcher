@@ -26,6 +26,7 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 - **Attached drawer** (optional): the drawer slides up beneath the home screen as one tall page
 - **Auto-update**: checks for new builds while the launcher is on screen (interval is a setting: 1 min to once a day, default 3 h), downloads them on Wi-Fi, and shows an "Install" banner on home; installs through Android's installer (you confirm). Needs "Install unknown apps" allowed once, and the GitHub token while the repo is private
 - **Player buttons**: the media card shows the player's own extra buttons, such as Spotify's add to liked songs
+- **Double tap**: double-tap empty home-screen space to open the drawer, search, the notification shade, car mode or any app (off by default)
 - **Swipe feedback**: the home screen leans after your finger during a configured swipe, ticks when it counts, and the dashboard slides in from the side you swiped
 - **Glucose on home**: FreeStyle Libre value, trend and age under the clock, via a LibreLinkUp follower account (display only; greyed out when older than 10 min)
 - **Navigation card**: the Google Maps / Waze next-turn notification shown on home
@@ -55,6 +56,7 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 - **More header control** (item order, 12/24-hour time, date styles, text size and weight), an **icon grid for the app drawer**, and a fixed-width seek-bar time
 - **Full screen mode**: hide the status bar, or the status and navigation bars, while the launcher is showing (Settings → Appearance)
 - **Backups restore places, contacts and logins**: places, addresses and call contacts are included by default; logins when you set a backup password once (kept encrypted on the phone, used by every backup, automatic ones too). **Camera cut-out and extra top padding** for full screen mode
+- **Search button styles**: round, pill with a label, or a bar along the bottom; position, size and background are adjustable
 - **Header layout**: stacked, details beside the time, or one compact wrapping row; toggle date/battery and set the time size (Settings → Home)
 - App shortcuts ("New message", …) at the top of an app's long-press menu
 - Home-screen widgets (long-press the home screen → Add widget)

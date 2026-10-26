@@ -80,6 +80,12 @@ data class LauncherSettings(
     val anchorBottom: Boolean = false,
     val showIcons: Boolean = true,
     val showSearchButton: Boolean = true,
+    /** "round" (a circle with a magnifier), "pill" (icon and the word Search) or "bar" (a search bar along the bottom). */
+    val searchButtonStyle: String = "round",
+    /** Where round and pill buttons sit: "auto" (the corner opposite the favourites), "left" or "right". */
+    val searchButtonPosition: String = "auto",
+    val searchButtonSizeDp: Int = 56,
+    val searchButtonOpacity: Int = 35,
     /** What each swipe on the home screen does: a [GestureActions] key or an app key; empty = nothing. */
     val swipeUp: String = GestureActions.DRAWER,
     val swipeDown: String = GestureActions.NOTIFICATIONS,
@@ -166,6 +172,8 @@ data class LauncherSettings(
     /** App keys launched by a left / right swipe on the home screen; empty = nothing. */
     val swipeLeftApp: String = "",
     val swipeRightApp: String = "",
+    /** What a double tap on empty home-screen space does: a [GestureActions] key or an app key; empty = nothing. */
+    val doubleTapAction: String = "",
     val glucoseEnabled: Boolean = false,
     /** LibreLinkUp follower login. Stored on this device only and never exported. */
     val glucoseEmail: String = "",
@@ -390,6 +398,10 @@ class LauncherPrefs(context: Context) {
         anchorBottom = prefs.getBoolean(KEY_ANCHOR_BOTTOM, prefs.getBoolean(KEY_ALIGN_END, false)),
         showIcons = prefs.getBoolean(KEY_SHOW_ICONS, true),
         showSearchButton = prefs.getBoolean(KEY_SHOW_SEARCH_BUTTON, true),
+        searchButtonStyle = prefs.getString(KEY_SEARCH_STYLE, "round") ?: "round",
+        searchButtonPosition = prefs.getString(KEY_SEARCH_POSITION, "auto") ?: "auto",
+        searchButtonSizeDp = prefs.getInt(KEY_SEARCH_SIZE, 56).coerceIn(40, 80),
+        searchButtonOpacity = prefs.getInt(KEY_SEARCH_OPACITY, 35).coerceIn(10, 100),
         swipeUp = if (prefs.contains(KEY_SWIPE_UP)) prefs.getString(KEY_SWIPE_UP, "").orEmpty() else GestureActions.DRAWER,
         swipeDown = if (prefs.contains(KEY_SWIPE_DOWN)) {
             GestureActions.fromLegacy(prefs.getString(KEY_SWIPE_DOWN, "").orEmpty())
@@ -456,6 +468,7 @@ class LauncherPrefs(context: Context) {
         folderPopupOnHome = prefs.getBoolean(KEY_FOLDER_POPUP, true),
         swipeLeftApp = prefs.getString(KEY_SWIPE_LEFT, "").orEmpty(),
         swipeRightApp = prefs.getString(KEY_SWIPE_RIGHT, "").orEmpty(),
+        doubleTapAction = prefs.getString(KEY_DOUBLE_TAP, "").orEmpty(),
         glucoseEnabled = prefs.getBoolean(KEY_GLUCOSE_ON, false),
         glucoseEmail = readSecret(KEY_GLUCOSE_EMAIL),
         glucosePassword = readSecret(KEY_GLUCOSE_PASSWORD),
@@ -537,6 +550,10 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_ANCHOR_BOTTOM, s.anchorBottom)
             .putBoolean(KEY_SHOW_ICONS, s.showIcons)
             .putBoolean(KEY_SHOW_SEARCH_BUTTON, s.showSearchButton)
+            .putString(KEY_SEARCH_STYLE, s.searchButtonStyle)
+            .putString(KEY_SEARCH_POSITION, s.searchButtonPosition)
+            .putInt(KEY_SEARCH_SIZE, s.searchButtonSizeDp)
+            .putInt(KEY_SEARCH_OPACITY, s.searchButtonOpacity)
             .putString(KEY_SWIPE_UP, s.swipeUp)
             .putString(KEY_SWIPE_DOWN, s.swipeDown)
             .putString(KEY_ICON_PACK, s.iconPack)
@@ -597,6 +614,7 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_FOLDER_POPUP, s.folderPopupOnHome)
             .putString(KEY_SWIPE_LEFT, s.swipeLeftApp)
             .putString(KEY_SWIPE_RIGHT, s.swipeRightApp)
+            .putString(KEY_DOUBLE_TAP, s.doubleTapAction)
             .putBoolean(KEY_GLUCOSE_ON, s.glucoseEnabled)
             .putString(KEY_GLUCOSE_EMAIL, sealSecret(s.glucoseEmail))
             .putString(KEY_GLUCOSE_PASSWORD, sealSecret(s.glucosePassword))
@@ -820,6 +838,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_FOLDER_POPUP = "folder_popup_on_home"
         const val KEY_SWIPE_LEFT = "swipe_left_app"
         const val KEY_SWIPE_RIGHT = "swipe_right_app"
+        const val KEY_DOUBLE_TAP = "double_tap_action"
         const val KEY_GLUCOSE_ON = "glucose_enabled"
         const val KEY_GLUCOSE_EMAIL = "glucose_email"
         const val KEY_GLUCOSE_PASSWORD = "glucose_password"
@@ -900,6 +919,10 @@ class LauncherPrefs(context: Context) {
         const val KEY_ANCHOR_BOTTOM = "anchor_bottom"
         const val KEY_SHOW_ICONS = "show_icons"
         const val KEY_SHOW_SEARCH_BUTTON = "show_search_button"
+        const val KEY_SEARCH_STYLE = "search_style"
+        const val KEY_SEARCH_POSITION = "search_position"
+        const val KEY_SEARCH_SIZE = "search_size_dp"
+        const val KEY_SEARCH_OPACITY = "search_opacity"
     }
 }
 
