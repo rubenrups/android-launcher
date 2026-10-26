@@ -276,7 +276,21 @@ private fun HomeContent(
                 // Long-press on empty space opens settings (child rows consume their own presses).
                 .pointerInput(editMode) {
                     if (editMode) return@pointerInput
-                    detectTapGestures(onLongPress = { homeMenuAt = it })
+                    detectTapGestures(
+                        onLongPress = { homeMenuAt = it },
+                        onDoubleTap = {
+                            val action = currentSettings.doubleTapAction
+                            if (action.isNotBlank()) {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                when (action) {
+                                    GestureActions.DRAWER -> currentOpenDrawer(false)
+                                    GestureActions.SEARCH -> currentOpenDrawer(true)
+                                    GestureActions.NOTIFICATIONS -> expandNotificationShade(context)
+                                    else -> viewModel.launchByKey(action)
+                                }
+                            }
+                        },
+                    )
                 }
                 // Each direction runs the action chosen in settings. When swipe-up is the drawer, it follows the finger.
                 .pointerInput(editMode) {

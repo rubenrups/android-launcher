@@ -274,6 +274,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                     "down" -> it.copy(swipeDown = key)
                     "left" -> it.copy(swipeLeftApp = key)
                     "right" -> it.copy(swipeRightApp = key)
+                    "doubleTap" -> it.copy(doubleTapAction = key)
                     "carUp" -> it.copy(carSwipeUp = key)
                     "carDown" -> it.copy(carSwipeDown = key)
                     "carLeft" -> it.copy(carSwipeLeft = key)
@@ -290,6 +291,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                 "down" -> "Swipe down"
                 "left" -> "Swipe left"
                 "right" -> "Swipe right"
+                "doubleTap" -> "Double tap"
                 "carUp" -> "Car mode: swipe up"
                 "carDown" -> "Car mode: swipe down"
                 "carLeft" -> "Car mode: swipe left"
@@ -649,6 +651,10 @@ private fun GesturesPage(settings: LauncherSettings, apps: List<AppInfo>, openCh
             "Each swipe can open the drawer, search, the notification shade, car mode or any app. " +
                 "A short label shows what it will do while you swipe."
         )
+    }
+    Group("Taps on the home screen") {
+        NavRow("Double tap", labelFor(settings.doubleTapAction, apps)) { openChooser("doubleTap") }
+        Hint("Double-tap empty space on the home screen. Long-press still opens the home menu.")
     }
 }
 

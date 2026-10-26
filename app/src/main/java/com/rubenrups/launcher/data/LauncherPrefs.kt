@@ -172,6 +172,8 @@ data class LauncherSettings(
     /** App keys launched by a left / right swipe on the home screen; empty = nothing. */
     val swipeLeftApp: String = "",
     val swipeRightApp: String = "",
+    /** What a double tap on empty home-screen space does: a [GestureActions] key or an app key; empty = nothing. */
+    val doubleTapAction: String = "",
     val glucoseEnabled: Boolean = false,
     /** LibreLinkUp follower login. Stored on this device only and never exported. */
     val glucoseEmail: String = "",
@@ -466,6 +468,7 @@ class LauncherPrefs(context: Context) {
         folderPopupOnHome = prefs.getBoolean(KEY_FOLDER_POPUP, true),
         swipeLeftApp = prefs.getString(KEY_SWIPE_LEFT, "").orEmpty(),
         swipeRightApp = prefs.getString(KEY_SWIPE_RIGHT, "").orEmpty(),
+        doubleTapAction = prefs.getString(KEY_DOUBLE_TAP, "").orEmpty(),
         glucoseEnabled = prefs.getBoolean(KEY_GLUCOSE_ON, false),
         glucoseEmail = readSecret(KEY_GLUCOSE_EMAIL),
         glucosePassword = readSecret(KEY_GLUCOSE_PASSWORD),
@@ -611,6 +614,7 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_FOLDER_POPUP, s.folderPopupOnHome)
             .putString(KEY_SWIPE_LEFT, s.swipeLeftApp)
             .putString(KEY_SWIPE_RIGHT, s.swipeRightApp)
+            .putString(KEY_DOUBLE_TAP, s.doubleTapAction)
             .putBoolean(KEY_GLUCOSE_ON, s.glucoseEnabled)
             .putString(KEY_GLUCOSE_EMAIL, sealSecret(s.glucoseEmail))
             .putString(KEY_GLUCOSE_PASSWORD, sealSecret(s.glucosePassword))
@@ -834,6 +838,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_FOLDER_POPUP = "folder_popup_on_home"
         const val KEY_SWIPE_LEFT = "swipe_left_app"
         const val KEY_SWIPE_RIGHT = "swipe_right_app"
+        const val KEY_DOUBLE_TAP = "double_tap_action"
         const val KEY_GLUCOSE_ON = "glucose_enabled"
         const val KEY_GLUCOSE_EMAIL = "glucose_email"
         const val KEY_GLUCOSE_PASSWORD = "glucose_password"
