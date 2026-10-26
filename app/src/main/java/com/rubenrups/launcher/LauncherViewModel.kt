@@ -328,10 +328,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         repository.apps.value.firstOrNull { it.key == key }?.let { launch(it) }
     }
 
-    fun backupJson(password: String = ): String = prefs.exportJson(password)
+    fun backupJson(): String = prefs.exportJson()
 
     /** Null when the file is not one of our backups; otherwise what happened to its saved logins. */
-    fun restoreBackup(json: String, password: String = ): LauncherPrefs.LoginsResult? = prefs.importJson(json, password)
+    fun restoreBackup(json: String): LauncherPrefs.LoginsResult? = prefs.importJson(json, prefs.settings.value.backupPassword)
 
     fun setSettingsOpen(open: Boolean) { _settingsOpen.value = open }
 
