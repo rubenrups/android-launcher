@@ -77,16 +77,28 @@ jobs:
           name: rups-launcher-apk
           path: apk
 
+      # Shows in the log where the APK ended up inside the artifact (its folder layout can differ between runs).
+      - name: Show downloaded files
+        run: ls -R apk
+
+      # The launcher shows this as "What's new": the first paragraph of the commit message (for a squash merge that is
+      # the pull request title, not the whole list of commits).
+      - name: Release notes
+        env:
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+        run: printf '%s\n' "$COMMIT_MESSAGE" | awk 'NF==0{exit} {print}' > notes.txt
+
       - name: Publish release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: build-${{ github.run_number }}
           target_commitish: ${{ github.sha }}
           name: Build ${{ github.run_number }}
-          # The launcher shows this as "What's new" before you install.
-          body: ${{ github.event.head_commit.message }}
+          body_path: notes.txt
           prerelease: true
-          files: apk/app-release.apk
+          # Any folder depth, and fail loudly instead of publishing a release without an APK.
+          files: apk/**/*.apk
+          fail_on_unmatched_files: true
 
       # Every push leaves a "build-N" pre-release behind. Keep the newest 10 (the in-app update check only
       # ever looks at the newest) and delete the rest together with their tags.
