@@ -80,6 +80,12 @@ data class LauncherSettings(
     val anchorBottom: Boolean = false,
     val showIcons: Boolean = true,
     val showSearchButton: Boolean = true,
+    /** "round" (a circle with a magnifier), "pill" (icon and the word Search) or "bar" (a search bar along the bottom). */
+    val searchButtonStyle: String = "round",
+    /** Where round and pill buttons sit: "auto" (the corner opposite the favourites), "left" or "right". */
+    val searchButtonPosition: String = "auto",
+    val searchButtonSizeDp: Int = 56,
+    val searchButtonOpacity: Int = 35,
     /** What each swipe on the home screen does: a [GestureActions] key or an app key; empty = nothing. */
     val swipeUp: String = GestureActions.DRAWER,
     val swipeDown: String = GestureActions.NOTIFICATIONS,
@@ -390,6 +396,10 @@ class LauncherPrefs(context: Context) {
         anchorBottom = prefs.getBoolean(KEY_ANCHOR_BOTTOM, prefs.getBoolean(KEY_ALIGN_END, false)),
         showIcons = prefs.getBoolean(KEY_SHOW_ICONS, true),
         showSearchButton = prefs.getBoolean(KEY_SHOW_SEARCH_BUTTON, true),
+        searchButtonStyle = prefs.getString(KEY_SEARCH_STYLE, "round") ?: "round",
+        searchButtonPosition = prefs.getString(KEY_SEARCH_POSITION, "auto") ?: "auto",
+        searchButtonSizeDp = prefs.getInt(KEY_SEARCH_SIZE, 56).coerceIn(40, 80),
+        searchButtonOpacity = prefs.getInt(KEY_SEARCH_OPACITY, 35).coerceIn(10, 100),
         swipeUp = if (prefs.contains(KEY_SWIPE_UP)) prefs.getString(KEY_SWIPE_UP, "").orEmpty() else GestureActions.DRAWER,
         swipeDown = if (prefs.contains(KEY_SWIPE_DOWN)) {
             GestureActions.fromLegacy(prefs.getString(KEY_SWIPE_DOWN, "").orEmpty())
@@ -537,6 +547,10 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_ANCHOR_BOTTOM, s.anchorBottom)
             .putBoolean(KEY_SHOW_ICONS, s.showIcons)
             .putBoolean(KEY_SHOW_SEARCH_BUTTON, s.showSearchButton)
+            .putString(KEY_SEARCH_STYLE, s.searchButtonStyle)
+            .putString(KEY_SEARCH_POSITION, s.searchButtonPosition)
+            .putInt(KEY_SEARCH_SIZE, s.searchButtonSizeDp)
+            .putInt(KEY_SEARCH_OPACITY, s.searchButtonOpacity)
             .putString(KEY_SWIPE_UP, s.swipeUp)
             .putString(KEY_SWIPE_DOWN, s.swipeDown)
             .putString(KEY_ICON_PACK, s.iconPack)
@@ -900,6 +914,10 @@ class LauncherPrefs(context: Context) {
         const val KEY_ANCHOR_BOTTOM = "anchor_bottom"
         const val KEY_SHOW_ICONS = "show_icons"
         const val KEY_SHOW_SEARCH_BUTTON = "show_search_button"
+        const val KEY_SEARCH_STYLE = "search_style"
+        const val KEY_SEARCH_POSITION = "search_position"
+        const val KEY_SEARCH_SIZE = "search_size_dp"
+        const val KEY_SEARCH_OPACITY = "search_opacity"
     }
 }
 

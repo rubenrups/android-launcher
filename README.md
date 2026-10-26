@@ -55,6 +55,7 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 - **More header control** (item order, 12/24-hour time, date styles, text size and weight), an **icon grid for the app drawer**, and a fixed-width seek-bar time
 - **Full screen mode**: hide the status bar, or the status and navigation bars, while the launcher is showing (Settings → Appearance)
 - **Backups restore places, contacts and logins**: places, addresses and call contacts are included by default; logins when you set a backup password once (kept encrypted on the phone, used by every backup, automatic ones too). **Camera cut-out and extra top padding** for full screen mode
+- **Search button styles**: round, pill with a label, or a bar along the bottom; position, size and background are adjustable
 - **Header layout**: stacked, details beside the time, or one compact wrapping row; toggle date/battery and set the time size (Settings → Home)
 - App shortcuts ("New message", …) at the top of an app's long-press menu
 - Home-screen widgets (long-press the home screen → Add widget)
