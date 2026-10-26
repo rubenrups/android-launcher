@@ -54,6 +54,7 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 - **Car mode notifications card** (tap to open, ✕ to clear), and card shortcuts that open settings scrolled to the right group
 - **More header control** (item order, 12/24-hour time, date styles, text size and weight), an **icon grid for the app drawer**, and a fixed-width seek-bar time
 - **Full screen mode**: hide the status bar, or the status and navigation bars, while the launcher is showing (Settings → Appearance)
+- **Backups restore places, contacts and logins**: places, addresses and call contacts are included by default; logins when you set a backup password once (kept encrypted on the phone, used by every backup, automatic ones too). **Camera cut-out and extra top padding** for full screen mode
 - **Header layout**: stacked, details beside the time, or one compact wrapping row; toggle date/battery and set the time size (Settings → Home)
 - App shortcuts ("New message", …) at the top of an app's long-press menu
 - Home-screen widgets (long-press the home screen → Add widget)

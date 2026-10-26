@@ -101,6 +101,11 @@ data class LauncherSettings(
     val headerTextSp: Int = 16,
     /** "off", "status" (hide the status bar) or "both" (hide the status and navigation bars); swipe from the edge to peek. */
     val fullscreenMode: String = "off",
+    /** Keep content clear of a punch-hole camera or notch, and extra space on top of that (dp). */
+    val avoidCutout: Boolean = true,
+    val extraTopPaddingDp: Int = 0,
+    /** Backups include places, call contacts and car Bluetooth devices (never logins unless a password is given). */
+    val backupIncludePersonal: Boolean = true,
     /** "light", "normal" or "bold". */
     val clockWeight: String = "light",
     /** The app drawer: "list" or "grid", with icon size, columns and whether names show under the icons. */
@@ -165,6 +170,8 @@ data class LauncherSettings(
     /** LibreLinkUp follower login. Stored on this device only and never exported. */
     val glucoseEmail: String = "",
     val glucosePassword: String = "",
+    /** Protects the logins inside backup files (typed once; stored encrypted on this phone, never in a backup). */
+    val backupPassword: String = "",
     val glucoseMmol: Boolean = false,
     /** Thresholds in mg/dL: below [glucoseLow] or above [glucoseHigh] the value is coloured. */
     val glucoseLow: Int = 70,
@@ -302,23 +309,40 @@ class LauncherPrefs(context: Context) {
 
     /**
      * Everything the user set up (favourites, folders, hidden apps, every setting), as JSON.
-     * The GitHub token is left out on purpose: a backup file is easy to share by accident.
+     * Logins are left out unless a [password] is given (by default the one saved in settings): then they go in as one encrypted block (see [BackupVault]),
+     * because a backup file is easy to share or lose by accident.
      */
-    fun exportJson(): String {
+    fun exportJson(password: String = _settings.value.backupPassword, includePersonal: Boolean = _settings.value.backupIncludePersonal): String {
         val out = JSONObject().put("_format", BACKUP_FORMAT)
         prefs.all.forEach { (key, value) ->
-            if (key !in SECRET_KEYS && value != null) out.put(key, value)
+            if (key in SECRET_KEYS || value == null) return@forEach
+            if (key in PERSONAL_KEYS && !includePersonal) return@forEach
+            out.put(key, value)
+        }
+        if (password.isNotEmpty()) {
+            val s = _settings.value
+            val logins = JSONObject()
+                .put("glucoseEmail", s.glucoseEmail)
+                .put("glucosePassword", s.glucosePassword)
+                .put("updateToken", s.updateToken)
+            out.put("_logins", BackupVault.seal(logins.toString(), password))
         }
         return out.toString(2)
     }
 
-    /** Replaces the current setup with a backup. Returns false (changing nothing) if the file isn't one of ours. */
-    fun importJson(json: String): Boolean {
-        val data = runCatching { JSONObject(json) }.getOrNull() ?: return false
-        if (data.optInt("_format", -1) != BACKUP_FORMAT) return false
+    /** What happened to the saved logins when a backup was restored. */
+    enum class LoginsResult { NOT_IN_FILE, RESTORED, NEEDS_PASSWORD, WRONG_PASSWORD }
+
+    /**
+     * Replaces the current setup with a backup. Returns null (changing nothing) if the file isn't one of ours,
+     * otherwise what happened to its saved logins ([password] opens them).
+     */
+    fun importJson(json: String, password: String = ""): LoginsResult? {
+        val data = runCatching { JSONObject(json) }.getOrNull() ?: return null
+        if (data.optInt("_format", -1) != BACKUP_FORMAT) return null
         val editor = prefs.edit()
-        // Keep the token (never exported) and replace everything else.
-        prefs.all.keys.filter { it !in SECRET_KEYS }.forEach { editor.remove(it) }
+        // Replace everything the backup covers; logins, device state and places are only touched when the file has them.
+        prefs.all.keys.filter { it !in SECRET_KEYS && it !in PERSONAL_KEYS }.forEach { editor.remove(it) }
         data.keys().forEach { key ->
             if (key.startsWith("_") || key in SECRET_KEYS) return@forEach
             when (val value = data.get(key)) {
@@ -327,9 +351,25 @@ class LauncherPrefs(context: Context) {
                 is String -> editor.putString(key, value)
             }
         }
+        var result = LoginsResult.NOT_IN_FILE
+        val sealed = data.optString("_logins")
+        if (sealed.isNotEmpty()) {
+            val plain = if (password.isEmpty()) null else BackupVault.open(sealed, password)
+            result = when {
+                password.isEmpty() -> LoginsResult.NEEDS_PASSWORD
+                plain == null -> LoginsResult.WRONG_PASSWORD
+                else -> {
+                    val logins = JSONObject(plain)
+                    editor.putString(KEY_GLUCOSE_EMAIL, sealSecret(logins.optString("glucoseEmail")))
+                    editor.putString(KEY_GLUCOSE_PASSWORD, sealSecret(logins.optString("glucosePassword")))
+                    editor.putString(KEY_UPDATE_TOKEN, sealSecret(logins.optString("updateToken")))
+                    LoginsResult.RESTORED
+                }
+            }
+        }
         editor.apply()
         _settings.value = load()
-        return true
+        return result
     }
 
     fun update(transform: (LauncherSettings) -> LauncherSettings) {
@@ -370,6 +410,9 @@ class LauncherPrefs(context: Context) {
         dateFormat = prefs.getString(KEY_DATE_FORMAT, "short") ?: "short",
         headerTextSp = prefs.getInt(KEY_HEADER_TEXT, 16).coerceIn(12, 28),
         fullscreenMode = prefs.getString(KEY_FULLSCREEN, "off") ?: "off",
+        avoidCutout = prefs.getBoolean(KEY_AVOID_CUTOUT, true),
+        extraTopPaddingDp = prefs.getInt(KEY_EXTRA_TOP, 0).coerceIn(0, 100),
+        backupIncludePersonal = prefs.getBoolean(KEY_BACKUP_PERSONAL, true),
         clockWeight = prefs.getString(KEY_CLOCK_WEIGHT, "light") ?: "light",
         drawerLayout = prefs.getString(KEY_DRAWER_LAYOUT, "list") ?: "list",
         drawerIconDp = prefs.getInt(KEY_DRAWER_ICON, 52).coerceIn(32, 80),
@@ -416,6 +459,7 @@ class LauncherPrefs(context: Context) {
         glucoseEnabled = prefs.getBoolean(KEY_GLUCOSE_ON, false),
         glucoseEmail = readSecret(KEY_GLUCOSE_EMAIL),
         glucosePassword = readSecret(KEY_GLUCOSE_PASSWORD),
+        backupPassword = readSecret(KEY_BACKUP_PASSWORD),
         glucoseMmol = prefs.getBoolean(KEY_GLUCOSE_MMOL, false),
         glucoseLow = prefs.getInt(KEY_GLUCOSE_LOW, 70),
         glucoseHigh = prefs.getInt(KEY_GLUCOSE_HIGH, 180),
@@ -508,6 +552,9 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_DATE_FORMAT, s.dateFormat)
             .putInt(KEY_HEADER_TEXT, s.headerTextSp)
             .putString(KEY_FULLSCREEN, s.fullscreenMode)
+            .putBoolean(KEY_AVOID_CUTOUT, s.avoidCutout)
+            .putInt(KEY_EXTRA_TOP, s.extraTopPaddingDp)
+            .putBoolean(KEY_BACKUP_PERSONAL, s.backupIncludePersonal)
             .putString(KEY_CLOCK_WEIGHT, s.clockWeight)
             .putString(KEY_DRAWER_LAYOUT, s.drawerLayout)
             .putInt(KEY_DRAWER_ICON, s.drawerIconDp)
@@ -553,6 +600,7 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_GLUCOSE_ON, s.glucoseEnabled)
             .putString(KEY_GLUCOSE_EMAIL, sealSecret(s.glucoseEmail))
             .putString(KEY_GLUCOSE_PASSWORD, sealSecret(s.glucosePassword))
+            .putString(KEY_BACKUP_PASSWORD, sealSecret(s.backupPassword))
             .putBoolean(KEY_GLUCOSE_MMOL, s.glucoseMmol)
             .putInt(KEY_GLUCOSE_LOW, s.glucoseLow)
             .putInt(KEY_GLUCOSE_HIGH, s.glucoseHigh)
@@ -726,6 +774,10 @@ class LauncherPrefs(context: Context) {
         const val KEY_DATE_FORMAT = "date_format"
         const val KEY_HEADER_TEXT = "header_text_sp"
         const val KEY_FULLSCREEN = "fullscreen_mode"
+        const val KEY_AVOID_CUTOUT = "avoid_cutout"
+        const val KEY_BACKUP_PASSWORD = "backup_password"
+        const val KEY_EXTRA_TOP = "extra_top_padding"
+        const val KEY_BACKUP_PERSONAL = "backup_personal"
         const val KEY_CLOCK_WEIGHT = "clock_weight"
         const val KEY_DRAWER_LAYOUT = "drawer_layout"
         const val KEY_DRAWER_ICON = "drawer_icon_dp"
@@ -833,8 +885,18 @@ class LauncherPrefs(context: Context) {
         const val KEY_AUTO_DOWNLOAD = "auto_download_updates"
         const val KEY_DISMISSED_UPDATE = "dismissed_update"
         /** Credentials, places and live state: never written to a backup file, and a restore leaves them alone. */
-        private val SECRET_CREDENTIAL_KEYS = listOf(KEY_UPDATE_TOKEN, KEY_GLUCOSE_EMAIL, KEY_GLUCOSE_PASSWORD)
-        val SECRET_KEYS = setOf(KEY_UPDATE_TOKEN, KEY_GLUCOSE_EMAIL, KEY_GLUCOSE_PASSWORD, KEY_DESTINATIONS, KEY_HOME_ADDRESS, KEY_WORK_ADDRESS, KEY_CAR_WAS_OPEN, KEY_CALL_CONTACTS, KEY_CAR_BT_DEVICES, KEY_AUTO_BACKUP_FOLDER, KEY_LAST_BACKUP, KEY_FOCUS_SNOOZE)
+        private val SECRET_CREDENTIAL_KEYS = listOf(KEY_UPDATE_TOKEN, KEY_GLUCOSE_EMAIL, KEY_GLUCOSE_PASSWORD, KEY_BACKUP_PASSWORD)
+        /** Logins: never written to a backup in plain form (see [BackupVault] for the password-protected copy). */
+        private val CREDENTIAL_KEYS = setOf(KEY_UPDATE_TOKEN, KEY_GLUCOSE_EMAIL, KEY_GLUCOSE_PASSWORD, KEY_BACKUP_PASSWORD)
+
+        /** State that only makes sense on this phone right now, so a backup leaves it out. */
+        private val DEVICE_KEYS = setOf(KEY_CAR_WAS_OPEN, KEY_AUTO_BACKUP_FOLDER, KEY_LAST_BACKUP, KEY_FOCUS_SNOOZE)
+
+        /** Personal places and people: in a backup unless the user switched that off. */
+        private val PERSONAL_KEYS = setOf(KEY_DESTINATIONS, KEY_HOME_ADDRESS, KEY_WORK_ADDRESS, KEY_CALL_CONTACTS, KEY_CAR_BT_DEVICES)
+
+        /** Never exported or imported as plain values. */
+        val SECRET_KEYS = CREDENTIAL_KEYS + DEVICE_KEYS
         const val KEY_ANCHOR_BOTTOM = "anchor_bottom"
         const val KEY_SHOW_ICONS = "show_icons"
         const val KEY_SHOW_SEARCH_BUTTON = "show_search_button"

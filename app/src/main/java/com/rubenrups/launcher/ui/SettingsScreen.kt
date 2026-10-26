@@ -68,6 +68,7 @@ import com.rubenrups.launcher.data.DashboardModules
 import com.rubenrups.launcher.data.GestureActions
 import com.rubenrups.launcher.data.HeaderItems
 import com.rubenrups.launcher.data.HomeRecentsAlign
+import com.rubenrups.launcher.data.LauncherPrefs
 import com.rubenrups.launcher.data.LauncherSettings
 import com.rubenrups.launcher.data.UpdateChecker
 import com.rubenrups.launcher.data.UpdateState
@@ -191,7 +192,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
         Modifier
             .fillMaxSize()
             .background(Color(0xF00B0D10))
-            .windowInsetsPadding(WindowInsets.systemBars),
+            .windowInsetsPadding(launcherInsets()),
     ) {
         Crossfade(targetState = page, label = "settingsPage") { current ->
             val scroll = rememberScrollState()
@@ -590,7 +591,15 @@ private fun AppearancePage(viewModel: LauncherViewModel, settings: LauncherSetti
         ChoiceRow("Off", selected = settings.fullscreenMode == "off") { viewModel.update { it.copy(fullscreenMode = "off") } }
         ChoiceRow("Hide the status bar", selected = settings.fullscreenMode == "status") { viewModel.update { it.copy(fullscreenMode = "status") } }
         ChoiceRow("Hide the status and navigation bars", selected = settings.fullscreenMode == "both") { viewModel.update { it.copy(fullscreenMode = "both") } }
-        Hint("Swipe in from the screen edge to show the bars for a moment. Phones with a camera notch may keep a thin black strip at the top. Other apps are not affected.")
+        SwitchRow(
+            "Keep clear of the camera cut-out",
+            settings.avoidCutout,
+            subtitle = "Pushes content away from a punch-hole camera or notch",
+        ) { v -> viewModel.update { it.copy(avoidCutout = v) } }
+        SliderRow("Extra top padding", "${settings.extraTopPaddingDp} dp", settings.extraTopPaddingDp.toFloat(), 0f..100f) { v ->
+            viewModel.update { it.copy(extraTopPaddingDp = v.roundToInt()) }
+        }
+        Hint("Swipe in from the screen edge to show the bars for a moment. The extra padding is added on top of the cut-out and applies on every screen of the launcher. Other apps are not affected.")
     }
     Group("Motion") {
         SwitchRow(
@@ -958,7 +967,11 @@ private fun BackupPage(viewModel: LauncherViewModel, settings: LauncherSettings,
             val saved = runCatching {
                 context.contentResolver.openOutputStream(uri)?.use { it.write(viewModel.backupJson().toByteArray()) }
             }.isSuccess
-            backupStatus = if (saved) "Backup saved." else "Could not save the backup."
+            backupStatus = when {
+                !saved -> "Could not save the backup."
+                settings.backupPassword.isNotEmpty() -> "Backup saved, with your logins protected by your backup password."
+                else -> "Backup saved (without logins)."
+            }
         }
     }
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -966,10 +979,15 @@ private fun BackupPage(viewModel: LauncherViewModel, settings: LauncherSettings,
             val text = runCatching {
                 context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
             }.getOrNull()
-            backupStatus = if (text != null && viewModel.restoreBackup(text)) {
-                "Backup restored."
-            } else {
-                "That file is not a Rups Launcher backup."
+            val result = text?.let { viewModel.restoreBackup(it) }
+            backupStatus = when (result) {
+                null -> "That file is not a Rups Launcher backup."
+                LauncherPrefs.LoginsResult.RESTORED -> "Backup restored, including your logins."
+                LauncherPrefs.LoginsResult.NEEDS_PASSWORD ->
+                    "Backup restored. It has saved logins: type its password in the backup password field and restore again to get them back."
+                LauncherPrefs.LoginsResult.WRONG_PASSWORD ->
+                    "Backup restored, but that password did not open the saved logins. Check it and restore again."
+                LauncherPrefs.LoginsResult.NOT_IN_FILE -> "Backup restored."
             }
         }
     }
@@ -980,10 +998,23 @@ private fun BackupPage(viewModel: LauncherViewModel, settings: LauncherSettings,
         Hint("Home app, notification access, update permission and calendar, step by step.")
     }
     Group("Backup") {
+        SwitchRow(
+            "Include places, contacts and car Bluetooth devices",
+            settings.backupIncludePersonal,
+            subtitle = "Navigation places, Home / Work addresses, call contacts. Applies to automatic backups too.",
+        ) { v -> viewModel.update { it.copy(backupIncludePersonal = v) } }
+        Field(settings.backupPassword, "Backup password for saved logins (optional)", password = true) { v ->
+            viewModel.update { it.copy(backupPassword = v) }
+        }
         NavRow("Save a backup file") { exportLauncher.launch("rups-launcher-backup.json") }
         NavRow("Restore from a backup file") { importLauncher.launch(arrayOf("*/*")) }
         backupStatus?.let { Hint(it) }
-        Hint("Favourites, folders, hidden apps and settings. Logins and the GitHub token are never included.")
+        Hint(
+            "A backup holds favourites, folders, hidden apps and settings. Set a backup password once and every backup, " +
+                "automatic ones included, also carries your LibreLinkUp login and GitHub token, encrypted with it. The " +
+                "password is kept (encrypted) on this phone and is not in the file. Write it down somewhere safe: on a new " +
+                "phone you type it here before restoring, and it can't be recovered. Changing it only affects later backups."
+        )
     }
     AutoBackupGroup(viewModel, settings)
     Group("Updates") {
@@ -1263,7 +1294,7 @@ private fun AutoBackupGroup(viewModel: LauncherViewModel, settings: LauncherSett
         if (settings.lastBackupMs > 0) {
             Hint("Last backup: " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(settings.lastBackupMs)))
         }
-        Hint("Runs while the launcher is on screen, keeps the newest 5 files, and never includes your logins.")
+        Hint("Runs while the launcher is on screen and keeps the newest 5 files. Your logins are included, encrypted, only if you have set a backup password under Save a backup file.")
     }
 }
 

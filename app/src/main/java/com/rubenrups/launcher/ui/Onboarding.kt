@@ -177,7 +177,7 @@ fun OnboardingScreen(viewModel: LauncherViewModel, onFinish: () -> Unit) {
         Modifier
             .fillMaxSize()
             .background(Color(0xFF0B0D10))
-            .windowInsetsPadding(WindowInsets.systemBars)
+            .windowInsetsPadding(launcherInsets())
             .padding(horizontal = 28.dp, vertical = 16.dp),
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {

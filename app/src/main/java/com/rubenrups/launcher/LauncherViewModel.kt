@@ -18,6 +18,7 @@ import android.app.Activity
 import android.appwidget.AppWidgetProviderInfo
 import com.rubenrups.launcher.data.AppRepository
 import com.rubenrups.launcher.data.IconPack
+import com.rubenrups.launcher.data.LauncherPrefs
 import com.rubenrups.launcher.data.LauncherPrefsHolder
 import com.rubenrups.launcher.data.Destination
 import com.rubenrups.launcher.data.BackupScheduler
@@ -329,7 +330,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun backupJson(): String = prefs.exportJson()
 
-    fun restoreBackup(json: String): Boolean = prefs.importJson(json)
+    /** Null when the file is not one of our backups; otherwise what happened to its saved logins. */
+    fun restoreBackup(json: String): LauncherPrefs.LoginsResult? = prefs.importJson(json, prefs.settings.value.backupPassword)
 
     fun setSettingsOpen(open: Boolean) { _settingsOpen.value = open }
 
