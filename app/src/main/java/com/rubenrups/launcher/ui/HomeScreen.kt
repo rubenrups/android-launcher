@@ -263,14 +263,14 @@ private fun HomeContent(
             }
             rows.coerceIn(1, MIN_FAVOURITE_ROWS)
         }
-        val bars = WindowInsets.systemBars.asPaddingValues()
+        val bars = launcherInsets().asPaddingValues()
         val topSectionMax = (maxHeight - bars.calculateTopPadding() - bars.calculateBottomPadding() - 32.dp -
             rowHeightForMin * favouriteRows - 16.dp - recentsReserve).coerceAtLeast(120.dp)
         val topScroll = rememberScrollState()
         Column(
             Modifier
                 .fillMaxSize()
-                .windowInsetsPadding(WindowInsets.systemBars)
+                .windowInsetsPadding(launcherInsets())
                 // Long-press on empty space opens settings (child rows consume their own presses).
                 .pointerInput(editMode) {
                     if (editMode) return@pointerInput
@@ -537,7 +537,7 @@ private fun HomeContent(
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier
                     .align(alignment)
-                    .windowInsetsPadding(WindowInsets.systemBars)
+                    .windowInsetsPadding(launcherInsets())
                     .padding(horizontal = 20.dp, vertical = if (h.dir == SwipeDir.UP) 96.dp else 24.dp)
                     .alpha(0.35f + 0.65f * h.progress)
                     .background(if (h.armed) Color.White else Color.Black.copy(alpha = 0.55f), RoundedCornerShape(50))
@@ -614,7 +614,7 @@ private fun HomeContent(
                 settings = settings,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .windowInsetsPadding(WindowInsets.systemBars)
+                    .windowInsetsPadding(launcherInsets())
                     .padding(bottom = settings.homeRecentsBottomDp.dp),
             )
         }
@@ -624,7 +624,7 @@ private fun HomeContent(
                 onClick = { onOpenDrawer(true) },
                 modifier = Modifier
                     .align(if (settings.alignEnd) Alignment.BottomStart else Alignment.BottomEnd)
-                    .windowInsetsPadding(WindowInsets.systemBars)
+                    .windowInsetsPadding(launcherInsets())
                     .padding(24.dp),
             )
         }

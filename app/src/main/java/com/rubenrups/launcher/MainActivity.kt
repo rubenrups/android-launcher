@@ -8,6 +8,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.core.view.WindowCompat
@@ -16,6 +17,8 @@ import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.Lifecycle
 import com.rubenrups.launcher.ui.LauncherApp
+import com.rubenrups.launcher.ui.LocalAvoidCutout
+import com.rubenrups.launcher.ui.LocalExtraTopDp
 import com.rubenrups.launcher.ui.LauncherTheme
 
 class MainActivity : ComponentActivity() {
@@ -92,7 +95,12 @@ class MainActivity : ComponentActivity() {
                 applyFullscreen()
             }
             LauncherTheme(settings.accentColor, settings.fontFamily) {
-                LauncherApp(viewModel)
+                CompositionLocalProvider(
+                    LocalAvoidCutout provides settings.avoidCutout,
+                    LocalExtraTopDp provides settings.extraTopPaddingDp,
+                ) {
+                    LauncherApp(viewModel)
+                }
             }
         }
     }

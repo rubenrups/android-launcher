@@ -212,7 +212,7 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
             // Tapping empty space closes it (cards swallow their own taps, see Card).
             .background(Color(0xFF0F1215).copy(alpha = settings.dashboardOpacity / 100f))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)
-            .windowInsetsPadding(WindowInsets.systemBars)
+            .windowInsetsPadding(launcherInsets())
             // Swipes run the actions set in settings. Watched without consuming anything, so cards and scrolling still work.
             .pointerInput(Unit) {
                 awaitEachGesture {

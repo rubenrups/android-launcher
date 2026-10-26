@@ -175,7 +175,7 @@ fun AppDrawer(
         Modifier
             .fillMaxSize()
             .background(Color.Black.copy(alpha = settings.drawerOpacity / 100f))
-            .windowInsetsPadding(WindowInsets.systemBars)
+            .windowInsetsPadding(launcherInsets())
             .imePadding(),
     ) {
         Column(Modifier.fillMaxSize()) {
