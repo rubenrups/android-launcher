@@ -962,16 +962,14 @@ private fun AppsPage(viewModel: LauncherViewModel, settings: LauncherSettings, o
 private fun BackupPage(viewModel: LauncherViewModel, settings: LauncherSettings, update: UpdateState) {
     val context = LocalContext.current
     var backupStatus by remember { mutableStateOf<String?>(null) }
-    // Not saved anywhere: it protects the logins in a backup file, so you type it again to restore them.
-    var backupPassword by remember { mutableStateOf("") }
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) {
             val saved = runCatching {
-                context.contentResolver.openOutputStream(uri)?.use { it.write(viewModel.backupJson(backupPassword).toByteArray()) }
+                context.contentResolver.openOutputStream(uri)?.use { it.write(viewModel.backupJson().toByteArray()) }
             }.isSuccess
             backupStatus = when {
                 !saved -> "Could not save the backup."
-                backupPassword.isNotEmpty() -> "Backup saved, with your logins protected by the password."
+                settings.backupPassword.isNotEmpty() -> "Backup saved, with your logins protected by your backup password."
                 else -> "Backup saved (without logins)."
             }
         }
@@ -981,12 +979,12 @@ private fun BackupPage(viewModel: LauncherViewModel, settings: LauncherSettings,
             val text = runCatching {
                 context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
             }.getOrNull()
-            val result = text?.let { viewModel.restoreBackup(it, backupPassword) }
+            val result = text?.let { viewModel.restoreBackup(it) }
             backupStatus = when (result) {
                 null -> "That file is not a Rups Launcher backup."
                 LauncherPrefs.LoginsResult.RESTORED -> "Backup restored, including your logins."
                 LauncherPrefs.LoginsResult.NEEDS_PASSWORD ->
-                    "Backup restored. It has saved logins: type its password below and restore again to get them back."
+                    "Backup restored. It has saved logins: type its password in the backup password field and restore again to get them back."
                 LauncherPrefs.LoginsResult.WRONG_PASSWORD ->
                     "Backup restored, but that password did not open the saved logins. Check it and restore again."
                 LauncherPrefs.LoginsResult.NOT_IN_FILE -> "Backup restored."
@@ -1005,14 +1003,17 @@ private fun BackupPage(viewModel: LauncherViewModel, settings: LauncherSettings,
             settings.backupIncludePersonal,
             subtitle = "Navigation places, Home / Work addresses, call contacts. Applies to automatic backups too.",
         ) { v -> viewModel.update { it.copy(backupIncludePersonal = v) } }
-        Field(backupPassword, "Password for saved logins (optional)", password = true) { v -> backupPassword = v }
+        Field(settings.backupPassword, "Backup password for saved logins (optional)", password = true) { v ->
+            viewModel.update { it.copy(backupPassword = v) }
+        }
         NavRow("Save a backup file") { exportLauncher.launch("rups-launcher-backup.json") }
         NavRow("Restore from a backup file") { importLauncher.launch(arrayOf("*/*")) }
         backupStatus?.let { Hint(it) }
         Hint(
-            "A backup holds favourites, folders, hidden apps and settings. Your LibreLinkUp login and GitHub token go in " +
-                "only if you type a password above, and then only encrypted with it. Remember the password: it can't " +
-                "be recovered. Automatic backups never contain logins."
+            "A backup holds favourites, folders, hidden apps and settings. Set a backup password once and every backup, " +
+                "automatic ones included, also carries your LibreLinkUp login and GitHub token, encrypted with it. The " +
+                "password is kept (encrypted) on this phone and is not in the file. Write it down somewhere safe: on a new " +
+                "phone you type it here before restoring, and it can't be recovered. Changing it only affects later backups."
         )
     }
     AutoBackupGroup(viewModel, settings)
@@ -1293,7 +1294,7 @@ private fun AutoBackupGroup(viewModel: LauncherViewModel, settings: LauncherSett
         if (settings.lastBackupMs > 0) {
             Hint("Last backup: " + java.text.DateFormat.getDateTimeInstance().format(java.util.Date(settings.lastBackupMs)))
         }
-        Hint("Runs while the launcher is on screen, keeps the newest 5 files, and never includes your logins.")
+        Hint("Runs while the launcher is on screen and keeps the newest 5 files. Your logins are included, encrypted, only if you have set a backup password under Save a backup file.")
     }
 }
 

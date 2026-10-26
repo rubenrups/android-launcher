@@ -170,6 +170,8 @@ data class LauncherSettings(
     /** LibreLinkUp follower login. Stored on this device only and never exported. */
     val glucoseEmail: String = "",
     val glucosePassword: String = "",
+    /** Protects the logins inside backup files (typed once; stored encrypted on this phone, never in a backup). */
+    val backupPassword: String = "",
     val glucoseMmol: Boolean = false,
     /** Thresholds in mg/dL: below [glucoseLow] or above [glucoseHigh] the value is coloured. */
     val glucoseLow: Int = 70,
@@ -307,10 +309,10 @@ class LauncherPrefs(context: Context) {
 
     /**
      * Everything the user set up (favourites, folders, hidden apps, every setting), as JSON.
-     * Logins are left out unless a [password] is given: then they go in as one encrypted block (see [BackupVault]),
+     * Logins are left out unless a [password] is given (by default the one saved in settings): then they go in as one encrypted block (see [BackupVault]),
      * because a backup file is easy to share or lose by accident.
      */
-    fun exportJson(password: String = "", includePersonal: Boolean = _settings.value.backupIncludePersonal): String {
+    fun exportJson(password: String = _settings.value.backupPassword, includePersonal: Boolean = _settings.value.backupIncludePersonal): String {
         val out = JSONObject().put("_format", BACKUP_FORMAT)
         prefs.all.forEach { (key, value) ->
             if (key in SECRET_KEYS || value == null) return@forEach
@@ -457,6 +459,7 @@ class LauncherPrefs(context: Context) {
         glucoseEnabled = prefs.getBoolean(KEY_GLUCOSE_ON, false),
         glucoseEmail = readSecret(KEY_GLUCOSE_EMAIL),
         glucosePassword = readSecret(KEY_GLUCOSE_PASSWORD),
+        backupPassword = readSecret(KEY_BACKUP_PASSWORD),
         glucoseMmol = prefs.getBoolean(KEY_GLUCOSE_MMOL, false),
         glucoseLow = prefs.getInt(KEY_GLUCOSE_LOW, 70),
         glucoseHigh = prefs.getInt(KEY_GLUCOSE_HIGH, 180),
@@ -597,6 +600,7 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_GLUCOSE_ON, s.glucoseEnabled)
             .putString(KEY_GLUCOSE_EMAIL, sealSecret(s.glucoseEmail))
             .putString(KEY_GLUCOSE_PASSWORD, sealSecret(s.glucosePassword))
+            .putString(KEY_BACKUP_PASSWORD, sealSecret(s.backupPassword))
             .putBoolean(KEY_GLUCOSE_MMOL, s.glucoseMmol)
             .putInt(KEY_GLUCOSE_LOW, s.glucoseLow)
             .putInt(KEY_GLUCOSE_HIGH, s.glucoseHigh)
@@ -771,6 +775,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_HEADER_TEXT = "header_text_sp"
         const val KEY_FULLSCREEN = "fullscreen_mode"
         const val KEY_AVOID_CUTOUT = "avoid_cutout"
+        const val KEY_BACKUP_PASSWORD = "backup_password"
         const val KEY_EXTRA_TOP = "extra_top_padding"
         const val KEY_BACKUP_PERSONAL = "backup_personal"
         const val KEY_CLOCK_WEIGHT = "clock_weight"
@@ -880,9 +885,9 @@ class LauncherPrefs(context: Context) {
         const val KEY_AUTO_DOWNLOAD = "auto_download_updates"
         const val KEY_DISMISSED_UPDATE = "dismissed_update"
         /** Credentials, places and live state: never written to a backup file, and a restore leaves them alone. */
-        private val SECRET_CREDENTIAL_KEYS = listOf(KEY_UPDATE_TOKEN, KEY_GLUCOSE_EMAIL, KEY_GLUCOSE_PASSWORD)
+        private val SECRET_CREDENTIAL_KEYS = listOf(KEY_UPDATE_TOKEN, KEY_GLUCOSE_EMAIL, KEY_GLUCOSE_PASSWORD, KEY_BACKUP_PASSWORD)
         /** Logins: never written to a backup in plain form (see [BackupVault] for the password-protected copy). */
-        private val CREDENTIAL_KEYS = setOf(KEY_UPDATE_TOKEN, KEY_GLUCOSE_EMAIL, KEY_GLUCOSE_PASSWORD)
+        private val CREDENTIAL_KEYS = setOf(KEY_UPDATE_TOKEN, KEY_GLUCOSE_EMAIL, KEY_GLUCOSE_PASSWORD, KEY_BACKUP_PASSWORD)
 
         /** State that only makes sense on this phone right now, so a backup leaves it out. */
         private val DEVICE_KEYS = setOf(KEY_CAR_WAS_OPEN, KEY_AUTO_BACKUP_FOLDER, KEY_LAST_BACKUP, KEY_FOCUS_SNOOZE)
