@@ -209,9 +209,30 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
     Column(
         Modifier
             .fillMaxSize()
-            // Tapping empty space closes it (cards swallow their own taps, see Card).
             .background(Color(0xFF0F1215).copy(alpha = settings.dashboardOpacity / 100f))
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose)
+            // Tapping empty space closes it (cards swallow their own taps, see Card). A double or triple tap runs its
+            // own action when one is set; the close then waits a moment to be sure it was a single tap.
+            .multiTap(
+                enabled = true,
+                maxTaps = {
+                    val s = currentSettings
+                    if (s.carTripleTapAction.isNotBlank()) 3 else if (s.carDoubleTapAction.isNotBlank()) 2 else 1
+                },
+                onLongPress = {},
+                onTaps = { count, _ ->
+                    val s = currentSettings
+                    when (count) {
+                        1 -> onClose()
+                        else -> {
+                            val action = if (count == 2) s.carDoubleTapAction else s.carTripleTapAction
+                            if (action.isNotBlank()) {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                runCarAction(action, viewModel, context)
+                            }
+                        }
+                    }
+                },
+            )
             .windowInsetsPadding(launcherInsets())
             // Swipes run the actions set in settings. Watched without consuming anything, so cards and scrolling still work.
             .pointerInput(Unit) {

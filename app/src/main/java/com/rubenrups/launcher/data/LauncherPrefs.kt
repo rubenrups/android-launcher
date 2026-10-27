@@ -174,6 +174,9 @@ data class LauncherSettings(
     val swipeRightApp: String = "",
     /** What a double tap on empty home-screen space does: a [GestureActions] key or an app key; empty = nothing. */
     val doubleTapAction: String = "",
+    val tripleTapAction: String = "",
+    /** Long-press on empty home-screen space. The home menu holds the way into settings, so keep a route to it. */
+    val holdAction: String = GestureActions.MENU,
     val glucoseEnabled: Boolean = false,
     /** LibreLinkUp follower login. Stored on this device only and never exported. */
     val glucoseEmail: String = "",
@@ -269,6 +272,8 @@ data class LauncherSettings(
     val carSwipeDown: String = GestureActions.CLOSE,
     val carSwipeLeft: String = GestureActions.NEXT,
     val carSwipeRight: String = GestureActions.PREVIOUS,
+    val carDoubleTapAction: String = GestureActions.NONE,
+    val carTripleTapAction: String = GestureActions.NONE,
     /** Places for the car-mode navigation buttons. Personal, so never exported in a backup. */
     val destinations: List<Destination> = emptyList(),
     val autoCheckUpdates: Boolean = true,
@@ -469,6 +474,8 @@ class LauncherPrefs(context: Context) {
         swipeLeftApp = prefs.getString(KEY_SWIPE_LEFT, "").orEmpty(),
         swipeRightApp = prefs.getString(KEY_SWIPE_RIGHT, "").orEmpty(),
         doubleTapAction = prefs.getString(KEY_DOUBLE_TAP, "").orEmpty(),
+        tripleTapAction = prefs.getString(KEY_TRIPLE_TAP, "").orEmpty(),
+        holdAction = prefs.getString(KEY_HOLD, GestureActions.MENU).orEmpty(),
         glucoseEnabled = prefs.getBoolean(KEY_GLUCOSE_ON, false),
         glucoseEmail = readSecret(KEY_GLUCOSE_EMAIL),
         glucosePassword = readSecret(KEY_GLUCOSE_PASSWORD),
@@ -531,6 +538,8 @@ class LauncherPrefs(context: Context) {
         carSwipeDown = prefs.getString(KEY_CAR_DOWN, GestureActions.CLOSE).orEmpty(),
         carSwipeLeft = prefs.getString(KEY_CAR_LEFT, GestureActions.NEXT).orEmpty(),
         carSwipeRight = prefs.getString(KEY_CAR_RIGHT, GestureActions.PREVIOUS).orEmpty(),
+        carDoubleTapAction = prefs.getString(KEY_CAR_DOUBLE, "").orEmpty(),
+        carTripleTapAction = prefs.getString(KEY_CAR_TRIPLE, "").orEmpty(),
         destinations = loadDestinations(),
         autoCheckUpdates = prefs.getBoolean(KEY_AUTO_CHECK, true),
         updateCheckMinutes = prefs.getInt(KEY_UPDATE_MINUTES, 180),
@@ -615,6 +624,8 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_SWIPE_LEFT, s.swipeLeftApp)
             .putString(KEY_SWIPE_RIGHT, s.swipeRightApp)
             .putString(KEY_DOUBLE_TAP, s.doubleTapAction)
+            .putString(KEY_TRIPLE_TAP, s.tripleTapAction)
+            .putString(KEY_HOLD, s.holdAction)
             .putBoolean(KEY_GLUCOSE_ON, s.glucoseEnabled)
             .putString(KEY_GLUCOSE_EMAIL, sealSecret(s.glucoseEmail))
             .putString(KEY_GLUCOSE_PASSWORD, sealSecret(s.glucosePassword))
@@ -676,6 +687,8 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_CAR_DOWN, s.carSwipeDown)
             .putString(KEY_CAR_LEFT, s.carSwipeLeft)
             .putString(KEY_CAR_RIGHT, s.carSwipeRight)
+            .putString(KEY_CAR_DOUBLE, s.carDoubleTapAction)
+            .putString(KEY_CAR_TRIPLE, s.carTripleTapAction)
             .putString(KEY_DESTINATIONS, encodeDestinations(s.destinations))
             .putBoolean(KEY_AUTO_CHECK, s.autoCheckUpdates)
             .putInt(KEY_UPDATE_MINUTES, s.updateCheckMinutes)
@@ -839,6 +852,10 @@ class LauncherPrefs(context: Context) {
         const val KEY_SWIPE_LEFT = "swipe_left_app"
         const val KEY_SWIPE_RIGHT = "swipe_right_app"
         const val KEY_DOUBLE_TAP = "double_tap_action"
+        const val KEY_TRIPLE_TAP = "triple_tap_action"
+        const val KEY_HOLD = "hold_action"
+        const val KEY_CAR_DOUBLE = "car_double_tap"
+        const val KEY_CAR_TRIPLE = "car_triple_tap"
         const val KEY_GLUCOSE_ON = "glucose_enabled"
         const val KEY_GLUCOSE_EMAIL = "glucose_email"
         const val KEY_GLUCOSE_PASSWORD = "glucose_password"

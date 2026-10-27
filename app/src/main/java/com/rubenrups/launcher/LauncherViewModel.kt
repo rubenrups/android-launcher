@@ -325,18 +325,19 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             setDashboardOpen(true, from)
             return
         }
-        if (key == GestureActions.LOCK) {
-            lockPhone()
-            return
+        when (key) {
+            GestureActions.SETTINGS -> { setSettingsOpen(true); return }
+            GestureActions.FLASHLIGHT -> { Flashlight.toggle(getApplication()); return }
+            in GestureActions.needsAccessibility -> { systemAction(key); return }
         }
         repository.apps.value.firstOrNull { it.key == key }?.let { launch(it) }
     }
 
-    /** Locks the screen through the accessibility service; if that is not switched on yet, opens its settings. */
-    private fun lockPhone() {
-        if (LockScreenService.lock()) return
+    /** Runs an action through the accessibility service; if that is not switched on yet, opens its settings. */
+    private fun systemAction(key: String) {
+        if (GestureService.perform(key)) return
         val context = getApplication<Application>()
-        android.widget.Toast.makeText(context, "Switch on Rups Launcher: lock phone under Accessibility", android.widget.Toast.LENGTH_LONG).show()
+        android.widget.Toast.makeText(context, "Switch on Rups Launcher: system gestures under Accessibility", android.widget.Toast.LENGTH_LONG).show()
         context.startActivity(
             android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
         )
