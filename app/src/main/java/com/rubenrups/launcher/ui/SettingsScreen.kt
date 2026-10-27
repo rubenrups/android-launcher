@@ -62,6 +62,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
+import com.rubenrups.launcher.GestureService
 import com.rubenrups.launcher.data.AppInfo
 import com.rubenrups.launcher.data.CalendarReader
 import com.rubenrups.launcher.data.DashboardModules
@@ -266,8 +267,26 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
 
     if (pickWidget) WidgetPickerDialog(viewModel, onDismiss = { pickWidget = false })
 
+    val chooserContext = LocalContext.current
     chooser?.let { side ->
         fun set(key: String) {
+            val next = when (side) {
+                "up" -> settings.copy(swipeUp = key)
+                "down" -> settings.copy(swipeDown = key)
+                "left" -> settings.copy(swipeLeftApp = key)
+                "right" -> settings.copy(swipeRightApp = key)
+                "doubleTap" -> settings.copy(doubleTapAction = key)
+                "tripleTap" -> settings.copy(tripleTapAction = key)
+                "hold" -> settings.copy(holdAction = key)
+                else -> settings
+            }
+            // The home menu or the launcher settings must stay one gesture away, or you could lock yourself out of settings.
+            if (!GestureActions.reachesSettings(next)) {
+                android.widget.Toast.makeText(
+                    chooserContext, "Keep one gesture on Home menu or Launcher settings", android.widget.Toast.LENGTH_LONG,
+                ).show()
+                return
+            }
             viewModel.update {
                 when (side) {
                     "up" -> it.copy(swipeUp = key)
@@ -275,6 +294,10 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                     "left" -> it.copy(swipeLeftApp = key)
                     "right" -> it.copy(swipeRightApp = key)
                     "doubleTap" -> it.copy(doubleTapAction = key)
+                    "tripleTap" -> it.copy(tripleTapAction = key)
+                    "hold" -> it.copy(holdAction = key)
+                    "carDouble" -> it.copy(carDoubleTapAction = key)
+                    "carTriple" -> it.copy(carTripleTapAction = key)
                     "carUp" -> it.copy(carSwipeUp = key)
                     "carDown" -> it.copy(carSwipeDown = key)
                     "carLeft" -> it.copy(carSwipeLeft = key)
@@ -292,6 +315,10 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                 "left" -> "Swipe left"
                 "right" -> "Swipe right"
                 "doubleTap" -> "Double tap"
+                "tripleTap" -> "Triple tap"
+                "hold" -> "Hold"
+                "carDouble" -> "Car mode: double tap"
+                "carTriple" -> "Car mode: triple tap"
                 "carUp" -> "Car mode: swipe up"
                 "carDown" -> "Car mode: swipe down"
                 "carLeft" -> "Car mode: swipe left"
@@ -304,7 +331,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
             onDismiss = { chooser = null },
             extras = when {
                 side == "glucose" || side == "carApp" -> emptyList()
-                side.startsWith("carUp") || side.startsWith("carDown") || side.startsWith("carLeft") || side.startsWith("carRight") -> GestureActions.carBuiltIn.map { (key, label) -> label to key }
+                side.startsWith("car") -> GestureActions.carBuiltIn.map { (key, label) -> label to key }
                 else -> GestureActions.builtIn.map { (key, label) -> label to key }
             },
             onPickExtra = { key -> set(key) },
@@ -654,7 +681,25 @@ private fun GesturesPage(settings: LauncherSettings, apps: List<AppInfo>, openCh
     }
     Group("Taps on the home screen") {
         NavRow("Double tap", labelFor(settings.doubleTapAction, apps)) { openChooser("doubleTap") }
-        Hint("Double-tap empty space on the home screen. Long-press still opens the home menu.")
+        NavRow("Triple tap", labelFor(settings.tripleTapAction, apps)) { openChooser("tripleTap") }
+        NavRow("Hold", labelFor(settings.holdAction, apps)) { openChooser("hold") }
+        Hint(
+            "On empty space on the home screen. With a triple tap set, a double tap waits a moment to be sure. " +
+                "Hold opens the home menu (with Settings in it) unless you change it; one gesture must always stay on " +
+                "Home menu or Launcher settings, so you can never lose the way in."
+        )
+    }
+    val context = LocalContext.current
+    Group("System actions") {
+        InfoRow("Lock, recents, quick settings…", if (GestureService.isEnabled) "Ready ✓" else "Needs accessibility access")
+        NavRow("Open accessibility settings") {
+            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+        Hint(
+            "Lock phone, Recent apps, Quick settings, Power menu and Screenshot are done by Android itself and need an " +
+                "accessibility service: switch on \"Rups Launcher: system gestures\" there. It reads nothing from the screen. " +
+                "Lock phone and Screenshot need Android 9 or newer. Flashlight and Launcher settings need nothing extra."
+        )
     }
 }
 
@@ -738,6 +783,8 @@ private fun DashboardPage(viewModel: LauncherViewModel, settings: LauncherSettin
         Hint("Open car mode from the long-press menu, a swipe (see Gestures), or a favourites button (see Home screen).")
     }
     Group("Swipes in car mode") {
+        NavRow("Double tap", labelFor(settings.carDoubleTapAction, apps)) { openChooser("carDouble") }
+        NavRow("Triple tap", labelFor(settings.carTripleTapAction, apps)) { openChooser("carTriple") }
         NavRow("Swipe up", labelFor(settings.carSwipeUp, apps)) { openChooser("carUp") }
         NavRow("Swipe down", labelFor(settings.carSwipeDown, apps)) { openChooser("carDown") }
         NavRow("Swipe left", labelFor(settings.carSwipeLeft, apps)) { openChooser("carLeft") }

@@ -238,6 +238,17 @@ private fun HomeContent(
     val currentOpenDrawer by rememberUpdatedState(onOpenDrawer)
     val currentDrawerDrag by rememberUpdatedState(onDrawerDrag)
     val currentDrawerRelease by rememberUpdatedState(onDrawerRelease)
+    // One place that runs a gesture action; the home menu opens where the finger was.
+    val runGesture: (String, Offset, DashboardEdge) -> Unit = { action, at, edge ->
+        when (action) {
+            GestureActions.NONE -> Unit
+            GestureActions.DRAWER -> currentOpenDrawer(false)
+            GestureActions.SEARCH -> currentOpenDrawer(true)
+            GestureActions.NOTIFICATIONS -> expandNotificationShade(context)
+            GestureActions.MENU -> homeMenuAt = at
+            else -> viewModel.launchByKey(action, edge)
+        }
+    }
 
     val homeRecents = remember(allApps, settings.recents, settings.showHomeRecents, settings.homeRecentsCount) {
         if (!settings.showHomeRecents) emptyList() else {
@@ -309,25 +320,26 @@ private fun HomeContent(
                 .fillMaxSize()
                 .windowInsetsPadding(launcherInsets())
                 .nestedScroll(overscrollUp)
-                // Long-press on empty space opens settings (child rows consume their own presses).
-                .pointerInput(editMode) {
-                    if (editMode) return@pointerInput
-                    detectTapGestures(
-                        onLongPress = { homeMenuAt = it },
-                        onDoubleTap = {
-                            val action = currentSettings.doubleTapAction
-                            if (action.isNotBlank()) {
-                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                when (action) {
-                                    GestureActions.DRAWER -> currentOpenDrawer(false)
-                                    GestureActions.SEARCH -> currentOpenDrawer(true)
-                                    GestureActions.NOTIFICATIONS -> expandNotificationShade(context)
-                                    else -> viewModel.launchByKey(action)
-                                }
-                            }
-                        },
-                    )
-                }
+                // Taps and a hold on empty space run the actions set in settings (child rows consume their own presses).
+                .multiTap(
+                    enabled = !editMode,
+                    maxTaps = {
+                        val s = currentSettings
+                        if (s.tripleTapAction.isNotBlank()) 3 else if (s.doubleTapAction.isNotBlank()) 2 else 1
+                    },
+                    onLongPress = { at -> runGesture(currentSettings.holdAction, at, DashboardEdge.NONE) },
+                    onTaps = { count, at ->
+                        val action = when (count) {
+                            2 -> currentSettings.doubleTapAction
+                            3 -> currentSettings.tripleTapAction
+                            else -> ""
+                        }
+                        if (action.isNotBlank()) {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            runGesture(action, at, DashboardEdge.NONE)
+                        }
+                    },
+                )
                 // Each direction runs the action chosen in settings. When swipe-up is the drawer, it follows the finger.
                 .pointerInput(editMode) {
                     if (editMode) return@pointerInput
@@ -404,12 +416,7 @@ private fun HomeContent(
                                         SwipeDir.DOWN -> DashboardEdge.TOP
                                         SwipeDir.UP -> DashboardEdge.BOTTOM
                                     }
-                                    when (action) {
-                                        GestureActions.DRAWER -> currentOpenDrawer(false)
-                                        GestureActions.SEARCH -> currentOpenDrawer(true)
-                                        GestureActions.NOTIFICATIONS -> expandNotificationShade(context)
-                                        else -> viewModel.launchByKey(action, edge)
-                                    }
+                                    runGesture(action, Offset(size.width / 2f, size.height / 2f), edge)
                                 }
                             }
                         },

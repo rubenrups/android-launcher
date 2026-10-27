@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="gesture_service_description">Lets launcher gestures lock the screen, open recent apps, quick settings or the power menu, and take a screenshot. Reads nothing from the screen.</string>
+</resources>
