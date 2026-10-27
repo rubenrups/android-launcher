@@ -62,6 +62,7 @@ import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
+import com.rubenrups.launcher.LockScreenService
 import com.rubenrups.launcher.data.AppInfo
 import com.rubenrups.launcher.data.CalendarReader
 import com.rubenrups.launcher.data.DashboardModules
@@ -655,6 +656,18 @@ private fun GesturesPage(settings: LauncherSettings, apps: List<AppInfo>, openCh
     Group("Taps on the home screen") {
         NavRow("Double tap", labelFor(settings.doubleTapAction, apps)) { openChooser("doubleTap") }
         Hint("Double-tap empty space on the home screen. Long-press still opens the home menu.")
+    }
+    val context = LocalContext.current
+    Group("Lock phone") {
+        InfoRow("Lock phone action", if (LockScreenService.isEnabled) "Ready ✓" else "Needs accessibility access")
+        NavRow("Open accessibility settings") {
+            context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+        Hint(
+            "\"Lock phone\" can be chosen for any swipe or the double tap. Android only allows locking from an app " +
+                "through an accessibility service: switch on \"Rups Launcher: lock phone\" there. It reads nothing from the screen. " +
+                "Needs Android 9 or newer. Fingerprint unlock keeps working."
+        )
     }
 }
 

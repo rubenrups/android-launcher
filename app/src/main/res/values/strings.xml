@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="lock_service_description">Lets the Lock phone gesture turn the screen off. Reads nothing from the screen.</string>
+</resources>

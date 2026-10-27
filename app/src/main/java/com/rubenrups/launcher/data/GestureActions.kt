@@ -10,6 +10,7 @@ object GestureActions {
     const val SEARCH = "action:search"
     const val NOTIFICATIONS = "action:notifications"
     const val DASHBOARD = "action:dashboard"
+    const val LOCK = "action:lock"
 
     // Only offered for swipes inside car mode.
     const val CLOSE = "action:close"
@@ -23,6 +24,7 @@ object GestureActions {
         SEARCH to "Search apps",
         NOTIFICATIONS to "Notification shade",
         DASHBOARD to "Car mode",
+        LOCK to "Lock phone",
     )
 
     /** What a swipe inside car mode can do (besides launching an app). */
@@ -34,6 +36,7 @@ object GestureActions {
         DRAWER to "App drawer",
         SEARCH to "Search apps",
         NOTIFICATIONS to "Notification shade",
+        LOCK to "Lock phone",
     )
 
     fun builtInLabel(key: String): String? =

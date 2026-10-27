@@ -99,5 +99,19 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+
+        <!-- Only used to lock the screen from a gesture; no events, no screen content -->
+        <service
+            android:name=".LockScreenService"
+            android:exported="false"
+            android:label="Rups Launcher: lock phone"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/lock_screen_service" />
+        </service>
     </application>
 </manifest>
