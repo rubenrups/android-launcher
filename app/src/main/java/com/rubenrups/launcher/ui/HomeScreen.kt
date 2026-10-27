@@ -76,6 +76,10 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.StrokeCap
@@ -269,10 +273,42 @@ private fun HomeContent(
         val topSectionMax = (maxHeight - bars.calculateTopPadding() - bars.calculateBottomPadding() - 32.dp -
             rowHeightForMin * favouriteRows - 16.dp - recentsReserve).coerceAtLeast(120.dp)
         val topScroll = rememberScrollState()
+        // A scrolling section swallows the swipe-up before the detector below sees it. Whatever the scroll
+        // cannot use (it is already at the end) is passed up here, so swiping up on a full page still opens the drawer.
+        val overscrollUp = remember {
+            object : NestedScrollConnection {
+                var pulled = 0f
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    if (pulled > 0f && available.y > 0f) {
+                        val back = minOf(pulled, available.y)
+                        pulled -= back
+                        currentDrawerDrag(pulled)
+                        return Offset(0f, back)
+                    }
+                    return Offset.Zero
+                }
+                override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                    if (source != NestedScrollSource.UserInput || available.y >= 0f || currentSettings.swipeUp != GestureActions.DRAWER) {
+                        return Offset.Zero
+                    }
+                    pulled += -available.y
+                    currentDrawerDrag(pulled)
+                    return Offset(0f, available.y)
+                }
+                override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
+                    if (pulled > 0f) {
+                        currentDrawerRelease(pulled > SWIPE_THRESHOLD_PX)
+                        pulled = 0f
+                    }
+                    return Velocity.Zero
+                }
+            }
+        }
         Column(
             Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(launcherInsets())
+                .nestedScroll(overscrollUp)
                 // Long-press on empty space opens settings (child rows consume their own presses).
                 .pointerInput(editMode) {
                     if (editMode) return@pointerInput
