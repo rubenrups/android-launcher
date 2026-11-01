@@ -203,7 +203,8 @@ private fun HomeContent(
     onOpenSettings: () -> Unit,
 ) {
     val context = LocalContext.current
-    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    // The home screen sees the settings with the active context profile laid over them.
+    val settings by viewModel.effectiveSettings.collectAsStateWithLifecycle()
     val favourites by viewModel.favourites.collectAsStateWithLifecycle()
     val notifications by NotificationStore.notifications.collectAsStateWithLifecycle()
     val media by NotificationStore.media.collectAsStateWithLifecycle()
@@ -650,6 +651,16 @@ private fun HomeContent(
                             onClick = {
                                 homeMenuAt = null
                                 if (focusActive) viewModel.pauseFocus(60) else viewModel.setFocusManual(true)
+                            },
+                        )
+                    }
+                    if (settings.profiles.isNotEmpty()) {
+                        val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
+                        DropdownMenuItem(
+                            text = { Text("Switch profile" + (activeProfile?.let { " (${it.name})" } ?: "")) },
+                            onClick = {
+                                homeMenuAt = null
+                                viewModel.cycleProfile()
                             },
                         )
                     }

@@ -85,6 +85,7 @@ private enum class Page(val title: String, val icon: String) {
     GESTURES("Gestures", "👆"),
     DRAWER("App drawer", "🗂️"),
     FOCUS("Focus mode", "🎯"),
+    PROFILES("Profiles", "🎭"),
     GLUCOSE("Glucose", "🩸"),
     DASHBOARD("Car mode", "🚗"),
     NOTIFICATIONS("Notifications & media", "🔔"),
@@ -124,6 +125,7 @@ private val SearchIndex = listOf(
     SettingHit("Font", Page.APPEARANCE, "typeface theme serif mono"),
     SettingHit("Icon pack", Page.APPEARANCE, "theme nova adw"),
     SettingHit("Focus mode", Page.FOCUS, "hide apps distraction schedule work"),
+    SettingHit("Profiles", Page.PROFILES, "context work home night car charging bluetooth schedule favourites switch"),
     SettingHit("Swipe up", Page.GESTURES, "gesture"),
     SettingHit("Swipe down", Page.GESTURES, "gesture notification shade"),
     SettingHit("Swipe left", Page.GESTURES, "gesture"),
@@ -178,6 +180,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
     val listenerConnected by NotificationStore.listenerConnected.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
     val focusActive by viewModel.focusActive.collectAsStateWithLifecycle()
+    val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val installedBuild = remember { UpdateChecker.installedBuild(context) }
 
@@ -227,6 +230,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                             Page.GESTURES -> "Swipe up, down, left, right"
                             Page.DRAWER -> "Search, recents, background"
                             Page.FOCUS -> if (focusActive) "On now" else "Hide distracting apps"
+                            Page.PROFILES -> activeProfile?.let { "On now: ${it.name}" } ?: "Favourites and layout by context"
                             Page.GLUCOSE -> if (settings.glucoseEnabled) "On · LibreLinkUp" else "LibreLinkUp, units, thresholds"
                             Page.DASHBOARD -> "Big glanceable screen, cards, order"
                             Page.NOTIFICATIONS -> if (listenerConnected) "Access connected ✓" else "Access not connected"
@@ -253,6 +257,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                         Page.GESTURES -> GesturesPage(settings, visibleApps) { chooser = it }
                         Page.DRAWER -> DrawerPage(viewModel, settings)
                         Page.FOCUS -> FocusPage(viewModel, settings)
+                        Page.PROFILES -> ProfilesPage(viewModel, settings)
                         Page.GLUCOSE -> GlucosePage(viewModel, settings, visibleApps) { chooser = it }
                         Page.DASHBOARD -> DashboardPage(viewModel, settings, visibleApps) { chooser = it }
                         Page.NOTIFICATIONS -> NotificationsPage(viewModel, settings, listenerConnected)

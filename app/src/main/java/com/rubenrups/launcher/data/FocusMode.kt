@@ -11,14 +11,7 @@ fun LauncherSettings.focusActive(now: Calendar = Calendar.getInstance()): Boolea
     if (System.currentTimeMillis() < focusSnoozeUntil) return false
     if (focusManual) return true
     if (!focusScheduleOn) return false
-    val day = now.get(Calendar.DAY_OF_WEEK)
-    val previousDay = if (day == Calendar.SUNDAY) Calendar.SATURDAY else day - 1
-    val minute = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-    return if (focusStartMin <= focusEndMin) {
-        day in focusDays && minute in focusStartMin until focusEndMin
-    } else {
-        (day in focusDays && minute >= focusStartMin) || (previousDay in focusDays && minute < focusEndMin)
-    }
+    return scheduleActive(focusDays, focusStartMin, focusEndMin, now)
 }
 
 /** "09:30" for 570. */

@@ -230,6 +230,9 @@ data class LauncherSettings(
     val focusEndMin: Int = 17 * 60,
     /** Focus mode is paused until this time (epoch millis). */
     val focusSnoozeUntil: Long = 0L,
+    /** Context profiles (see [ContextProfile]); [profileManual] is the id of the one switched on by hand, or empty. */
+    val profiles: List<ContextProfile> = emptyList(),
+    val profileManual: String = "",
     /** Open car mode by itself when connecting to one of [carBluetoothDevices] (device addresses). */
     val carAutoBluetooth: Boolean = false,
     val carBluetoothDevices: Set<String> = emptySet(),
@@ -515,6 +518,8 @@ class LauncherPrefs(context: Context) {
         focusStartMin = prefs.getInt(KEY_FOCUS_START, 9 * 60),
         focusEndMin = prefs.getInt(KEY_FOCUS_END, 17 * 60),
         focusSnoozeUntil = prefs.getLong(KEY_FOCUS_SNOOZE, 0L),
+        profiles = ProfileCodec.decode(prefs.getString(KEY_PROFILES, null)),
+        profileManual = prefs.getString(KEY_PROFILE_MANUAL, "").orEmpty(),
         carAutoBluetooth = prefs.getBoolean(KEY_CAR_AUTO_BT, false),
         carBluetoothDevices = prefs.getString(KEY_CAR_BT_DEVICES, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }.toSet(),
         carAutoCharging = prefs.getBoolean(KEY_CAR_AUTO_CHARGE, false),
@@ -666,6 +671,8 @@ class LauncherPrefs(context: Context) {
             .putInt(KEY_FOCUS_START, s.focusStartMin)
             .putInt(KEY_FOCUS_END, s.focusEndMin)
             .putLong(KEY_FOCUS_SNOOZE, s.focusSnoozeUntil)
+            .putString(KEY_PROFILES, ProfileCodec.encode(s.profiles))
+            .putString(KEY_PROFILE_MANUAL, s.profileManual)
             .putBoolean(KEY_CAR_AUTO_BT, s.carAutoBluetooth)
             .putString(KEY_CAR_BT_DEVICES, s.carBluetoothDevices.joinToString(SEPARATOR))
             .putBoolean(KEY_CAR_AUTO_CHARGE, s.carAutoCharging)
@@ -904,6 +911,8 @@ class LauncherPrefs(context: Context) {
         const val KEY_FOCUS_START = "focus_start_min"
         const val KEY_FOCUS_END = "focus_end_min"
         const val KEY_FOCUS_SNOOZE = "focus_snooze_until"
+        const val KEY_PROFILES = "context_profiles"
+        const val KEY_PROFILE_MANUAL = "profile_manual"
         const val KEY_CAR_AUTO_BT = "car_auto_bluetooth"
         const val KEY_CAR_BT_DEVICES = "car_bluetooth_devices"
         const val KEY_CAR_AUTO_CHARGE = "car_auto_charging"

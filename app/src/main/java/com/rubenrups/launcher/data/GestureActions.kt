@@ -21,6 +21,7 @@ object GestureActions {
     const val CAMERA = "action:camera"
     const val DIALER = "action:dialer"
     const val DND = "action:dnd"
+    const val PROFILE = "action:profile"
 
     // Only offered for swipes inside car mode.
     const val CLOSE = "action:close"
@@ -45,6 +46,7 @@ object GestureActions {
         CAMERA to "Camera",
         DIALER to "Phone dialer",
         DND to "Do not disturb (toggle)",
+        PROFILE to "Switch profile",
     )
 
     /** What a swipe inside car mode can do (besides launching an app). */
@@ -66,6 +68,7 @@ object GestureActions {
         CAMERA to "Camera",
         DIALER to "Phone dialer",
         DND to "Do not disturb (toggle)",
+        PROFILE to "Switch profile",
     )
 
     /** Actions that need the accessibility service switched on. */

@@ -23,7 +23,11 @@ import com.rubenrups.launcher.data.LauncherPrefsHolder
 import com.rubenrups.launcher.data.Destination
 import com.rubenrups.launcher.data.BackupScheduler
 import com.rubenrups.launcher.data.GestureActions
+import com.rubenrups.launcher.data.ContextProfile
+import com.rubenrups.launcher.data.ProfileSignals
+import com.rubenrups.launcher.data.activeProfile
 import com.rubenrups.launcher.data.focusActive
+import com.rubenrups.launcher.data.withProfile
 import com.rubenrups.launcher.data.GlucoseState
 import com.rubenrups.launcher.data.UpdateManager
 import com.rubenrups.launcher.data.VirtualApps
@@ -40,6 +44,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -63,6 +68,22 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             .distinctUntilChanged()
             .stateIn(viewModelScope, SharingStarted.Eagerly, settings.value.focusActive())
 
+    /** The context profile that is on right now (by hand, or by its time, charger or Bluetooth trigger). */
+    val activeProfile: StateFlow<ContextProfile?> =
+        combine(
+            settings,
+            ProfileSignals.charging,
+            ProfileSignals.devices,
+            flow { while (true) { emit(Unit); delay(30_000) } },
+        ) { s, charging, devices, _ -> s.activeProfile(charging, devices) }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** The settings as the home screen should see them: the normal ones with the active profile laid over them. */
+    val effectiveSettings: StateFlow<LauncherSettings> =
+        combine(settings, activeProfile) { s, profile -> s.withProfile(profile) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, settings.value)
+
     /** The installed apps under the names the user gave them (the installed name where they gave none). */
     private val namedApps: StateFlow<List<AppInfo>> =
         combine(repository.apps, settings.map { it.appLabels }.distinctUntilChanged()) { apps, labels ->
@@ -80,7 +101,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val visibleApps: StateFlow<List<AppInfo>> =
         combine(
             appsWithButtons,
-            settings.map { it.hidden }.distinctUntilChanged(),
+            effectiveSettings.map { it.hidden }.distinctUntilChanged(),
             focusActive,
             settings.map { it.focusApps }.distinctUntilChanged(),
         ) { apps, hidden, focus, focusApps ->
@@ -94,7 +115,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     /** Favourites (apps and folders) in the user's order, silently dropping uninstalled apps. */
     val favourites: StateFlow<List<Entry>> =
-        combine(namedApps, settings, focusActive) { allApps, s, focus ->
+        combine(namedApps, effectiveSettings, focusActive) { allApps, s, focus ->
             val apps = if (focus) allApps.filter { it.key !in s.focusApps } else allApps
             val byKey = apps.associateBy { it.key }
             val folders = s.folders.associateBy { it.key }
@@ -165,6 +186,20 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val glucose: StateFlow<GlucoseState> = glucoseStore.state
 
     init {
+        ProfileSignals.start(application)
+        // A profile that opens car mode does so when it switches on, and closes it again when it ends.
+        viewModelScope.launch {
+            var openedByProfile = false
+            activeProfile.map { it?.id to (it?.openCar == true) }.distinctUntilChanged().drop(1).collect { (_, openCar) ->
+                if (openCar) {
+                    CarMode.autoOpen(getApplication())
+                    openedByProfile = true
+                } else if (openedByProfile) {
+                    CarMode.autoClose(getApplication())
+                    openedByProfile = false
+                }
+            }
+        }
         if (!settings.value.onboardingDone && settings.value.favourites.isNotEmpty()) update { it.copy(onboardingDone = true) }
         // Bluetooth / charging triggers (see CarTriggerReceiver) open and close car mode while we are running.
         viewModelScope.launch {
@@ -338,6 +373,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             GestureActions.CAMERA -> { startExternal(android.content.Intent(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)); return }
             GestureActions.DIALER -> { startExternal(android.content.Intent(android.content.Intent.ACTION_DIAL)); return }
             GestureActions.DND -> { toggleDoNotDisturb(); return }
+            GestureActions.PROFILE -> { cycleProfile(); return }
             in GestureActions.needsAccessibility -> { systemAction(key); return }
         }
         repository.apps.value.firstOrNull { it.key == key }?.let { launch(it) }
@@ -430,22 +466,26 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun update(transform: (LauncherSettings) -> LauncherSettings) = prefs.update(transform)
 
-    fun addFavouriteKey(key: String) = update { s ->
-        if (key in s.favourites) s else s.copy(favourites = s.favourites + key)
+    /** Edits the favourites you can see: the active profile's own list when it has one, otherwise the normal list. */
+    private fun editFavourites(transform: (List<String>) -> List<String>) = update { s ->
+        val active = activeProfile.value
+        if (active != null && active.ownFavourites) {
+            s.copy(profiles = s.profiles.map { if (it.id == active.id) it.copy(favourites = transform(it.favourites)) else it })
+        } else {
+            s.copy(favourites = transform(s.favourites))
+        }
     }
 
-    fun removeFavouriteKey(key: String) = update { it.copy(favourites = it.favourites - key) }
+    fun addFavouriteKey(key: String) = editFavourites { if (key in it) it else it + key }
+
+    fun removeFavouriteKey(key: String) = editFavourites { it - key }
 
     fun addFavourite(app: AppInfo) = addFavouriteKey(app.key)
 
     fun removeFavourite(app: AppInfo) = removeFavouriteKey(app.key)
 
-    fun moveFavourite(from: Int, to: Int) = update { s ->
-        if (from !in s.favourites.indices || to !in s.favourites.indices || from == to) {
-            s
-        } else {
-            s.copy(favourites = s.favourites.toMutableList().apply { add(to, removeAt(from)) })
-        }
+    fun moveFavourite(from: Int, to: Int) = editFavourites { list ->
+        if (from !in list.indices || to !in list.indices || from == to) list else list.toMutableList().apply { add(to, removeAt(from)) }
     }
 
     /** Hiding also drops the app from favourites and folders, so it can't linger anywhere visible. */
@@ -453,6 +493,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         s.copy(
             hidden = s.hidden + app.key,
             favourites = s.favourites - app.key,
+            profiles = s.profiles.map { it.copy(favourites = it.favourites - app.key) },
             folders = s.folders.map { it.copy(appKeys = it.appKeys - app.key) },
         )
     }
@@ -534,7 +575,21 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         s.copy(
             folders = s.folders.filter { it.id != folder.id },
             favourites = s.favourites - folder.key,
+            profiles = s.profiles.map { it.copy(favourites = it.favourites - folder.key) },
         )
+    }
+
+    /** Switches to the next profile by hand (none → first → … → none), and says which one is on. */
+    fun cycleProfile() {
+        val s = settings.value
+        if (s.profiles.isEmpty()) {
+            android.widget.Toast.makeText(getApplication(), "No profiles yet: add one in Settings → Profiles", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        val index = s.profiles.indexOfFirst { it.id == s.profileManual }
+        val next = s.profiles.getOrNull(index + 1)
+        update { it.copy(profileManual = next?.id.orEmpty()) }
+        android.widget.Toast.makeText(getApplication(), next?.let { "Profile: ${it.name}" } ?: "Profile: automatic", android.widget.Toast.LENGTH_SHORT).show()
     }
 
     fun installedIconPacks(): List<IconPack> = repository.iconPacks.installedPacks()
