@@ -24,6 +24,8 @@ import com.rubenrups.launcher.data.Destination
 import com.rubenrups.launcher.data.BackupScheduler
 import com.rubenrups.launcher.data.GestureActions
 import com.rubenrups.launcher.data.ContextProfile
+import com.rubenrups.launcher.data.DrawerSort
+import com.rubenrups.launcher.data.SearchLearning
 import com.rubenrups.launcher.data.ProfileSignals
 import com.rubenrups.launcher.data.activeProfile
 import com.rubenrups.launcher.data.focusActive
@@ -138,17 +140,15 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             visibleApps,
             settings.map { it.folders }.distinctUntilChanged(),
             settings.map { it.usage }.distinctUntilChanged(),
-        ) { apps, folders, usage ->
+            settings.map { Triple(it.drawerSort, it.drawerFolderSort, it.drawerFoldersPosition) }.distinctUntilChanged(),
+        ) { apps, folders, usage, order ->
             val byKey = apps.associateBy { it.key }
             val inFolder = folders.flatMapTo(HashSet()) { it.appKeys }
             val all = ArrayList<Entry>()
             folders.forEach { f -> all.add(f.resolve(byKey, usage)) }
             // The App drawer button can sit in a folder, but listing it loose inside the drawer itself would be silly.
             apps.filter { it.key !in inFolder && it.key != VirtualApps.drawer.key }.forEach { all.add(AppEntry(it)) }
-            // Folders pin to the top (by name); loose apps follow in A-Z order.
-            val sortedFolders = all.filterIsInstance<FolderEntry>().sortedBy { it.label.lowercase() }
-            val sortedApps = all.filterIsInstance<AppEntry>().sortedWith(compareBy({ it.letter }, { it.label.lowercase() }))
-            sortedFolders + sortedApps
+            DrawerSort.arrange(all, appSort = order.first, folderSort = order.second, folderPosition = order.third, usage = usage)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _drawerOpen = MutableStateFlow(false)
@@ -226,6 +226,15 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         _drawerOpen.value = false
         _focusSearch.value = false
         _initialQuery.value = ""
+        searchQuery = ""
+    }
+
+    /** What is typed in the drawer's search field right now, so the app you then pick can be remembered for it. */
+    @Volatile
+    private var searchQuery: String = ""
+
+    fun setSearchQuery(query: String) {
+        searchQuery = query
     }
 
     /** True while nothing is covering the home screen, so a typed character should start a search. */
@@ -630,13 +639,18 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             return
         }
         val now = System.currentTimeMillis()
+        val searched = searchQuery.takeIf { it.isNotBlank() && _drawerOpen.value && settings.value.learnSearches }
         update { s ->
             val used = (s.usage[app.key]?.count ?: 0) + 1
             // Keep the table bounded: if it grows past the limit, forget the least recently used entries.
             val usage = (s.usage + (app.key to AppUsage(used, now))).let { all ->
                 if (all.size <= MAX_USAGE) all else all.entries.sortedByDescending { it.value.lastMs }.take(MAX_USAGE).associate { it.toPair() }
             }
-            s.copy(recents = (listOf(app.key) + (s.recents - app.key)).take(MAX_RECENTS), usage = usage)
+            s.copy(
+                recents = (listOf(app.key) + (s.recents - app.key)).take(MAX_RECENTS),
+                usage = usage,
+                searchPicks = if (searched != null) SearchLearning.record(s.searchPicks, searched, app.key) else s.searchPicks,
+            )
         }
         if (settings.value.launchAnimation) _launchPulse.value += 1
         repository.launch(app)

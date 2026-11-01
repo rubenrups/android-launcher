@@ -64,6 +64,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.GestureService
 import com.rubenrups.launcher.data.Diagnostics
+import com.rubenrups.launcher.data.DrawerSort
 import com.rubenrups.launcher.data.AppInfo
 import com.rubenrups.launcher.data.CalendarReader
 import com.rubenrups.launcher.data.DashboardModules
@@ -101,6 +102,8 @@ private val SearchIndex = listOf(
     SettingHit("Header order and text", Page.HOME, "clock date time format 12 24 hour weight size order items"),
     SettingHit("Full screen", Page.APPEARANCE, "immersive hide status bar navigation bar clock battery"),
     SettingHit("Drawer layout", Page.DRAWER, "icons only grid columns names icon size"),
+    SettingHit("Drawer order", Page.DRAWER, "sort alphabetical a-z z-a most used recently used folders position top bottom"),
+    SettingHit("Search ranking", Page.DRAWER, "learn remember picks most chosen apps score forget"),
     SettingHit("Search button look", Page.HOME, "search style round pill bar position size background opacity"),
     SettingHit("Header layout", Page.HOME, "stacked side by side inline compact date battery time size"),
     SettingHit("Next calendar event", Page.HOME, "agenda"),
@@ -711,6 +714,32 @@ private fun GesturesPage(settings: LauncherSettings, apps: List<AppInfo>, openCh
 
 @Composable
 private fun DrawerPage(viewModel: LauncherViewModel, settings: LauncherSettings) {
+    Group("Order of apps") {
+        DrawerSort.options.forEach { (key, label) ->
+            ChoiceRow(label, selected = settings.drawerSort == key) { viewModel.update { it.copy(drawerSort = key) } }
+        }
+        Hint("Most used and Recently used count apps opened from the launcher. The A–Z letter strip only shows for A–Z and Z–A.")
+    }
+    Group("Folders in the drawer") {
+        DrawerSort.options.forEach { (key, label) ->
+            ChoiceRow("Order: $label", selected = settings.drawerFolderSort == key) { viewModel.update { it.copy(drawerFolderSort = key) } }
+        }
+        DrawerSort.folderPositions.forEach { (key, label) ->
+            ChoiceRow("Position: $label", selected = settings.drawerFoldersPosition == key) {
+                viewModel.update { it.copy(drawerFoldersPosition = key) }
+            }
+        }
+        Hint("A folder counts as used when any app inside it is. Mixed in, folders follow the apps' order above.")
+    }
+    Group("Search ranking") {
+        SwitchRow(
+            "Learn from my searches",
+            settings.learnSearches,
+            subtitle = "For each text you type it remembers which app you pick and shows the most picked ones first",
+        ) { v -> viewModel.update { it.copy(learnSearches = v) } }
+        NavRow("Forget what it learned", "${settings.searchPicks.size} searches") { viewModel.update { it.copy(searchPicks = emptyMap()) } }
+        Hint("Kept on this phone. It is only in a backup if you include places and contacts.")
+    }
     Group("Layout") {
         ChoiceRow("List (icon and name)", selected = settings.drawerLayout == "list") { viewModel.update { it.copy(drawerLayout = "list") } }
         ChoiceRow("Icon grid", selected = settings.drawerLayout == "grid") { viewModel.update { it.copy(drawerLayout = "grid") } }
@@ -1069,7 +1098,7 @@ private fun BackupPage(viewModel: LauncherViewModel, settings: LauncherSettings,
         SwitchRow(
             "Include places, contacts and car Bluetooth devices",
             settings.backupIncludePersonal,
-            subtitle = "Navigation places, Home / Work addresses, call contacts. Applies to automatic backups too.",
+            subtitle = "Navigation places, Home / Work addresses, call contacts, learned searches. Applies to automatic backups too.",
         ) { v -> viewModel.update { it.copy(backupIncludePersonal = v) } }
         Field(settings.backupPassword, "Backup password for saved logins (optional)", password = true) { v ->
             viewModel.update { it.copy(backupPassword = v) }

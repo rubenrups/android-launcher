@@ -74,7 +74,9 @@ import com.rubenrups.launcher.data.AppEntry
 import com.rubenrups.launcher.data.AppFolder
 import com.rubenrups.launcher.data.AppInfo
 import com.rubenrups.launcher.data.VirtualApps
+import com.rubenrups.launcher.data.DrawerSort
 import com.rubenrups.launcher.data.Entry
+import com.rubenrups.launcher.data.SearchLearning
 import com.rubenrups.launcher.data.FolderEntry
 import com.rubenrups.launcher.data.WebSearchEngine
 import com.rubenrups.launcher.notifications.NotificationStore
@@ -128,17 +130,23 @@ fun AppDrawer(
         }
     }
 
+    // Tell the view model what is typed, so a pick from the results can be remembered for it.
+    LaunchedEffect(query) { viewModel.setSearchQuery(query) }
+
     // Warm the icon cache off the main thread so scrolling and letter jumps never wait on icon decoding.
     LaunchedEffect(allApps) {
         withContext(Dispatchers.Default) { allApps.forEach { viewModel.repository.loadIcon(it) } }
     }
 
     // While searching, results are flat apps (including ones inside folders); otherwise folders + loose apps.
-    val entries: List<Entry> = remember(drawerEntries, allApps, query, settings.searchHidden) {
+    val entries: List<Entry> = remember(drawerEntries, allApps, query, settings.searchHidden, settings.learnSearches, settings.searchPicks) {
         if (query.isBlank()) {
             drawerEntries
         } else {
-            allApps.filter { it.key !in settings.searchHidden && it.label.contains(query, ignoreCase = true) }.map { AppEntry(it) }
+            val matches = allApps.filter { it.key !in settings.searchHidden && it.label.contains(query, ignoreCase = true) }
+            // The apps you usually pick for this exact text come first; the rest keep their order.
+            val ordered = if (settings.learnSearches) SearchLearning.rank(matches, { it.key }, settings.searchPicks, query) else matches
+            ordered.map { AppEntry(it) }
         }
     }
 
@@ -165,7 +173,12 @@ fun AppDrawer(
         val index = if (letter == '#') {
             0
         } else {
-            val appIndex = entries.indexOfFirst { it is AppEntry && it.letter >= letter }
+            val reversed = settings.drawerSort == DrawerSort.Z_A
+            // Folders sit at the top, so only apps count there; mixed in, they are part of the alphabet.
+            val mixed = settings.drawerFoldersPosition == DrawerSort.FOLDERS_MIXED
+            val appIndex = entries.indexOfFirst {
+                (mixed || it is AppEntry) && it.letter != '#' && (if (reversed) it.letter <= letter else it.letter >= letter)
+            }
             (if (appIndex >= 0) appIndex else entries.lastIndex) / perRow + headerRows
         }
         if (index >= 0) scope.launch { listState.scrollToItem(index) }
@@ -234,7 +247,7 @@ fun AppDrawer(
                         item(key = "web-search") { WebSearchRow(query) { viewModel.webSearch(query) } }
                     }
                 }
-                if (query.isBlank()) {
+                if (query.isBlank() && DrawerSort.isAlphabetical(settings.drawerSort)) {
                     AlphabetScrubber(
                         letters = SCRUBBER_LETTERS,
                         activeLetter = activeLetter,
