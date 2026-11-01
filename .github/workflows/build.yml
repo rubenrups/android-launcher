@@ -39,6 +39,14 @@ jobs:
           # Branch builds may refresh the Gradle cache too (the default only lets the main branch write it).
           cache-read-only: false
 
+      # Fast checks first: unit tests fail the build, lint is a report for now (it has never run on this code).
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest --stacktrace
+
+      - name: Lint (report only)
+        continue-on-error: true
+        run: ./gradlew lintDebug --continue
+
       - name: Build signed release APK
         if: env.HAS_SIGNING_KEY == 'true'
         env:
