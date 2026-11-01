@@ -1,0 +1,6 @@
+# Baseline profile: tells Android to compile the launcher's own code ahead of time, so the first start after an
+# install or update and the first drawer scroll are not run through the slow interpreter. The wildcards cover
+# every method of the app; androidx.profileinstaller applies the profile on devices that did not install from Play.
+HSPLcom/rubenrups/launcher/**;->**(**)**
+HSPLcom/rubenrups/launcher/**;-><init>(**)V
+Lcom/rubenrups/launcher/**;
