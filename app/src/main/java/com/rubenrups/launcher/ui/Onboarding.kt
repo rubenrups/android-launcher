@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -52,6 +53,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.data.CalendarReader
+import com.rubenrups.launcher.data.LauncherPrefs
 import com.rubenrups.launcher.notifications.NotificationStore
 
 /** One page of the setup guide. [done] = null for pages that only inform. */
@@ -64,7 +66,20 @@ private class Step(
     val action: () -> Unit = {},
     val extraLabel: String? = null,
     val extraAction: () -> Unit = {},
+    /** Optional extra content shown under the body (for example a password field). */
+    val content: (@Composable () -> Unit)? = null,
 )
+
+/** What to tell the user after a backup file was chosen; [result] is null when the file is not one of our backups. */
+internal fun restoreMessage(result: LauncherPrefs.LoginsResult?): String = when (result) {
+    null -> "That file is not a Rups Launcher backup."
+    LauncherPrefs.LoginsResult.RESTORED -> "Backup restored, including your logins."
+    LauncherPrefs.LoginsResult.NEEDS_PASSWORD ->
+        "Backup restored. It has saved logins: type its password in the backup password field and restore again to get them back."
+    LauncherPrefs.LoginsResult.WRONG_PASSWORD ->
+        "Backup restored, but that password did not open the saved logins. Check it and restore again."
+    LauncherPrefs.LoginsResult.NOT_IN_FILE -> "Backup restored."
+}
 
 /** True when this launcher is the one Android opens for the Home button. */
 private fun isDefaultHome(context: Context): Boolean {
@@ -106,12 +121,41 @@ fun OnboardingScreen(viewModel: LauncherViewModel, onFinish: () -> Unit) {
         runCatching { context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
 
+    // New phone? Restore a saved backup first, so the rest of the guide starts from your own settings.
+    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    var restoreStatus by rememberSaveable { mutableStateOf<String?>(null) }
+    val restorePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            val text = runCatching {
+                context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
+            }.getOrNull()
+            restoreStatus = restoreMessage(text?.let { viewModel.restoreBackup(it) })
+        }
+    }
+
     val steps = listOf(
         Step(
             "👋", "Welcome to Rups Launcher",
             "A few quick steps get everything working. You can skip any of them and come back later: " +
                 "Settings → Backup & updates → Setup guide.",
             done = null,
+        ),
+        Step(
+            "💾", "Restore a backup (optional)",
+            "Moving from another phone or reinstalling? Pick your backup file to bring back favourites, folders, " +
+                "settings and places. If it holds saved logins, type the backup password first.",
+            done = null,
+            actionLabel = "Choose backup file",
+            action = { restorePicker.launch(arrayOf("*/*")) },
+            content = {
+                Spacer(Modifier.height(16.dp))
+                Field(settings.backupPassword, "Backup password (only if you set one)", password = true) { v ->
+                    viewModel.update { it.copy(backupPassword = v) }
+                }
+                restoreStatus?.let {
+                    Text(it, color = Color(0xFF7BE0A0), fontSize = 14.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 8.dp))
+                }
+            },
         ),
         Step(
             "🏠", "Make it your home app",
@@ -209,6 +253,7 @@ fun OnboardingScreen(viewModel: LauncherViewModel, onFinish: () -> Unit) {
                         .padding(horizontal = 28.dp, vertical = 14.dp),
                 )
             }
+            current.content?.invoke()
             if (current.extraLabel != null) {
                 Text(
                     current.extraLabel,

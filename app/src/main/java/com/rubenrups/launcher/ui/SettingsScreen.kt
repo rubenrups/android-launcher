@@ -1051,15 +1051,7 @@ private fun BackupPage(viewModel: LauncherViewModel, settings: LauncherSettings,
                 context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
             }.getOrNull()
             val result = text?.let { viewModel.restoreBackup(it) }
-            backupStatus = when (result) {
-                null -> "That file is not a Rups Launcher backup."
-                LauncherPrefs.LoginsResult.RESTORED -> "Backup restored, including your logins."
-                LauncherPrefs.LoginsResult.NEEDS_PASSWORD ->
-                    "Backup restored. It has saved logins: type its password in the backup password field and restore again to get them back."
-                LauncherPrefs.LoginsResult.WRONG_PASSWORD ->
-                    "Backup restored, but that password did not open the saved logins. Check it and restore again."
-                LauncherPrefs.LoginsResult.NOT_IN_FILE -> "Backup restored."
-            }
+            backupStatus = restoreMessage(result)
         }
     }
     val installedBuild = remember { UpdateChecker.installedBuild(context) }
