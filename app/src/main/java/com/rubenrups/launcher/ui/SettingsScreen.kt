@@ -698,7 +698,7 @@ private fun GesturesPage(settings: LauncherSettings, apps: List<AppInfo>, openCh
         Hint(
             "Lock phone, Recent apps, Quick settings, Power menu and Screenshot are done by Android itself and need an " +
                 "accessibility service: switch on \"Rups Launcher: system gestures\" there. It reads nothing from the screen. " +
-                "Lock phone and Screenshot need Android 9 or newer. Flashlight and Launcher settings need nothing extra."
+                "Lock phone and Screenshot need Android 9 or newer. Flashlight, Camera, Phone dialer and Launcher settings need nothing extra; Do not disturb asks for its own access the first time."
         )
     }
 }

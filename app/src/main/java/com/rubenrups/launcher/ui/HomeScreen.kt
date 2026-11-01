@@ -284,32 +284,46 @@ private fun HomeContent(
         val topSectionMax = (maxHeight - bars.calculateTopPadding() - bars.calculateBottomPadding() - 32.dp -
             rowHeightForMin * favouriteRows - 16.dp - recentsReserve).coerceAtLeast(120.dp)
         val topScroll = rememberScrollState()
-        // A scrolling section swallows the swipe-up before the detector below sees it. Whatever the scroll
-        // cannot use (it is already at the end) is passed up here, so swiping up on a full page still opens the drawer.
-        val overscrollUp = remember {
+        // A scrolling section swallows the swipe before the detector below sees it. Whatever the scroll cannot use
+        // (it is already at the top or the end) is passed up here, so the swipe actions work on a full page too:
+        // swipe up follows the finger when it opens the drawer, and any swipe up or down runs its action on release.
+        val middle = Offset(constraints.maxWidth / 2f, constraints.maxHeight / 2f)
+        val currentMiddle by rememberUpdatedState(middle)
+        val overscroll = remember {
             object : NestedScrollConnection {
-                var pulled = 0f
-                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                    if (pulled > 0f && available.y > 0f) {
-                        val back = minOf(pulled, available.y)
-                        pulled -= back
-                        currentDrawerDrag(pulled)
-                        return Offset(0f, back)
-                    }
-                    return Offset.Zero
+                /** Leftover finger travel: negative = up past the end, positive = down past the top. */
+                var over = 0f
+
+                private fun followDrawer() {
+                    if (currentSettings.swipeUp == GestureActions.DRAWER) currentDrawerDrag(maxOf(-over, 0f))
                 }
+
+                override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                    if (over == 0f || available.y * over >= 0f) return Offset.Zero
+                    val back = if (over < 0f) minOf(-over, available.y) else maxOf(-over, available.y)
+                    over += back
+                    followDrawer()
+                    return Offset(0f, back)
+                }
+
                 override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                    if (source != NestedScrollSource.UserInput || available.y >= 0f || currentSettings.swipeUp != GestureActions.DRAWER) {
-                        return Offset.Zero
-                    }
-                    pulled += -available.y
-                    currentDrawerDrag(pulled)
+                    if (source != NestedScrollSource.UserInput || available.y == 0f) return Offset.Zero
+                    over += available.y
+                    followDrawer()
                     return Offset(0f, available.y)
                 }
+
                 override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
-                    if (pulled > 0f) {
-                        currentDrawerRelease(pulled > SWIPE_THRESHOLD_PX)
-                        pulled = 0f
+                    val travelled = over
+                    over = 0f
+                    if (travelled == 0f) return Velocity.Zero
+                    val up = travelled < 0f
+                    val action = if (up) currentSettings.swipeUp else currentSettings.swipeDown
+                    val longEnough = abs(travelled) > SWIPE_THRESHOLD_PX
+                    if (up && action == GestureActions.DRAWER) {
+                        currentDrawerRelease(longEnough)
+                    } else if (longEnough && action.isNotBlank()) {
+                        runGesture(action, currentMiddle, if (up) DashboardEdge.BOTTOM else DashboardEdge.TOP)
                     }
                     return Velocity.Zero
                 }
@@ -319,7 +333,7 @@ private fun HomeContent(
             Modifier
                 .fillMaxSize()
                 .windowInsetsPadding(launcherInsets())
-                .nestedScroll(overscrollUp)
+                .nestedScroll(overscroll)
                 // Taps and a hold on empty space run the actions set in settings (child rows consume their own presses).
                 .multiTap(
                     enabled = !editMode,

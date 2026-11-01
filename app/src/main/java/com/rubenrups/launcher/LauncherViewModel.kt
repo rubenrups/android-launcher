@@ -328,9 +328,31 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         when (key) {
             GestureActions.SETTINGS -> { setSettingsOpen(true); return }
             GestureActions.FLASHLIGHT -> { Flashlight.toggle(getApplication()); return }
+            GestureActions.CAMERA -> { startExternal(android.content.Intent(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)); return }
+            GestureActions.DIALER -> { startExternal(android.content.Intent(android.content.Intent.ACTION_DIAL)); return }
+            GestureActions.DND -> { toggleDoNotDisturb(); return }
             in GestureActions.needsAccessibility -> { systemAction(key); return }
         }
         repository.apps.value.firstOrNull { it.key == key }?.let { launch(it) }
+    }
+
+    private fun startExternal(intent: android.content.Intent) {
+        runCatching { getApplication<Application>().startActivity(intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    /** Switches between everything allowed and priority-only; asks for the notification-policy grant the first time. */
+    private fun toggleDoNotDisturb() {
+        val context = getApplication<Application>()
+        val manager = context.getSystemService(android.app.NotificationManager::class.java)
+        if (!manager.isNotificationPolicyAccessGranted) {
+            android.widget.Toast.makeText(context, "Allow Rups Launcher under Do Not Disturb access, then try again", android.widget.Toast.LENGTH_LONG).show()
+            startExternal(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
+            return
+        }
+        val quiet = manager.currentInterruptionFilter != android.app.NotificationManager.INTERRUPTION_FILTER_ALL
+        manager.setInterruptionFilter(
+            if (quiet) android.app.NotificationManager.INTERRUPTION_FILTER_ALL else android.app.NotificationManager.INTERRUPTION_FILTER_PRIORITY
+        )
     }
 
     /** Runs an action through the accessibility service; if that is not switched on yet, opens its settings. */

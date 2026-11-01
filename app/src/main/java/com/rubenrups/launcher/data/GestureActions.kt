@@ -18,6 +18,9 @@ object GestureActions {
     const val QUICK_SETTINGS = "action:quicksettings"
     const val POWER_MENU = "action:powermenu"
     const val SCREENSHOT = "action:screenshot"
+    const val CAMERA = "action:camera"
+    const val DIALER = "action:dialer"
+    const val DND = "action:dnd"
 
     // Only offered for swipes inside car mode.
     const val CLOSE = "action:close"
@@ -39,6 +42,9 @@ object GestureActions {
         QUICK_SETTINGS to "Quick settings",
         POWER_MENU to "Power menu",
         SCREENSHOT to "Screenshot",
+        CAMERA to "Camera",
+        DIALER to "Phone dialer",
+        DND to "Do not disturb (toggle)",
     )
 
     /** What a swipe inside car mode can do (besides launching an app). */
@@ -57,6 +63,9 @@ object GestureActions {
         QUICK_SETTINGS to "Quick settings",
         POWER_MENU to "Power menu",
         SCREENSHOT to "Screenshot",
+        CAMERA to "Camera",
+        DIALER to "Phone dialer",
+        DND to "Do not disturb (toggle)",
     )
 
     /** Actions that need the accessibility service switched on. */
