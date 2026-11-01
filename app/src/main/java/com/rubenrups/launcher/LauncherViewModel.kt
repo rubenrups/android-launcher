@@ -63,12 +63,18 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             .distinctUntilChanged()
             .stateIn(viewModelScope, SharingStarted.Eagerly, settings.value.focusActive())
 
+    /** The installed apps under the names the user gave them (the installed name where they gave none). */
+    private val namedApps: StateFlow<List<AppInfo>> =
+        combine(repository.apps, settings.map { it.appLabels }.distinctUntilChanged()) { apps, labels ->
+            if (labels.isEmpty()) apps else apps.map { app -> labels[app.key]?.let { app.copy(label = it) } ?: app }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, repository.apps.value)
+
     /** Every installed app, including the ones focus mode is hiding (settings need to be able to untick them). */
-    val installedApps: StateFlow<List<AppInfo>> = repository.apps
+    val installedApps: StateFlow<List<AppInfo>> = namedApps
 
     /** Installed apps plus the launcher's own buttons (App drawer, Dashboard), which behave like apps in lists. */
     private val appsWithButtons: StateFlow<List<AppInfo>> =
-        repository.apps.map { it + VirtualApps.all }.stateIn(viewModelScope, SharingStarted.Eagerly, VirtualApps.all)
+        namedApps.map { it + VirtualApps.all }.stateIn(viewModelScope, SharingStarted.Eagerly, VirtualApps.all)
 
     /** Apps the user hasn't hidden: what the drawer and search show. */
     val visibleApps: StateFlow<List<AppInfo>> =
@@ -88,7 +94,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     /** Favourites (apps and folders) in the user's order, silently dropping uninstalled apps. */
     val favourites: StateFlow<List<Entry>> =
-        combine(repository.apps, settings, focusActive) { allApps, s, focus ->
+        combine(namedApps, settings, focusActive) { allApps, s, focus ->
             val apps = if (focus) allApps.filter { it.key !in s.focusApps } else allApps
             val byKey = apps.associateBy { it.key }
             val folders = s.folders.associateBy { it.key }
@@ -452,6 +458,16 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun unhide(app: AppInfo) = update { it.copy(hidden = it.hidden - app.key) }
+
+    /** Gives an app a name of your own; a blank name goes back to the installed one. */
+    fun renameApp(app: AppInfo, label: String) = update { s ->
+        val name = label.trim()
+        s.copy(appLabels = if (name.isEmpty()) s.appLabels - app.key else s.appLabels + (app.key to name))
+    }
+
+    fun toggleSearchHidden(app: AppInfo) = update { s ->
+        s.copy(searchHidden = if (app.key in s.searchHidden) s.searchHidden - app.key else s.searchHidden + app.key)
+    }
 
     /** Creates a folder, optionally seeded with [firstApp]. An app lives in at most one folder. */
     fun createFolder(name: String, firstApp: AppInfo? = null): String {

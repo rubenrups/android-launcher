@@ -134,11 +134,11 @@ fun AppDrawer(
     }
 
     // While searching, results are flat apps (including ones inside folders); otherwise folders + loose apps.
-    val entries: List<Entry> = remember(drawerEntries, allApps, query) {
+    val entries: List<Entry> = remember(drawerEntries, allApps, query, settings.searchHidden) {
         if (query.isBlank()) {
             drawerEntries
         } else {
-            allApps.filter { it.label.contains(query, ignoreCase = true) }.map { AppEntry(it) }
+            allApps.filter { it.key !in settings.searchHidden && it.label.contains(query, ignoreCase = true) }.map { AppEntry(it) }
         }
     }
 
@@ -318,6 +318,8 @@ private fun DrawerRow(
     var menuOpen by remember { mutableStateOf(false) }
     var pickFolder by remember { mutableStateOf(false) }
     var newFolder by remember { mutableStateOf(false) }
+    var renaming by remember { mutableStateOf(false) }
+    val live by viewModel.settings.collectAsStateWithLifecycle()
     val currentFolder = folders.firstOrNull { app.key in it.appKeys }
 
     Box {
@@ -373,6 +375,14 @@ private fun DrawerRow(
                 menuOpen = false
                 viewModel.hide(app)
             })
+            DropdownMenuItem(text = { Text("Rename…") }, onClick = {
+                menuOpen = false
+                renaming = true
+            })
+            DropdownMenuItem(text = { Text(if (app.key in live.searchHidden) "Show in search" else "Hide from search") }, onClick = {
+                menuOpen = false
+                viewModel.toggleSearchHidden(app)
+            })
             // The launcher's own buttons (App drawer, Dashboard) are not installed apps: no app info, nothing to uninstall.
             if (!VirtualApps.isVirtual(app)) {
                 DropdownMenuItem(text = { Text("App info") }, onClick = {
@@ -395,6 +405,19 @@ private fun DrawerRow(
         }
     }
 
+    if (renaming) {
+        NameDialog(
+            title = "Rename app (empty = original name)",
+            allowBlank = true,
+            initial = app.label,
+            confirmLabel = "Save",
+            onConfirm = {
+                viewModel.renameApp(app, it)
+                renaming = false
+            },
+            onDismiss = { renaming = false },
+        )
+    }
     if (pickFolder) {
         FolderPickerDialog(
             app = app,

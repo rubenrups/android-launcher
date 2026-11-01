@@ -64,6 +64,7 @@ fun NameDialog(
     confirmLabel: String,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
+    allowBlank: Boolean = false,
 ) {
     var text by remember { mutableStateOf(TextFieldValue(initial, TextRange(0, initial.length))) }
     val focus = remember { FocusRequester() }
@@ -81,7 +82,7 @@ fun NameDialog(
             )
         },
         confirmButton = {
-            TextButton(onClick = { if (text.text.isNotBlank()) onConfirm(text.text.trim()) }) { Text(confirmLabel) }
+            TextButton(onClick = { if (allowBlank || text.text.isNotBlank()) onConfirm(text.text.trim()) }) { Text(confirmLabel) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
     )

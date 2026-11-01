@@ -30,6 +30,9 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 - **Gestures**: double tap, triple tap and hold on empty home space (and double / triple tap in car mode), plus every swipe, can run: drawer, search, notification shade, car mode, home menu, launcher settings, flashlight, any app, or (through a minimal accessibility service, no events and no screen content) lock phone, recent apps, quick settings, power menu and screenshot. One gesture must always stay on Home menu or Launcher settings so settings can never become unreachable
 - **Diagnostics**: Settings → Backup & updates shows a small crash and gesture log (never settings values, logins or notifications) with copy and share buttons
 - **More gesture actions**: camera, phone dialer and a do-not-disturb toggle; swipes now work on a full, scrolling home page too
+- **Per-app tweaks**: long-press an app in the drawer to rename it (shown everywhere) or hide it from search only
+- **Setup guide**: an optional first step restores a backup on a new phone
+- **Tests**: CI runs unit tests (gesture rules, glucose formatting) and a report-only lint
 - **Swipe feedback**: the home screen leans after your finger during a configured swipe, ticks when it counts, and the dashboard slides in from the side you swiped
 - **Glucose on home**: FreeStyle Libre value, trend and age under the clock, via a LibreLinkUp follower account (display only; greyed out when older than 10 min)
 - **Navigation card**: the Google Maps / Waze next-turn notification shown on home

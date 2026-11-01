@@ -248,6 +248,10 @@ data class LauncherSettings(
     val onboardingDone: Boolean = false,
     /** Launch counts and last-launch times, for the folder sorts "most used" and "most recent". */
     val usage: Map<String, AppUsage> = emptyMap(),
+    /** Names the user gave apps (app key to label); shown everywhere instead of the installed name. */
+    val appLabels: Map<String, String> = emptyMap(),
+    /** Apps that stay in the drawer but never show up as a search result. */
+    val searchHidden: Set<String> = emptySet(),
     /** How a folder opened as a popup from the home screen looks. */
     val folderPopupGrid: Boolean = false,
     val folderPopupColumns: Int = 4,
@@ -521,6 +525,8 @@ class LauncherPrefs(context: Context) {
         callDirect = prefs.getBoolean(KEY_CALL_DIRECT, false),
         onboardingDone = prefs.getBoolean(KEY_ONBOARDING_DONE, false),
         usage = decodeUsage(prefs.getString(KEY_USAGE, null)),
+        appLabels = decodeLabels(prefs.getString(KEY_APP_LABELS, null)),
+        searchHidden = prefs.getString(KEY_SEARCH_HIDDEN, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }.toSet(),
         folderPopupGrid = prefs.getBoolean(KEY_POPUP_GRID, false),
         folderPopupColumns = prefs.getInt(KEY_POPUP_COLUMNS, 4),
         folderPopupOpacity = prefs.getInt(KEY_POPUP_OPACITY, 60),
@@ -670,6 +676,8 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_CALL_DIRECT, s.callDirect)
             .putBoolean(KEY_ONBOARDING_DONE, s.onboardingDone)
             .putString(KEY_USAGE, encodeUsage(s.usage))
+            .putString(KEY_APP_LABELS, JSONObject().apply { s.appLabels.forEach { (k, v) -> put(k, v) } }.toString())
+            .putString(KEY_SEARCH_HIDDEN, s.searchHidden.joinToString(SEPARATOR))
             .putBoolean(KEY_POPUP_GRID, s.folderPopupGrid)
             .putInt(KEY_POPUP_COLUMNS, s.folderPopupColumns)
             .putInt(KEY_POPUP_OPACITY, s.folderPopupOpacity)
@@ -734,6 +742,14 @@ class LauncherPrefs(context: Context) {
                 Destination(o.optString("name"), o.optString("address"), o.optString("icon").ifBlank { "📍" })
             }
         }.getOrDefault(emptyList())
+    }
+
+    private fun decodeLabels(json: String?): Map<String, String> {
+        if (json.isNullOrBlank()) return emptyMap()
+        return runCatching {
+            val o = JSONObject(json)
+            o.keys().asSequence().associateWith { o.getString(it) }
+        }.getOrDefault(emptyMap())
     }
 
     private fun encodeUsage(usage: Map<String, AppUsage>): String =
@@ -898,6 +914,8 @@ class LauncherPrefs(context: Context) {
         const val KEY_CALL_DIRECT = "call_direct"
         const val KEY_ONBOARDING_DONE = "onboarding_done"
         const val KEY_USAGE = "app_usage"
+        const val KEY_APP_LABELS = "app_labels"
+        const val KEY_SEARCH_HIDDEN = "search_hidden"
         const val KEY_POPUP_GRID = "folder_popup_grid"
         const val KEY_POPUP_COLUMNS = "folder_popup_columns"
         const val KEY_POPUP_OPACITY = "folder_popup_opacity"
