@@ -63,6 +63,7 @@ import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.GestureService
+import com.rubenrups.launcher.data.Diagnostics
 import com.rubenrups.launcher.data.AppInfo
 import com.rubenrups.launcher.data.CalendarReader
 import com.rubenrups.launcher.data.DashboardModules
@@ -1134,6 +1135,39 @@ private fun BackupPage(viewModel: LauncherViewModel, settings: LauncherSettings,
         Hint(
             "Only needed while the repository is private. Create a fine-grained token with read-only access to " +
                 "this repository's contents. It is stored on this device only."
+        )
+    }
+    DiagnosticsGroup(installedBuild)
+}
+
+/** The crash and gesture log: view the latest lines, copy them, share them, or clear them. */
+@Composable
+private fun DiagnosticsGroup(build: Int) {
+    val context = LocalContext.current
+    var log by remember { mutableStateOf(Diagnostics.read()) }
+    val header = "Rups Launcher build $build · Android ${android.os.Build.VERSION.RELEASE} · ${android.os.Build.MODEL}"
+    Group("Diagnostics") {
+        Text(
+            if (log.isBlank()) "Nothing logged yet." else log.lines().filter { it.isNotBlank() }.takeLast(40).joinToString("\n"),
+            color = Color.White.copy(alpha = 0.75f),
+            fontSize = 11.sp,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        NavRow("Refresh") { log = Diagnostics.read() }
+        NavRow("Copy log") {
+            val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Rups Launcher log", header + "\n" + log))
+            android.widget.Toast.makeText(context, "Log copied", android.widget.Toast.LENGTH_SHORT).show()
+        }
+        NavRow("Share log") {
+            val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, header + "\n" + log)
+            context.startActivity(Intent.createChooser(send, "Share log").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+        NavRow("Clear log") { Diagnostics.clear(); log = "" }
+        Hint(
+            "Crashes and what each gesture action did (for example when lock phone is not switched on). " +
+                "It never contains settings values, logins or notifications. Paste it into the chat if something misbehaves."
         )
     }
 }

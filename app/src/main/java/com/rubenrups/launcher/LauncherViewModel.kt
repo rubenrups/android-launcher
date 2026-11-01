@@ -321,6 +321,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun launchByKey(key: String, from: DashboardEdge = DashboardEdge.NONE) {
+        if (key.startsWith("action:")) com.rubenrups.launcher.data.Diagnostics.log("gesture $key")
         if (key == ACTION_DASHBOARD) {
             setDashboardOpen(true, from)
             return
@@ -345,6 +346,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val context = getApplication<Application>()
         val manager = context.getSystemService(android.app.NotificationManager::class.java)
         if (!manager.isNotificationPolicyAccessGranted) {
+            com.rubenrups.launcher.data.Diagnostics.log("gesture ${GestureActions.DND} not done: no do-not-disturb access")
             android.widget.Toast.makeText(context, "Allow Rups Launcher under Do Not Disturb access, then try again", android.widget.Toast.LENGTH_LONG).show()
             startExternal(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
             return
@@ -358,6 +360,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     /** Runs an action through the accessibility service; if that is not switched on yet, opens its settings. */
     private fun systemAction(key: String) {
         if (GestureService.perform(key)) return
+        com.rubenrups.launcher.data.Diagnostics.log("gesture $key not done: accessibility service on=${GestureService.isEnabled}")
         val context = getApplication<Application>()
         android.widget.Toast.makeText(context, "Switch on Rups Launcher: system gestures under Accessibility", android.widget.Toast.LENGTH_LONG).show()
         context.startActivity(
