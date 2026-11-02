@@ -36,6 +36,7 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 - **Profiles** (Settings → Profiles): contexts such as work, night or driving, each with its own favourites, apps hidden for a while, parts of the home screen switched off and optionally car mode. They switch on by a time window, charging or a Bluetooth device, or by hand (home menu, or the Switch profile gesture); editing favourites while one is on changes that profile's list
 - **Drawer order**: sort apps A–Z, Z–A, most used or recently used; folders get their own order and can sit at the top, bottom or mixed in
 - **Search ranking**: the drawer learns which app you pick for each text you type and shows the most picked ones first (can be switched off or forgotten)
+- **Notifications on home**: choose where they sit (above or below the media player, below the widgets, or under the favourites), a card, compact or plain style, how many show and the panel opacity
 - **Swipe feedback**: the home screen leans after your finger during a configured swipe, ticks when it counts, and the dashboard slides in from the side you swiped
 - **Glucose on home**: FreeStyle Libre value, trend and age under the clock, via a LibreLinkUp follower account (display only; greyed out when older than 10 min)
 - **Navigation card**: the Google Maps / Waze next-turn notification shown on home
