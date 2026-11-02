@@ -63,6 +63,8 @@ import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.GestureService
+import com.rubenrups.launcher.data.Diagnostics
+import com.rubenrups.launcher.data.DrawerSort
 import com.rubenrups.launcher.data.AppInfo
 import com.rubenrups.launcher.data.CalendarReader
 import com.rubenrups.launcher.data.DashboardModules
@@ -84,6 +86,7 @@ private enum class Page(val title: String, val icon: String) {
     GESTURES("Gestures", "👆"),
     DRAWER("App drawer", "🗂️"),
     FOCUS("Focus mode", "🎯"),
+    PROFILES("Profiles", "🎭"),
     GLUCOSE("Glucose", "🩸"),
     DASHBOARD("Car mode", "🚗"),
     NOTIFICATIONS("Notifications & media", "🔔"),
@@ -99,6 +102,8 @@ private val SearchIndex = listOf(
     SettingHit("Header order and text", Page.HOME, "clock date time format 12 24 hour weight size order items"),
     SettingHit("Full screen", Page.APPEARANCE, "immersive hide status bar navigation bar clock battery"),
     SettingHit("Drawer layout", Page.DRAWER, "icons only grid columns names icon size"),
+    SettingHit("Drawer order", Page.DRAWER, "sort alphabetical a-z z-a most used recently used folders position top bottom"),
+    SettingHit("Search ranking", Page.DRAWER, "learn remember picks most chosen apps score forget"),
     SettingHit("Search button look", Page.HOME, "search style round pill bar position size background opacity"),
     SettingHit("Header layout", Page.HOME, "stacked side by side inline compact date battery time size"),
     SettingHit("Next calendar event", Page.HOME, "agenda"),
@@ -123,6 +128,7 @@ private val SearchIndex = listOf(
     SettingHit("Font", Page.APPEARANCE, "typeface theme serif mono"),
     SettingHit("Icon pack", Page.APPEARANCE, "theme nova adw"),
     SettingHit("Focus mode", Page.FOCUS, "hide apps distraction schedule work"),
+    SettingHit("Profiles", Page.PROFILES, "context work home night car charging bluetooth schedule favourites switch"),
     SettingHit("Swipe up", Page.GESTURES, "gesture"),
     SettingHit("Swipe down", Page.GESTURES, "gesture notification shade"),
     SettingHit("Swipe left", Page.GESTURES, "gesture"),
@@ -177,6 +183,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
     val listenerConnected by NotificationStore.listenerConnected.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
     val focusActive by viewModel.focusActive.collectAsStateWithLifecycle()
+    val activeProfile by viewModel.activeProfile.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val installedBuild = remember { UpdateChecker.installedBuild(context) }
 
@@ -226,6 +233,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                             Page.GESTURES -> "Swipe up, down, left, right"
                             Page.DRAWER -> "Search, recents, background"
                             Page.FOCUS -> if (focusActive) "On now" else "Hide distracting apps"
+                            Page.PROFILES -> activeProfile?.let { "On now: ${it.name}" } ?: "Favourites and layout by context"
                             Page.GLUCOSE -> if (settings.glucoseEnabled) "On · LibreLinkUp" else "LibreLinkUp, units, thresholds"
                             Page.DASHBOARD -> "Big glanceable screen, cards, order"
                             Page.NOTIFICATIONS -> if (listenerConnected) "Access connected ✓" else "Access not connected"
@@ -252,6 +260,7 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                         Page.GESTURES -> GesturesPage(settings, visibleApps) { chooser = it }
                         Page.DRAWER -> DrawerPage(viewModel, settings)
                         Page.FOCUS -> FocusPage(viewModel, settings)
+                        Page.PROFILES -> ProfilesPage(viewModel, settings)
                         Page.GLUCOSE -> GlucosePage(viewModel, settings, visibleApps) { chooser = it }
                         Page.DASHBOARD -> DashboardPage(viewModel, settings, visibleApps) { chooser = it }
                         Page.NOTIFICATIONS -> NotificationsPage(viewModel, settings, listenerConnected)
@@ -698,13 +707,39 @@ private fun GesturesPage(settings: LauncherSettings, apps: List<AppInfo>, openCh
         Hint(
             "Lock phone, Recent apps, Quick settings, Power menu and Screenshot are done by Android itself and need an " +
                 "accessibility service: switch on \"Rups Launcher: system gestures\" there. It reads nothing from the screen. " +
-                "Lock phone and Screenshot need Android 9 or newer. Flashlight and Launcher settings need nothing extra."
+                "Lock phone and Screenshot need Android 9 or newer. Flashlight, Camera, Phone dialer and Launcher settings need nothing extra; Do not disturb asks for its own access the first time."
         )
     }
 }
 
 @Composable
 private fun DrawerPage(viewModel: LauncherViewModel, settings: LauncherSettings) {
+    Group("Order of apps") {
+        DrawerSort.options.forEach { (key, label) ->
+            ChoiceRow(label, selected = settings.drawerSort == key) { viewModel.update { it.copy(drawerSort = key) } }
+        }
+        Hint("Most used and Recently used count apps opened from the launcher. The A–Z letter strip only shows for A–Z and Z–A.")
+    }
+    Group("Folders in the drawer") {
+        DrawerSort.options.forEach { (key, label) ->
+            ChoiceRow("Order: $label", selected = settings.drawerFolderSort == key) { viewModel.update { it.copy(drawerFolderSort = key) } }
+        }
+        DrawerSort.folderPositions.forEach { (key, label) ->
+            ChoiceRow("Position: $label", selected = settings.drawerFoldersPosition == key) {
+                viewModel.update { it.copy(drawerFoldersPosition = key) }
+            }
+        }
+        Hint("A folder counts as used when any app inside it is. Mixed in, folders follow the apps' order above.")
+    }
+    Group("Search ranking") {
+        SwitchRow(
+            "Learn from my searches",
+            settings.learnSearches,
+            subtitle = "For each text you type it remembers which app you pick and shows the most picked ones first",
+        ) { v -> viewModel.update { it.copy(learnSearches = v) } }
+        NavRow("Forget what it learned", "${settings.searchPicks.size} searches") { viewModel.update { it.copy(searchPicks = emptyMap()) } }
+        Hint("Kept on this phone. It is only in a backup if you include places and contacts.")
+    }
     Group("Layout") {
         ChoiceRow("List (icon and name)", selected = settings.drawerLayout == "list") { viewModel.update { it.copy(drawerLayout = "list") } }
         ChoiceRow("Icon grid", selected = settings.drawerLayout == "grid") { viewModel.update { it.copy(drawerLayout = "grid") } }
@@ -1050,15 +1085,7 @@ private fun BackupPage(viewModel: LauncherViewModel, settings: LauncherSettings,
                 context.contentResolver.openInputStream(uri)?.use { it.readBytes().decodeToString() }
             }.getOrNull()
             val result = text?.let { viewModel.restoreBackup(it) }
-            backupStatus = when (result) {
-                null -> "That file is not a Rups Launcher backup."
-                LauncherPrefs.LoginsResult.RESTORED -> "Backup restored, including your logins."
-                LauncherPrefs.LoginsResult.NEEDS_PASSWORD ->
-                    "Backup restored. It has saved logins: type its password in the backup password field and restore again to get them back."
-                LauncherPrefs.LoginsResult.WRONG_PASSWORD ->
-                    "Backup restored, but that password did not open the saved logins. Check it and restore again."
-                LauncherPrefs.LoginsResult.NOT_IN_FILE -> "Backup restored."
-            }
+            backupStatus = restoreMessage(result)
         }
     }
     val installedBuild = remember { UpdateChecker.installedBuild(context) }
@@ -1071,7 +1098,7 @@ private fun BackupPage(viewModel: LauncherViewModel, settings: LauncherSettings,
         SwitchRow(
             "Include places, contacts and car Bluetooth devices",
             settings.backupIncludePersonal,
-            subtitle = "Navigation places, Home / Work addresses, call contacts. Applies to automatic backups too.",
+            subtitle = "Navigation places, Home / Work addresses, call contacts, learned searches. Applies to automatic backups too.",
         ) { v -> viewModel.update { it.copy(backupIncludePersonal = v) } }
         Field(settings.backupPassword, "Backup password for saved logins (optional)", password = true) { v ->
             viewModel.update { it.copy(backupPassword = v) }
@@ -1134,6 +1161,39 @@ private fun BackupPage(viewModel: LauncherViewModel, settings: LauncherSettings,
         Hint(
             "Only needed while the repository is private. Create a fine-grained token with read-only access to " +
                 "this repository's contents. It is stored on this device only."
+        )
+    }
+    DiagnosticsGroup(installedBuild)
+}
+
+/** The crash and gesture log: view the latest lines, copy them, share them, or clear them. */
+@Composable
+private fun DiagnosticsGroup(build: Int) {
+    val context = LocalContext.current
+    var log by remember { mutableStateOf(Diagnostics.read()) }
+    val header = "Rups Launcher build $build · Android ${android.os.Build.VERSION.RELEASE} · ${android.os.Build.MODEL}"
+    Group("Diagnostics") {
+        Text(
+            if (log.isBlank()) "Nothing logged yet." else log.lines().filter { it.isNotBlank() }.takeLast(40).joinToString("\n"),
+            color = Color.White.copy(alpha = 0.75f),
+            fontSize = 11.sp,
+            fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+        )
+        NavRow("Refresh") { log = Diagnostics.read() }
+        NavRow("Copy log") {
+            val clipboard = context.getSystemService(android.content.ClipboardManager::class.java)
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText("Rups Launcher log", header + "\n" + log))
+            android.widget.Toast.makeText(context, "Log copied", android.widget.Toast.LENGTH_SHORT).show()
+        }
+        NavRow("Share log") {
+            val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, header + "\n" + log)
+            context.startActivity(Intent.createChooser(send, "Share log").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
+        NavRow("Clear log") { Diagnostics.clear(); log = "" }
+        Hint(
+            "Crashes and what each gesture action did (for example when lock phone is not switched on). " +
+                "It never contains settings values, logins or notifications. Paste it into the chat if something misbehaves."
         )
     }
 }

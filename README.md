@@ -4,7 +4,7 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 
 ## Features (v0.9)
 
-- **Car mode** (formerly the dashboard): a big, glanceable second screen with glucose (graph, in-range %), navigation, media controls and quick stats. Open it from the long-press menu or assign it to any swipe (down, left, right). Tapping the glucose value opens the Libre app
+- **Car mode** (formerly the dashboard): a big, glanceable second screen with glucose (value and trend; tap it to open the Libre app), navigation, media controls and quick stats. Open it from the long-press menu or assign it to any swipe (down, left, right). Tapping the glucose value opens the Libre app
 - **Media thumbnail**, per-card dashboard switches, and hold-a-widget on home for Move up / Move down / Remove
 - **Folder sorts** by most recent or most used, and a Folder popup settings (list or grid, columns, text size, opacity, dim), separately for the home screen and the drawer
 - **Search extras** (calculator, unit and currency conversion, contacts, phone settings screens) and a **theme maker** (accent colour, font)
@@ -28,6 +28,14 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 - **Player buttons**: the media card shows the player's own extra buttons, such as Spotify's add to liked songs
 - **Double tap**: double-tap empty home-screen space to open the drawer, search, the notification shade, car mode or any app (off by default)
 - **Gestures**: double tap, triple tap and hold on empty home space (and double / triple tap in car mode), plus every swipe, can run: drawer, search, notification shade, car mode, home menu, launcher settings, flashlight, any app, or (through a minimal accessibility service, no events and no screen content) lock phone, recent apps, quick settings, power menu and screenshot. One gesture must always stay on Home menu or Launcher settings so settings can never become unreachable
+- **Diagnostics**: Settings → Backup & updates shows a small crash and gesture log (never settings values, logins or notifications) with copy and share buttons
+- **More gesture actions**: camera, phone dialer and a do-not-disturb toggle; swipes now work on a full, scrolling home page too
+- **Per-app tweaks**: long-press an app in the drawer to rename it (shown everywhere) or hide it from search only
+- **Setup guide**: an optional first step restores a backup on a new phone
+- **Tests**: CI runs unit tests (gesture rules, glucose formatting) and a report-only lint
+- **Profiles** (Settings → Profiles): contexts such as work, night or driving, each with its own favourites, apps hidden for a while, parts of the home screen switched off and optionally car mode. They switch on by a time window, charging or a Bluetooth device, or by hand (home menu, or the Switch profile gesture); editing favourites while one is on changes that profile's list
+- **Drawer order**: sort apps A–Z, Z–A, most used or recently used; folders get their own order and can sit at the top, bottom or mixed in
+- **Search ranking**: the drawer learns which app you pick for each text you type and shows the most picked ones first (can be switched off or forgotten)
 - **Swipe feedback**: the home screen leans after your finger during a configured swipe, ticks when it counts, and the dashboard slides in from the side you swiped
 - **Glucose on home**: FreeStyle Libre value, trend and age under the clock, via a LibreLinkUp follower account (display only; greyed out when older than 10 min)
 - **Navigation card**: the Google Maps / Waze next-turn notification shown on home

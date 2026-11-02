@@ -116,6 +116,13 @@ data class LauncherSettings(
     val clockWeight: String = "light",
     /** The app drawer: "list" or "grid", with icon size, columns and whether names show under the icons. */
     val drawerLayout: String = "list",
+    /** How the drawer orders apps and folders (see [DrawerSort]) and where the folders sit. */
+    val drawerSort: String = DrawerSort.A_Z,
+    val drawerFolderSort: String = DrawerSort.A_Z,
+    val drawerFoldersPosition: String = DrawerSort.FOLDERS_TOP,
+    /** Remember which app you pick for each search and show those first (see [SearchLearning]). */
+    val learnSearches: Boolean = true,
+    val searchPicks: Map<String, Map<String, Int>> = emptyMap(),
     val drawerIconDp: Int = 52,
     val drawerGridColumns: Int = 4,
     val drawerGridLabels: Boolean = true,
@@ -230,6 +237,9 @@ data class LauncherSettings(
     val focusEndMin: Int = 17 * 60,
     /** Focus mode is paused until this time (epoch millis). */
     val focusSnoozeUntil: Long = 0L,
+    /** Context profiles (see [ContextProfile]); [profileManual] is the id of the one switched on by hand, or empty. */
+    val profiles: List<ContextProfile> = emptyList(),
+    val profileManual: String = "",
     /** Open car mode by itself when connecting to one of [carBluetoothDevices] (device addresses). */
     val carAutoBluetooth: Boolean = false,
     val carBluetoothDevices: Set<String> = emptySet(),
@@ -248,6 +258,10 @@ data class LauncherSettings(
     val onboardingDone: Boolean = false,
     /** Launch counts and last-launch times, for the folder sorts "most used" and "most recent". */
     val usage: Map<String, AppUsage> = emptyMap(),
+    /** Names the user gave apps (app key to label); shown everywhere instead of the installed name. */
+    val appLabels: Map<String, String> = emptyMap(),
+    /** Apps that stay in the drawer but never show up as a search result. */
+    val searchHidden: Set<String> = emptySet(),
     /** How a folder opened as a popup from the home screen looks. */
     val folderPopupGrid: Boolean = false,
     val folderPopupColumns: Int = 4,
@@ -432,6 +446,11 @@ class LauncherPrefs(context: Context) {
         backupIncludePersonal = prefs.getBoolean(KEY_BACKUP_PERSONAL, true),
         clockWeight = prefs.getString(KEY_CLOCK_WEIGHT, "light") ?: "light",
         drawerLayout = prefs.getString(KEY_DRAWER_LAYOUT, "list") ?: "list",
+        drawerSort = prefs.getString(KEY_DRAWER_SORT, DrawerSort.A_Z) ?: DrawerSort.A_Z,
+        drawerFolderSort = prefs.getString(KEY_DRAWER_FOLDER_SORT, DrawerSort.A_Z) ?: DrawerSort.A_Z,
+        drawerFoldersPosition = prefs.getString(KEY_DRAWER_FOLDERS_POSITION, DrawerSort.FOLDERS_TOP) ?: DrawerSort.FOLDERS_TOP,
+        learnSearches = prefs.getBoolean(KEY_LEARN_SEARCHES, true),
+        searchPicks = decodePicks(prefs.getString(KEY_SEARCH_PICKS, null)),
         drawerIconDp = prefs.getInt(KEY_DRAWER_ICON, 52).coerceIn(32, 80),
         drawerGridColumns = prefs.getInt(KEY_DRAWER_COLUMNS, 4).coerceIn(3, 7),
         drawerGridLabels = prefs.getBoolean(KEY_DRAWER_LABELS, true),
@@ -511,6 +530,8 @@ class LauncherPrefs(context: Context) {
         focusStartMin = prefs.getInt(KEY_FOCUS_START, 9 * 60),
         focusEndMin = prefs.getInt(KEY_FOCUS_END, 17 * 60),
         focusSnoozeUntil = prefs.getLong(KEY_FOCUS_SNOOZE, 0L),
+        profiles = ProfileCodec.decode(prefs.getString(KEY_PROFILES, null)),
+        profileManual = prefs.getString(KEY_PROFILE_MANUAL, "").orEmpty(),
         carAutoBluetooth = prefs.getBoolean(KEY_CAR_AUTO_BT, false),
         carBluetoothDevices = prefs.getString(KEY_CAR_BT_DEVICES, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }.toSet(),
         carAutoCharging = prefs.getBoolean(KEY_CAR_AUTO_CHARGE, false),
@@ -521,6 +542,8 @@ class LauncherPrefs(context: Context) {
         callDirect = prefs.getBoolean(KEY_CALL_DIRECT, false),
         onboardingDone = prefs.getBoolean(KEY_ONBOARDING_DONE, false),
         usage = decodeUsage(prefs.getString(KEY_USAGE, null)),
+        appLabels = decodeLabels(prefs.getString(KEY_APP_LABELS, null)),
+        searchHidden = prefs.getString(KEY_SEARCH_HIDDEN, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }.toSet(),
         folderPopupGrid = prefs.getBoolean(KEY_POPUP_GRID, false),
         folderPopupColumns = prefs.getInt(KEY_POPUP_COLUMNS, 4),
         folderPopupOpacity = prefs.getInt(KEY_POPUP_OPACITY, 60),
@@ -583,6 +606,11 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_BACKUP_PERSONAL, s.backupIncludePersonal)
             .putString(KEY_CLOCK_WEIGHT, s.clockWeight)
             .putString(KEY_DRAWER_LAYOUT, s.drawerLayout)
+            .putString(KEY_DRAWER_SORT, s.drawerSort)
+            .putString(KEY_DRAWER_FOLDER_SORT, s.drawerFolderSort)
+            .putString(KEY_DRAWER_FOLDERS_POSITION, s.drawerFoldersPosition)
+            .putBoolean(KEY_LEARN_SEARCHES, s.learnSearches)
+            .putString(KEY_SEARCH_PICKS, encodePicks(s.searchPicks))
             .putInt(KEY_DRAWER_ICON, s.drawerIconDp)
             .putInt(KEY_DRAWER_COLUMNS, s.drawerGridColumns)
             .putBoolean(KEY_DRAWER_LABELS, s.drawerGridLabels)
@@ -660,6 +688,8 @@ class LauncherPrefs(context: Context) {
             .putInt(KEY_FOCUS_START, s.focusStartMin)
             .putInt(KEY_FOCUS_END, s.focusEndMin)
             .putLong(KEY_FOCUS_SNOOZE, s.focusSnoozeUntil)
+            .putString(KEY_PROFILES, ProfileCodec.encode(s.profiles))
+            .putString(KEY_PROFILE_MANUAL, s.profileManual)
             .putBoolean(KEY_CAR_AUTO_BT, s.carAutoBluetooth)
             .putString(KEY_CAR_BT_DEVICES, s.carBluetoothDevices.joinToString(SEPARATOR))
             .putBoolean(KEY_CAR_AUTO_CHARGE, s.carAutoCharging)
@@ -670,6 +700,8 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_CALL_DIRECT, s.callDirect)
             .putBoolean(KEY_ONBOARDING_DONE, s.onboardingDone)
             .putString(KEY_USAGE, encodeUsage(s.usage))
+            .putString(KEY_APP_LABELS, JSONObject().apply { s.appLabels.forEach { (k, v) -> put(k, v) } }.toString())
+            .putString(KEY_SEARCH_HIDDEN, s.searchHidden.joinToString(SEPARATOR))
             .putBoolean(KEY_POPUP_GRID, s.folderPopupGrid)
             .putInt(KEY_POPUP_COLUMNS, s.folderPopupColumns)
             .putInt(KEY_POPUP_OPACITY, s.folderPopupOpacity)
@@ -734,6 +766,31 @@ class LauncherPrefs(context: Context) {
                 Destination(o.optString("name"), o.optString("address"), o.optString("icon").ifBlank { "📍" })
             }
         }.getOrDefault(emptyList())
+    }
+
+    private fun encodePicks(picks: Map<String, Map<String, Int>>): String =
+        JSONObject().apply { picks.forEach { (query, apps) -> put(query, JSONObject().apply { apps.forEach { (k, n) -> put(k, n) } }) } }.toString()
+
+    /** Keeps the saved order (oldest query first), which JSONObject itself does not promise, by reading the keys in text order. */
+    private fun decodePicks(json: String?): Map<String, Map<String, Int>> {
+        if (json.isNullOrBlank()) return emptyMap()
+        return runCatching {
+            val o = JSONObject(json)
+            val out = LinkedHashMap<String, Map<String, Int>>()
+            o.keys().forEach { query ->
+                val apps = o.getJSONObject(query)
+                out[query] = apps.keys().asSequence().associateWith { apps.getInt(it) }
+            }
+            out
+        }.getOrDefault(emptyMap())
+    }
+
+    private fun decodeLabels(json: String?): Map<String, String> {
+        if (json.isNullOrBlank()) return emptyMap()
+        return runCatching {
+            val o = JSONObject(json)
+            o.keys().asSequence().associateWith { o.getString(it) }
+        }.getOrDefault(emptyMap())
     }
 
     private fun encodeUsage(usage: Map<String, AppUsage>): String =
@@ -888,6 +945,8 @@ class LauncherPrefs(context: Context) {
         const val KEY_FOCUS_START = "focus_start_min"
         const val KEY_FOCUS_END = "focus_end_min"
         const val KEY_FOCUS_SNOOZE = "focus_snooze_until"
+        const val KEY_PROFILES = "context_profiles"
+        const val KEY_PROFILE_MANUAL = "profile_manual"
         const val KEY_CAR_AUTO_BT = "car_auto_bluetooth"
         const val KEY_CAR_BT_DEVICES = "car_bluetooth_devices"
         const val KEY_CAR_AUTO_CHARGE = "car_auto_charging"
@@ -898,6 +957,13 @@ class LauncherPrefs(context: Context) {
         const val KEY_CALL_DIRECT = "call_direct"
         const val KEY_ONBOARDING_DONE = "onboarding_done"
         const val KEY_USAGE = "app_usage"
+        const val KEY_APP_LABELS = "app_labels"
+        const val KEY_DRAWER_SORT = "drawer_sort"
+        const val KEY_DRAWER_FOLDER_SORT = "drawer_folder_sort"
+        const val KEY_DRAWER_FOLDERS_POSITION = "drawer_folders_position"
+        const val KEY_LEARN_SEARCHES = "learn_searches"
+        const val KEY_SEARCH_PICKS = "search_picks"
+        const val KEY_SEARCH_HIDDEN = "search_hidden"
         const val KEY_POPUP_GRID = "folder_popup_grid"
         const val KEY_POPUP_COLUMNS = "folder_popup_columns"
         const val KEY_POPUP_OPACITY = "folder_popup_opacity"
@@ -929,7 +995,7 @@ class LauncherPrefs(context: Context) {
         private val DEVICE_KEYS = setOf(KEY_CAR_WAS_OPEN, KEY_AUTO_BACKUP_FOLDER, KEY_LAST_BACKUP, KEY_FOCUS_SNOOZE)
 
         /** Personal places and people: in a backup unless the user switched that off. */
-        private val PERSONAL_KEYS = setOf(KEY_DESTINATIONS, KEY_HOME_ADDRESS, KEY_WORK_ADDRESS, KEY_CALL_CONTACTS, KEY_CAR_BT_DEVICES)
+        private val PERSONAL_KEYS = setOf(KEY_DESTINATIONS, KEY_HOME_ADDRESS, KEY_WORK_ADDRESS, KEY_CALL_CONTACTS, KEY_CAR_BT_DEVICES, KEY_SEARCH_PICKS)
 
         /** Never exported or imported as plain values. */
         val SECRET_KEYS = CREDENTIAL_KEYS + DEVICE_KEYS

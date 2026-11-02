@@ -23,7 +23,13 @@ import com.rubenrups.launcher.data.LauncherPrefsHolder
 import com.rubenrups.launcher.data.Destination
 import com.rubenrups.launcher.data.BackupScheduler
 import com.rubenrups.launcher.data.GestureActions
+import com.rubenrups.launcher.data.ContextProfile
+import com.rubenrups.launcher.data.DrawerSort
+import com.rubenrups.launcher.data.SearchLearning
+import com.rubenrups.launcher.data.ProfileSignals
+import com.rubenrups.launcher.data.activeProfile
 import com.rubenrups.launcher.data.focusActive
+import com.rubenrups.launcher.data.withProfile
 import com.rubenrups.launcher.data.GlucoseState
 import com.rubenrups.launcher.data.UpdateManager
 import com.rubenrups.launcher.data.VirtualApps
@@ -40,6 +46,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -63,18 +70,40 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             .distinctUntilChanged()
             .stateIn(viewModelScope, SharingStarted.Eagerly, settings.value.focusActive())
 
+    /** The context profile that is on right now (by hand, or by its time, charger or Bluetooth trigger). */
+    val activeProfile: StateFlow<ContextProfile?> =
+        combine(
+            settings,
+            ProfileSignals.charging,
+            ProfileSignals.devices,
+            flow { while (true) { emit(Unit); delay(30_000) } },
+        ) { s, charging, devices, _ -> s.activeProfile(charging, devices) }
+            .distinctUntilChanged()
+            .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** The settings as the home screen should see them: the normal ones with the active profile laid over them. */
+    val effectiveSettings: StateFlow<LauncherSettings> =
+        combine(settings, activeProfile) { s, profile -> s.withProfile(profile) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, settings.value)
+
+    /** The installed apps under the names the user gave them (the installed name where they gave none). */
+    private val namedApps: StateFlow<List<AppInfo>> =
+        combine(repository.apps, settings.map { it.appLabels }.distinctUntilChanged()) { apps, labels ->
+            if (labels.isEmpty()) apps else apps.map { app -> labels[app.key]?.let { app.copy(label = it) } ?: app }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, repository.apps.value)
+
     /** Every installed app, including the ones focus mode is hiding (settings need to be able to untick them). */
-    val installedApps: StateFlow<List<AppInfo>> = repository.apps
+    val installedApps: StateFlow<List<AppInfo>> = namedApps
 
     /** Installed apps plus the launcher's own buttons (App drawer, Dashboard), which behave like apps in lists. */
     private val appsWithButtons: StateFlow<List<AppInfo>> =
-        repository.apps.map { it + VirtualApps.all }.stateIn(viewModelScope, SharingStarted.Eagerly, VirtualApps.all)
+        namedApps.map { it + VirtualApps.all }.stateIn(viewModelScope, SharingStarted.Eagerly, VirtualApps.all)
 
     /** Apps the user hasn't hidden: what the drawer and search show. */
     val visibleApps: StateFlow<List<AppInfo>> =
         combine(
             appsWithButtons,
-            settings.map { it.hidden }.distinctUntilChanged(),
+            effectiveSettings.map { it.hidden }.distinctUntilChanged(),
             focusActive,
             settings.map { it.focusApps }.distinctUntilChanged(),
         ) { apps, hidden, focus, focusApps ->
@@ -88,7 +117,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     /** Favourites (apps and folders) in the user's order, silently dropping uninstalled apps. */
     val favourites: StateFlow<List<Entry>> =
-        combine(repository.apps, settings, focusActive) { allApps, s, focus ->
+        combine(namedApps, effectiveSettings, focusActive) { allApps, s, focus ->
             val apps = if (focus) allApps.filter { it.key !in s.focusApps } else allApps
             val byKey = apps.associateBy { it.key }
             val folders = s.folders.associateBy { it.key }
@@ -111,17 +140,15 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             visibleApps,
             settings.map { it.folders }.distinctUntilChanged(),
             settings.map { it.usage }.distinctUntilChanged(),
-        ) { apps, folders, usage ->
+            settings.map { Triple(it.drawerSort, it.drawerFolderSort, it.drawerFoldersPosition) }.distinctUntilChanged(),
+        ) { apps, folders, usage, order ->
             val byKey = apps.associateBy { it.key }
             val inFolder = folders.flatMapTo(HashSet()) { it.appKeys }
             val all = ArrayList<Entry>()
             folders.forEach { f -> all.add(f.resolve(byKey, usage)) }
             // The App drawer button can sit in a folder, but listing it loose inside the drawer itself would be silly.
             apps.filter { it.key !in inFolder && it.key != VirtualApps.drawer.key }.forEach { all.add(AppEntry(it)) }
-            // Folders pin to the top (by name); loose apps follow in A-Z order.
-            val sortedFolders = all.filterIsInstance<FolderEntry>().sortedBy { it.label.lowercase() }
-            val sortedApps = all.filterIsInstance<AppEntry>().sortedWith(compareBy({ it.letter }, { it.label.lowercase() }))
-            sortedFolders + sortedApps
+            DrawerSort.arrange(all, appSort = order.first, folderSort = order.second, folderPosition = order.third, usage = usage)
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _drawerOpen = MutableStateFlow(false)
@@ -159,6 +186,20 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val glucose: StateFlow<GlucoseState> = glucoseStore.state
 
     init {
+        ProfileSignals.start(application)
+        // A profile that opens car mode does so when it switches on, and closes it again when it ends.
+        viewModelScope.launch {
+            var openedByProfile = false
+            activeProfile.map { it?.id to (it?.openCar == true) }.distinctUntilChanged().drop(1).collect { (_, openCar) ->
+                if (openCar) {
+                    CarMode.autoOpen(getApplication())
+                    openedByProfile = true
+                } else if (openedByProfile) {
+                    CarMode.autoClose(getApplication())
+                    openedByProfile = false
+                }
+            }
+        }
         if (!settings.value.onboardingDone && settings.value.favourites.isNotEmpty()) update { it.copy(onboardingDone = true) }
         // Bluetooth / charging triggers (see CarTriggerReceiver) open and close car mode while we are running.
         viewModelScope.launch {
@@ -185,6 +226,15 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         _drawerOpen.value = false
         _focusSearch.value = false
         _initialQuery.value = ""
+        searchQuery = ""
+    }
+
+    /** What is typed in the drawer's search field right now, so the app you then pick can be remembered for it. */
+    @Volatile
+    private var searchQuery: String = ""
+
+    fun setSearchQuery(query: String) {
+        searchQuery = query
     }
 
     /** True while nothing is covering the home screen, so a typed character should start a search. */
@@ -321,6 +371,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun launchByKey(key: String, from: DashboardEdge = DashboardEdge.NONE) {
+        if (key.startsWith("action:")) com.rubenrups.launcher.data.Diagnostics.log("gesture $key")
         if (key == ACTION_DASHBOARD) {
             setDashboardOpen(true, from)
             return
@@ -328,14 +379,39 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         when (key) {
             GestureActions.SETTINGS -> { setSettingsOpen(true); return }
             GestureActions.FLASHLIGHT -> { Flashlight.toggle(getApplication()); return }
+            GestureActions.CAMERA -> { startExternal(android.content.Intent(android.provider.MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)); return }
+            GestureActions.DIALER -> { startExternal(android.content.Intent(android.content.Intent.ACTION_DIAL)); return }
+            GestureActions.DND -> { toggleDoNotDisturb(); return }
+            GestureActions.PROFILE -> { cycleProfile(); return }
             in GestureActions.needsAccessibility -> { systemAction(key); return }
         }
         repository.apps.value.firstOrNull { it.key == key }?.let { launch(it) }
     }
 
+    private fun startExternal(intent: android.content.Intent) {
+        runCatching { getApplication<Application>().startActivity(intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)) }
+    }
+
+    /** Switches between everything allowed and priority-only; asks for the notification-policy grant the first time. */
+    private fun toggleDoNotDisturb() {
+        val context = getApplication<Application>()
+        val manager = context.getSystemService(android.app.NotificationManager::class.java)
+        if (!manager.isNotificationPolicyAccessGranted) {
+            com.rubenrups.launcher.data.Diagnostics.log("gesture ${GestureActions.DND} not done: no do-not-disturb access")
+            android.widget.Toast.makeText(context, "Allow Rups Launcher under Do Not Disturb access, then try again", android.widget.Toast.LENGTH_LONG).show()
+            startExternal(android.content.Intent(android.provider.Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
+            return
+        }
+        val quiet = manager.currentInterruptionFilter != android.app.NotificationManager.INTERRUPTION_FILTER_ALL
+        manager.setInterruptionFilter(
+            if (quiet) android.app.NotificationManager.INTERRUPTION_FILTER_ALL else android.app.NotificationManager.INTERRUPTION_FILTER_PRIORITY
+        )
+    }
+
     /** Runs an action through the accessibility service; if that is not switched on yet, opens its settings. */
     private fun systemAction(key: String) {
         if (GestureService.perform(key)) return
+        com.rubenrups.launcher.data.Diagnostics.log("gesture $key not done: accessibility service on=${GestureService.isEnabled}")
         val context = getApplication<Application>()
         android.widget.Toast.makeText(context, "Switch on Rups Launcher: system gestures under Accessibility", android.widget.Toast.LENGTH_LONG).show()
         context.startActivity(
@@ -399,22 +475,26 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun update(transform: (LauncherSettings) -> LauncherSettings) = prefs.update(transform)
 
-    fun addFavouriteKey(key: String) = update { s ->
-        if (key in s.favourites) s else s.copy(favourites = s.favourites + key)
+    /** Edits the favourites you can see: the active profile's own list when it has one, otherwise the normal list. */
+    private fun editFavourites(transform: (List<String>) -> List<String>) = update { s ->
+        val active = activeProfile.value
+        if (active != null && active.ownFavourites) {
+            s.copy(profiles = s.profiles.map { if (it.id == active.id) it.copy(favourites = transform(it.favourites)) else it })
+        } else {
+            s.copy(favourites = transform(s.favourites))
+        }
     }
 
-    fun removeFavouriteKey(key: String) = update { it.copy(favourites = it.favourites - key) }
+    fun addFavouriteKey(key: String) = editFavourites { if (key in it) it else it + key }
+
+    fun removeFavouriteKey(key: String) = editFavourites { it - key }
 
     fun addFavourite(app: AppInfo) = addFavouriteKey(app.key)
 
     fun removeFavourite(app: AppInfo) = removeFavouriteKey(app.key)
 
-    fun moveFavourite(from: Int, to: Int) = update { s ->
-        if (from !in s.favourites.indices || to !in s.favourites.indices || from == to) {
-            s
-        } else {
-            s.copy(favourites = s.favourites.toMutableList().apply { add(to, removeAt(from)) })
-        }
+    fun moveFavourite(from: Int, to: Int) = editFavourites { list ->
+        if (from !in list.indices || to !in list.indices || from == to) list else list.toMutableList().apply { add(to, removeAt(from)) }
     }
 
     /** Hiding also drops the app from favourites and folders, so it can't linger anywhere visible. */
@@ -422,11 +502,22 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         s.copy(
             hidden = s.hidden + app.key,
             favourites = s.favourites - app.key,
+            profiles = s.profiles.map { it.copy(favourites = it.favourites - app.key) },
             folders = s.folders.map { it.copy(appKeys = it.appKeys - app.key) },
         )
     }
 
     fun unhide(app: AppInfo) = update { it.copy(hidden = it.hidden - app.key) }
+
+    /** Gives an app a name of your own; a blank name goes back to the installed one. */
+    fun renameApp(app: AppInfo, label: String) = update { s ->
+        val name = label.trim()
+        s.copy(appLabels = if (name.isEmpty()) s.appLabels - app.key else s.appLabels + (app.key to name))
+    }
+
+    fun toggleSearchHidden(app: AppInfo) = update { s ->
+        s.copy(searchHidden = if (app.key in s.searchHidden) s.searchHidden - app.key else s.searchHidden + app.key)
+    }
 
     /** Creates a folder, optionally seeded with [firstApp]. An app lives in at most one folder. */
     fun createFolder(name: String, firstApp: AppInfo? = null): String {
@@ -493,7 +584,21 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         s.copy(
             folders = s.folders.filter { it.id != folder.id },
             favourites = s.favourites - folder.key,
+            profiles = s.profiles.map { it.copy(favourites = it.favourites - folder.key) },
         )
+    }
+
+    /** Switches to the next profile by hand (none → first → … → none), and says which one is on. */
+    fun cycleProfile() {
+        val s = settings.value
+        if (s.profiles.isEmpty()) {
+            android.widget.Toast.makeText(getApplication(), "No profiles yet: add one in Settings → Profiles", android.widget.Toast.LENGTH_SHORT).show()
+            return
+        }
+        val index = s.profiles.indexOfFirst { it.id == s.profileManual }
+        val next = s.profiles.getOrNull(index + 1)
+        update { it.copy(profileManual = next?.id.orEmpty()) }
+        android.widget.Toast.makeText(getApplication(), next?.let { "Profile: ${it.name}" } ?: "Profile: automatic", android.widget.Toast.LENGTH_SHORT).show()
     }
 
     fun installedIconPacks(): List<IconPack> = repository.iconPacks.installedPacks()
@@ -534,13 +639,18 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             return
         }
         val now = System.currentTimeMillis()
+        val searched = searchQuery.takeIf { it.isNotBlank() && _drawerOpen.value && settings.value.learnSearches }
         update { s ->
             val used = (s.usage[app.key]?.count ?: 0) + 1
             // Keep the table bounded: if it grows past the limit, forget the least recently used entries.
             val usage = (s.usage + (app.key to AppUsage(used, now))).let { all ->
                 if (all.size <= MAX_USAGE) all else all.entries.sortedByDescending { it.value.lastMs }.take(MAX_USAGE).associate { it.toPair() }
             }
-            s.copy(recents = (listOf(app.key) + (s.recents - app.key)).take(MAX_RECENTS), usage = usage)
+            s.copy(
+                recents = (listOf(app.key) + (s.recents - app.key)).take(MAX_RECENTS),
+                usage = usage,
+                searchPicks = if (searched != null) SearchLearning.record(s.searchPicks, searched, app.key) else s.searchPicks,
+            )
         }
         if (settings.value.launchAnimation) _launchPulse.value += 1
         repository.launch(app)

@@ -40,6 +40,7 @@
     </queries>
 
     <application
+        android:name=".LauncherApp"
         android:allowBackup="false"
         android:label="Rups Launcher"
         android:supportsRtl="true"

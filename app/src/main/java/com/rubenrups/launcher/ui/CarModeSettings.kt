@@ -195,7 +195,8 @@ internal fun CarAutomationGroups(viewModel: LauncherViewModel, settings: Launche
 
 /** The phone's paired Bluetooth devices, with a tick on the ones that should open car mode. */
 @Composable
-private fun BluetoothDevicesDialog(
+internal fun BluetoothDevicesDialog(
+    title: String = "Car Bluetooth devices",
     selected: Set<String>,
     onToggle: (String) -> Unit,
     onOpenBluetoothSettings: () -> Unit,
@@ -211,7 +212,7 @@ private fun BluetoothDevicesDialog(
         Surface(shape = RoundedCornerShape(24.dp), color = Color(0xF21A1A1A)) {
             Column(Modifier.heightIn(max = 520.dp).padding(top = 16.dp)) {
                 Text(
-                    "Car Bluetooth devices",
+                    title,
                     color = Color.White,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Medium,
