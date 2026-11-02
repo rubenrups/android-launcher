@@ -128,6 +128,7 @@ private val SearchIndex = listOf(
     SettingHit("Font", Page.APPEARANCE, "typeface theme serif mono"),
     SettingHit("Icon pack", Page.APPEARANCE, "theme nova adw"),
     SettingHit("Focus mode", Page.FOCUS, "hide apps distraction schedule work"),
+    SettingHit("Notification placement", Page.NOTIFICATIONS, "where position top bottom below media widgets favourites style compact plain count opacity"),
     SettingHit("Profiles", Page.PROFILES, "context work home night car charging bluetooth schedule favourites switch"),
     SettingHit("Swipe up", Page.GESTURES, "gesture"),
     SettingHit("Swipe down", Page.GESTURES, "gesture notification shade"),
@@ -981,6 +982,33 @@ private fun GlucosePage(
 @Composable
 private fun NotificationsPage(viewModel: LauncherViewModel, settings: LauncherSettings, listenerConnected: Boolean) {
     val context = LocalContext.current
+    Group("Notifications on the home screen") {
+        SwitchRow("Show notifications", settings.showNotifications) { v -> viewModel.update { it.copy(showNotifications = v) } }
+        if (settings.showNotifications) {
+            listOf(
+                "top" to "Above the media player",
+                "below_media" to "Below the media player",
+                "below_widgets" to "Below the widgets",
+                "bottom" to "Under the favourites",
+            ).forEach { (key, label) ->
+                ChoiceRow("Place: $label", selected = settings.notificationsPlacement == key) {
+                    viewModel.update { it.copy(notificationsPlacement = key) }
+                }
+            }
+            listOf("card" to "Title and text on a panel", "compact" to "One line each on a panel", "plain" to "Plain text, no panel").forEach { (key, label) ->
+                ChoiceRow("Style: $label", selected = settings.notificationsStyle == key) { viewModel.update { it.copy(notificationsStyle = key) } }
+            }
+            SliderRow("Shown at once", "${settings.notificationsCount}", settings.notificationsCount.toFloat(), 1f..8f) { v ->
+                viewModel.update { it.copy(notificationsCount = v.roundToInt()) }
+            }
+            if (settings.notificationsStyle != "plain") {
+                SliderRow("Panel opacity", "${settings.notificationsOpacity}%", settings.notificationsOpacity.toFloat(), 0f..100f) { v ->
+                    viewModel.update { it.copy(notificationsOpacity = v.roundToInt()) }
+                }
+            }
+            Hint("Swipe a notification sideways to dismiss it, tap it to open it. \"Under the favourites\" puts them at the bottom of the home screen.")
+        }
+    }
     Group("Access") {
         InfoRow("Notification access", if (listenerConnected) "Connected ✓" else "Not connected")
         NavRow("Open notification access settings") {

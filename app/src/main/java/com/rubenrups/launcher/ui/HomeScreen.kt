@@ -448,6 +448,15 @@ private fun HomeContent(
                 .then(if (settings.homeScrollAsOne) Modifier.verticalScroll(pageScroll, enabled = !editMode && pageScroll.maxValue > 0) else Modifier),
             horizontalAlignment = if (settings.alignEnd) Alignment.End else Alignment.Start,
         ) {
+            // The notification list can sit in four places (see settings), so it is built once and placed below.
+            val notificationsBlock: @Composable () -> Unit = {
+                if (settings.showNotifications) {
+                    if (!listenerConnected) Box(SidePadding) { EnableNotificationsPrompt() }
+                    Box(SidePadding.fillMaxWidth()) {
+                        NotificationList(notifications.take(settings.notificationsCount), settings.notificationsStyle, settings.notificationsOpacity)
+                    }
+                }
+            }
             // In landscape there is room beside the clock, so the media card moves up next to it.
             val landscape = landscapeNow
             Column(
@@ -504,16 +513,14 @@ private fun HomeContent(
                 onDismiss = viewModel::dismissUpdate,
                 onShowNotes = { notesFor = it },
             )
-            if (settings.showNotifications) {
-                if (!listenerConnected) Box(SidePadding) { EnableNotificationsPrompt() }
-                Box(SidePadding.fillMaxWidth()) { NotificationList(notifications.take(3)) }
-            }
+            if (settings.notificationsPlacement == "top") notificationsBlock()
             if (!mediaBesideClock) {
                 mediaState?.let {
                     Box(SidePadding.fillMaxWidth()) { MediaCard(it, settings) }
                     Spacer(Modifier.height(8.dp))
                 }
             }
+            if (settings.notificationsPlacement == "below_media") notificationsBlock()
             settings.widgetIds.forEachIndexed { index, id ->
                 key(id) {
                     // Hold a widget for Move up / Move down / Remove.
@@ -545,6 +552,7 @@ private fun HomeContent(
                     }
                 }
             }
+            if (settings.notificationsPlacement == "below_widgets") notificationsBlock()
             }
 
             // Top/bottom placement is its own setting, independent of left/right alignment.
@@ -594,6 +602,10 @@ private fun HomeContent(
                 Spacer(Modifier.height(8.dp))
             } else {
                 Box(Modifier.weight(1f, fill = false).then(scrollModifier)) { favouritesContent() }
+            }
+            if (settings.notificationsPlacement == "bottom") {
+                Spacer(Modifier.height(8.dp))
+                notificationsBlock()
             }
         }
 
@@ -1501,15 +1513,12 @@ private fun openNotificationAccessSettings(context: Context) {
 }
 
 @Composable
-private fun NotificationList(items: List<NotificationItem>) {
+private fun NotificationList(items: List<NotificationItem>, style: String, opacity: Int) {
     if (items.isEmpty()) return
     val context = LocalContext.current
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
-            .padding(vertical = 4.dp),
-    ) {
+    val compact = style == "compact"
+    val panel = if (style == "plain") Modifier else Modifier.background(Color.Black.copy(alpha = opacity / 100f), RoundedCornerShape(16.dp))
+    Column(Modifier.fillMaxWidth().then(panel).padding(vertical = 4.dp)) {
         items.forEach { item ->
             key(item.key) {
                 SwipeAwayRow(onDismiss = { NotificationStore.dismiss(item.key) }) {
@@ -1517,13 +1526,21 @@ private fun NotificationList(items: List<NotificationItem>) {
                         Modifier
                             .fillMaxWidth()
                             .clickable { openNotification(context, item) }
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                            .padding(horizontal = 16.dp, vertical = if (compact) 6.dp else 8.dp),
                     ) {
-                        if (item.title.isNotBlank()) {
-                            Text(item.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                        if (item.text.isNotBlank()) {
-                            Text(item.text, color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        if (compact) {
+                            // One line: the title, then as much of the text as fits.
+                            val line = listOf(item.title, item.text).filter { it.isNotBlank() }.joinToString(" · ")
+                            if (line.isNotBlank()) {
+                                Text(line, color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, style = HomeTextStyle)
+                            }
+                        } else {
+                            if (item.title.isNotBlank()) {
+                                Text(item.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, style = HomeTextStyle)
+                            }
+                            if (item.text.isNotBlank()) {
+                                Text(item.text, color = Color.White.copy(alpha = 0.75f), fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, style = HomeTextStyle)
+                            }
                         }
                     }
                 }

@@ -72,6 +72,12 @@ data class LauncherSettings(
     val hidden: Set<String> = emptySet(),
     val showClock: Boolean = true,
     val showNotifications: Boolean = true,
+    /** Where the notifications sit on the home screen: "top", "below_media", "below_widgets" or "bottom" (under the favourites). */
+    val notificationsPlacement: String = "top",
+    val notificationsCount: Int = 3,
+    /** "card" (title and text on a panel), "compact" (one line each on a panel) or "plain" (no panel). */
+    val notificationsStyle: String = "card",
+    val notificationsOpacity: Int = 45,
     val showMedia: Boolean = true,
     val favouriteTextSp: Int = 22,
     /** Horizontal: right-aligned text and icons. Independent of [anchorBottom]. */
@@ -410,6 +416,10 @@ class LauncherPrefs(context: Context) {
         hidden = prefs.getString(KEY_HIDDEN, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }.toSet(),
         showClock = prefs.getBoolean(KEY_SHOW_CLOCK, true),
         showNotifications = prefs.getBoolean(KEY_SHOW_NOTIFICATIONS, true),
+        notificationsPlacement = prefs.getString(KEY_NOTIF_PLACEMENT, "top") ?: "top",
+        notificationsCount = prefs.getInt(KEY_NOTIF_COUNT, 3),
+        notificationsStyle = prefs.getString(KEY_NOTIF_STYLE, "card") ?: "card",
+        notificationsOpacity = prefs.getInt(KEY_NOTIF_OPACITY, 45),
         showMedia = prefs.getBoolean(KEY_SHOW_MEDIA, true),
         favouriteTextSp = prefs.getInt(KEY_TEXT_SP, 22),
         alignEnd = prefs.getBoolean(KEY_ALIGN_END, false),
@@ -576,6 +586,10 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_HIDDEN, s.hidden.joinToString(SEPARATOR))
             .putBoolean(KEY_SHOW_CLOCK, s.showClock)
             .putBoolean(KEY_SHOW_NOTIFICATIONS, s.showNotifications)
+            .putString(KEY_NOTIF_PLACEMENT, s.notificationsPlacement)
+            .putInt(KEY_NOTIF_COUNT, s.notificationsCount)
+            .putString(KEY_NOTIF_STYLE, s.notificationsStyle)
+            .putInt(KEY_NOTIF_OPACITY, s.notificationsOpacity)
             .putBoolean(KEY_SHOW_MEDIA, s.showMedia)
             .putInt(KEY_TEXT_SP, s.favouriteTextSp)
             .putBoolean(KEY_ALIGN_END, s.alignEnd)
@@ -841,6 +855,10 @@ class LauncherPrefs(context: Context) {
         const val KEY_HIDDEN = "hidden"
         const val KEY_SHOW_CLOCK = "show_clock"
         const val KEY_SHOW_NOTIFICATIONS = "show_notifications"
+        const val KEY_NOTIF_PLACEMENT = "notif_placement"
+        const val KEY_NOTIF_COUNT = "notif_count"
+        const val KEY_NOTIF_STYLE = "notif_style"
+        const val KEY_NOTIF_OPACITY = "notif_opacity"
         const val KEY_SHOW_MEDIA = "show_media"
         const val KEY_TEXT_SP = "favourite_text_sp"
         const val KEY_ALIGN_END = "align_end"
