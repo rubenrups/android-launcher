@@ -109,7 +109,8 @@ private val CardWeight = mapOf(
  */
 @Composable
 fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSettings: () -> Unit) {
-    val settings by viewModel.settings.collectAsStateWithLifecycle()
+    // Car mode sees the settings with the active profile's gestures and card layout laid over them.
+    val settings by viewModel.effectiveSettings.collectAsStateWithLifecycle()
     val media by NotificationStore.media.collectAsStateWithLifecycle()
     val notifications by NotificationStore.notifications.collectAsStateWithLifecycle()
     val listenerConnected by NotificationStore.listenerConnected.collectAsStateWithLifecycle()
@@ -690,15 +691,8 @@ private const val MAPS_PACKAGE = "com.google.android.apps.maps"
 
 /** Runs a car-mode swipe: close, a media key, a launcher function, or an app. */
 private fun runCarAction(action: String, viewModel: LauncherViewModel, context: Context) {
-    val controls = NotificationStore.media.value?.controller?.transportControls
     when (action) {
         GestureActions.CLOSE -> viewModel.setDashboardOpen(false)
-        GestureActions.NEXT -> controls?.skipToNext()
-        GestureActions.PREVIOUS -> controls?.skipToPrevious()
-        GestureActions.PLAY_PAUSE -> {
-            val media = NotificationStore.media.value
-            if (media?.isPlaying == true) controls?.pause() else controls?.play()
-        }
         GestureActions.DRAWER -> { viewModel.setDashboardOpen(false); viewModel.openDrawer(false) }
         GestureActions.SEARCH -> { viewModel.setDashboardOpen(false); viewModel.openDrawer(true) }
         GestureActions.NOTIFICATIONS -> expandNotificationShade(context)

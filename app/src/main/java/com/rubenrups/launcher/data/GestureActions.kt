@@ -28,6 +28,17 @@ object GestureActions {
     const val NEXT = "action:next"
     const val PREVIOUS = "action:previous"
     const val PLAY_PAUSE = "action:playpause"
+    const val SEEK_FORWARD = "action:seekforward"
+    const val SEEK_BACK = "action:seekback"
+
+    /** Control whatever is playing; offered for every gesture, on the home screen and in car mode. */
+    val mediaActions: List<Pair<String, String>> = listOf(
+        NEXT to "Next track",
+        PREVIOUS to "Previous track",
+        PLAY_PAUSE to "Play / pause",
+        SEEK_FORWARD to "Skip forward 15 s",
+        SEEK_BACK to "Skip back 15 s",
+    )
 
     /** In the order they are offered in settings. */
     val builtIn: List<Pair<String, String>> = listOf(
@@ -47,14 +58,12 @@ object GestureActions {
         DIALER to "Phone dialer",
         DND to "Do not disturb (toggle)",
         PROFILE to "Switch profile",
-    )
+    ) + mediaActions
 
     /** What a swipe inside car mode can do (besides launching an app). */
     val carBuiltIn: List<Pair<String, String>> = listOf(
         CLOSE to "Close car mode",
-        NEXT to "Next track",
-        PREVIOUS to "Previous track",
-        PLAY_PAUSE to "Play / pause",
+    ) + mediaActions + listOf(
         DRAWER to "App drawer",
         SEARCH to "Search apps",
         NOTIFICATIONS to "Notification shade",
