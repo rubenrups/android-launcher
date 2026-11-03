@@ -42,7 +42,76 @@ data class ContextProfile(
     val hideMedia: Boolean = false,
     val hideRecents: Boolean = false,
     val openCar: Boolean = false,
+    /** Own gestures while this profile is on; null keeps the normal ones. */
+    val gestures: GestureSet? = null,
+    /** Own car-mode cards and quick-launch apps while this profile is on; null keeps the normal ones. */
+    val car: CarLayout? = null,
 )
+
+/** Every gesture setting that can differ per profile. The names are the ones the gesture chooser uses. */
+data class GestureSet(
+    val up: String,
+    val down: String,
+    val left: String,
+    val right: String,
+    val doubleTap: String,
+    val tripleTap: String,
+    val hold: String,
+    val carUp: String,
+    val carDown: String,
+    val carLeft: String,
+    val carRight: String,
+    val carDouble: String,
+    val carTriple: String,
+) {
+    /** This set with the gesture called [side] ("up", "doubleTap", "carLeft", …) changed; other names change nothing. */
+    fun with(side: String, action: String): GestureSet = when (side) {
+        "up" -> copy(up = action)
+        "down" -> copy(down = action)
+        "left" -> copy(left = action)
+        "right" -> copy(right = action)
+        "doubleTap" -> copy(doubleTap = action)
+        "tripleTap" -> copy(tripleTap = action)
+        "hold" -> copy(hold = action)
+        "carUp" -> copy(carUp = action)
+        "carDown" -> copy(carDown = action)
+        "carLeft" -> copy(carLeft = action)
+        "carRight" -> copy(carRight = action)
+        "carDouble" -> copy(carDouble = action)
+        "carTriple" -> copy(carTriple = action)
+        else -> this
+    }
+
+    companion object {
+        val sides = setOf("up", "down", "left", "right", "doubleTap", "tripleTap", "hold", "carUp", "carDown", "carLeft", "carRight", "carDouble", "carTriple")
+    }
+}
+
+/** The car-mode cards (order, hidden, half width) and the quick-launch apps. */
+data class CarLayout(
+    val order: List<String>,
+    val hidden: Set<String>,
+    val half: Set<String>,
+    val apps: List<String>,
+)
+
+fun LauncherSettings.gestureSet() = GestureSet(
+    up = swipeUp, down = swipeDown, left = swipeLeftApp, right = swipeRightApp,
+    doubleTap = doubleTapAction, tripleTap = tripleTapAction, hold = holdAction,
+    carUp = carSwipeUp, carDown = carSwipeDown, carLeft = carSwipeLeft, carRight = carSwipeRight,
+    carDouble = carDoubleTapAction, carTriple = carTripleTapAction,
+)
+
+fun LauncherSettings.withGestures(g: GestureSet) = copy(
+    swipeUp = g.up, swipeDown = g.down, swipeLeftApp = g.left, swipeRightApp = g.right,
+    doubleTapAction = g.doubleTap, tripleTapAction = g.tripleTap, holdAction = g.hold,
+    carSwipeUp = g.carUp, carSwipeDown = g.carDown, carSwipeLeft = g.carLeft, carSwipeRight = g.carRight,
+    carDoubleTapAction = g.carDouble, carTripleTapAction = g.carTriple,
+)
+
+fun LauncherSettings.carLayout() = CarLayout(dashboardOrder, dashboardHidden, dashboardHalf, carApps)
+
+fun LauncherSettings.withCarLayout(c: CarLayout) = copy(dashboardOrder = c.order, dashboardHidden = c.hidden, dashboardHalf = c.half, carApps = c.apps)
 
 /** Whether [now] falls inside the days and hours, which may run past midnight (22:00-06:00 belongs to the day it started). */
 fun scheduleActive(days: Set<Int>, startMin: Int, endMin: Int, now: Calendar = Calendar.getInstance()): Boolean {
@@ -76,7 +145,7 @@ fun LauncherSettings.activeProfile(
 /** The settings the home screen should use while [profile] is on; null (or no profile) leaves them as they are. */
 fun LauncherSettings.withProfile(profile: ContextProfile?): LauncherSettings {
     if (profile == null) return this
-    return copy(
+    var out = copy(
         favourites = if (profile.ownFavourites) profile.favourites else favourites,
         hidden = hidden + profile.hiddenApps,
         showClock = showClock && !profile.hideClock,
@@ -84,6 +153,9 @@ fun LauncherSettings.withProfile(profile: ContextProfile?): LauncherSettings {
         showMedia = showMedia && !profile.hideMedia,
         showHomeRecents = showHomeRecents && !profile.hideRecents,
     )
+    profile.gestures?.let { out = out.withGestures(it) }
+    profile.car?.let { out = out.withCarLayout(it) }
+    return out
 }
 
 /** What the profile triggers need to know about the phone: is it charging, and which Bluetooth devices are connected. */
@@ -144,7 +216,26 @@ object ProfileCodec {
                     .put("ownFavourites", p.ownFavourites).put("favourites", JSONArray(p.favourites))
                     .put("hidden", JSONArray(p.hiddenApps.toList()))
                     .put("hideClock", p.hideClock).put("hideNotifications", p.hideNotifications)
-                    .put("hideMedia", p.hideMedia).put("hideRecents", p.hideRecents).put("openCar", p.openCar),
+                    .put("hideMedia", p.hideMedia).put("hideRecents", p.hideRecents).put("openCar", p.openCar)
+                    .apply {
+                        p.gestures?.let { g ->
+                            put(
+                                "gestures",
+                                JSONObject()
+                                    .put("up", g.up).put("down", g.down).put("left", g.left).put("right", g.right)
+                                    .put("doubleTap", g.doubleTap).put("tripleTap", g.tripleTap).put("hold", g.hold)
+                                    .put("carUp", g.carUp).put("carDown", g.carDown).put("carLeft", g.carLeft).put("carRight", g.carRight)
+                                    .put("carDouble", g.carDouble).put("carTriple", g.carTriple),
+                            )
+                        }
+                        p.car?.let { c ->
+                            put(
+                                "car",
+                                JSONObject().put("order", JSONArray(c.order)).put("hidden", JSONArray(c.hidden.toList()))
+                                    .put("half", JSONArray(c.half.toList())).put("apps", JSONArray(c.apps)),
+                            )
+                        }
+                    },
             )
         }
     }.toString()
@@ -173,6 +264,19 @@ object ProfileCodec {
                     hideMedia = o.optBoolean("hideMedia"),
                     hideRecents = o.optBoolean("hideRecents"),
                     openCar = o.optBoolean("openCar"),
+                    gestures = o.optJSONObject("gestures")?.let { g ->
+                        fun v(name: String) = g.optString(name)
+                        GestureSet(
+                            up = v("up"), down = v("down"), left = v("left"), right = v("right"),
+                            doubleTap = v("doubleTap"), tripleTap = v("tripleTap"), hold = v("hold"),
+                            carUp = v("carUp"), carDown = v("carDown"), carLeft = v("carLeft"), carRight = v("carRight"),
+                            carDouble = v("carDouble"), carTriple = v("carTriple"),
+                        )
+                    },
+                    car = o.optJSONObject("car")?.let { c ->
+                        fun list(name: String) = c.optJSONArray(name)?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
+                        CarLayout(list("order"), list("hidden").toSet(), list("half").toSet(), list("apps"))
+                    },
                 )
             }
         }.getOrDefault(emptyList())

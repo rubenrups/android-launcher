@@ -63,7 +63,11 @@ import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.GestureService
+import com.rubenrups.launcher.data.ContextProfile
 import com.rubenrups.launcher.data.Diagnostics
+import com.rubenrups.launcher.data.GestureSet
+import com.rubenrups.launcher.data.gestureSet
+import com.rubenrups.launcher.data.withGestures
 import com.rubenrups.launcher.data.DrawerSort
 import com.rubenrups.launcher.data.AppInfo
 import com.rubenrups.launcher.data.CalendarReader
@@ -180,6 +184,8 @@ private val CardShape = RoundedCornerShape(20.dp)
 @Composable
 fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    // The settings as the phone is using them right now (a profile's own gestures and car layout laid over the normal ones).
+    val visible by viewModel.effectiveSettings.collectAsStateWithLifecycle()
     val visibleApps by viewModel.visibleApps.collectAsStateWithLifecycle()
     val listenerConnected by NotificationStore.listenerConnected.collectAsStateWithLifecycle()
     val updateState by viewModel.updateState.collectAsStateWithLifecycle()
@@ -258,12 +264,12 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
                     when (current) {
                         Page.HOME -> HomePage(viewModel, settings)
                         Page.APPEARANCE -> AppearancePage(viewModel, settings)
-                        Page.GESTURES -> GesturesPage(settings, visibleApps) { chooser = it }
+                        Page.GESTURES -> GesturesPage(visible, visibleApps, activeProfile) { chooser = it }
                         Page.DRAWER -> DrawerPage(viewModel, settings)
                         Page.FOCUS -> FocusPage(viewModel, settings)
                         Page.PROFILES -> ProfilesPage(viewModel, settings)
                         Page.GLUCOSE -> GlucosePage(viewModel, settings, visibleApps) { chooser = it }
-                        Page.DASHBOARD -> DashboardPage(viewModel, settings, visibleApps) { chooser = it }
+                        Page.DASHBOARD -> DashboardPage(viewModel, visible, visibleApps, activeProfile) { chooser = it }
                         Page.NOTIFICATIONS -> NotificationsPage(viewModel, settings, listenerConnected)
                         Page.APPS -> AppsPage(viewModel, settings) { pickWidget = true }
                         Page.BACKUP -> BackupPage(viewModel, settings, updateState)
@@ -280,41 +286,21 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
     val chooserContext = LocalContext.current
     chooser?.let { side ->
         fun set(key: String) {
-            val next = when (side) {
-                "up" -> settings.copy(swipeUp = key)
-                "down" -> settings.copy(swipeDown = key)
-                "left" -> settings.copy(swipeLeftApp = key)
-                "right" -> settings.copy(swipeRightApp = key)
-                "doubleTap" -> settings.copy(doubleTapAction = key)
-                "tripleTap" -> settings.copy(tripleTapAction = key)
-                "hold" -> settings.copy(holdAction = key)
-                else -> settings
-            }
-            // The home menu or the launcher settings must stay one gesture away, or you could lock yourself out of settings.
-            if (!GestureActions.reachesSettings(next)) {
-                android.widget.Toast.makeText(
-                    chooserContext, "Keep one gesture on Home menu or Launcher settings", android.widget.Toast.LENGTH_LONG,
-                ).show()
-                return
-            }
-            viewModel.update {
-                when (side) {
-                    "up" -> it.copy(swipeUp = key)
-                    "down" -> it.copy(swipeDown = key)
-                    "left" -> it.copy(swipeLeftApp = key)
-                    "right" -> it.copy(swipeRightApp = key)
-                    "doubleTap" -> it.copy(doubleTapAction = key)
-                    "tripleTap" -> it.copy(tripleTapAction = key)
-                    "hold" -> it.copy(holdAction = key)
-                    "carDouble" -> it.copy(carDoubleTapAction = key)
-                    "carTriple" -> it.copy(carTripleTapAction = key)
-                    "carUp" -> it.copy(carSwipeUp = key)
-                    "carDown" -> it.copy(carSwipeDown = key)
-                    "carLeft" -> it.copy(carSwipeLeft = key)
-                    "carRight" -> it.copy(carSwipeRight = key)
-                    "carApp" -> it.copy(carApps = if (key.isBlank() || key in it.carApps) it.carApps else it.carApps + key)
-                    else -> it.copy(glucoseApp = key)
+            when {
+                side in GestureSet.sides -> {
+                    // The gestures shown are the ones in force (a profile's own, when it has them), and the change goes there.
+                    // The home menu or the launcher settings must stay one gesture away, or you could lock yourself out of settings.
+                    val next = visible.withGestures(visible.gestureSet().with(side, key))
+                    if (!GestureActions.reachesSettings(next)) {
+                        android.widget.Toast.makeText(
+                            chooserContext, "Keep one gesture on Home menu or Launcher settings", android.widget.Toast.LENGTH_LONG,
+                        ).show()
+                        return
+                    }
+                    viewModel.updateGestures { it.with(side, key) }
                 }
+                side == "carApp" -> viewModel.addCarApp(key)
+                else -> viewModel.update { it.copy(glucoseApp = key) }
             }
             chooser = null
         }
@@ -678,7 +664,10 @@ private fun AppearancePage(viewModel: LauncherViewModel, settings: LauncherSetti
 }
 
 @Composable
-private fun GesturesPage(settings: LauncherSettings, apps: List<AppInfo>, openChooser: (String) -> Unit) {
+private fun GesturesPage(settings: LauncherSettings, apps: List<AppInfo>, profile: ContextProfile?, openChooser: (String) -> Unit) {
+    if (profile?.gestures != null) {
+        Group { Hint("Profile \"${profile.name}\" is on and has its own gestures: what you change here changes that profile, not the normal ones.") }
+    }
     Group("Swipes on the home screen") {
         NavRow("Swipe up", labelFor(settings.swipeUp, apps)) { openChooser("up") }
         NavRow("Swipe down", labelFor(settings.swipeDown, apps)) { openChooser("down") }
@@ -798,7 +787,22 @@ private fun DrawerPage(viewModel: LauncherViewModel, settings: LauncherSettings)
 }
 
 @Composable
-private fun DashboardPage(viewModel: LauncherViewModel, settings: LauncherSettings, apps: List<AppInfo>, openChooser: (String) -> Unit) {
+private fun DashboardPage(
+    viewModel: LauncherViewModel,
+    settings: LauncherSettings,
+    apps: List<AppInfo>,
+    profile: ContextProfile?,
+    openChooser: (String) -> Unit,
+) {
+    if (profile?.gestures != null || profile?.car != null) {
+        Group {
+            Hint(
+                "Profile \"${profile.name}\" is on and has its own " +
+                    listOfNotNull("car gestures".takeIf { profile.gestures != null }, "card layout".takeIf { profile.car != null }).joinToString(" and ") +
+                    ": changes to those here go to that profile, not the normal ones."
+            )
+        }
+    }
     Group("Screen") {
         SwitchRow(
             "Keep the screen on",

@@ -23,7 +23,14 @@ import com.rubenrups.launcher.data.LauncherPrefsHolder
 import com.rubenrups.launcher.data.Destination
 import com.rubenrups.launcher.data.BackupScheduler
 import com.rubenrups.launcher.data.GestureActions
+import com.rubenrups.launcher.data.CarLayout
 import com.rubenrups.launcher.data.ContextProfile
+import com.rubenrups.launcher.notifications.NotificationStore
+import com.rubenrups.launcher.data.GestureSet
+import com.rubenrups.launcher.data.carLayout
+import com.rubenrups.launcher.data.gestureSet
+import com.rubenrups.launcher.data.withCarLayout
+import com.rubenrups.launcher.data.withGestures
 import com.rubenrups.launcher.data.DrawerSort
 import com.rubenrups.launcher.data.SearchLearning
 import com.rubenrups.launcher.data.ProfileSignals
@@ -308,19 +315,35 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun addCarApp(key: String) = update { s ->
-        if (key.isBlank() || key in s.carApps) s else s.copy(carApps = s.carApps + key)
+    /** Edits the car layout you can see: the active profile's own layout when it has one, otherwise the normal one. */
+    private fun editCarLayout(transform: (CarLayout) -> CarLayout) = update { s ->
+        val active = activeProfile.value
+        val own = active?.car
+        if (active != null && own != null) {
+            s.copy(profiles = s.profiles.map { if (it.id == active.id) it.copy(car = transform(own)) else it })
+        } else {
+            s.withCarLayout(transform(s.carLayout()))
+        }
     }
 
-    fun removeCarApp(index: Int) = update { s -> s.copy(carApps = s.carApps.filterIndexed { i, _ -> i != index }) }
-
-    fun moveCarApp(index: Int, delta: Int) = update { s ->
-        val to = index + delta
-        if (index !in s.carApps.indices || to !in s.carApps.indices) {
-            s
+    /** Edits the gestures you can see: the active profile's own set when it has one, otherwise the normal ones. */
+    fun updateGestures(transform: (GestureSet) -> GestureSet) = update { s ->
+        val active = activeProfile.value
+        val own = active?.gestures
+        if (active != null && own != null) {
+            s.copy(profiles = s.profiles.map { if (it.id == active.id) it.copy(gestures = transform(own)) else it })
         } else {
-            s.copy(carApps = s.carApps.toMutableList().apply { add(to, removeAt(index)) })
+            s.withGestures(transform(s.gestureSet()))
         }
+    }
+
+    fun addCarApp(key: String) = editCarLayout { c -> if (key.isBlank() || key in c.apps) c else c.copy(apps = c.apps + key) }
+
+    fun removeCarApp(index: Int) = editCarLayout { c -> c.copy(apps = c.apps.filterIndexed { i, _ -> i != index }) }
+
+    fun moveCarApp(index: Int, delta: Int) = editCarLayout { c ->
+        val to = index + delta
+        if (index !in c.apps.indices || to !in c.apps.indices) c else c.copy(apps = c.apps.toMutableList().apply { add(to, removeAt(index)) })
     }
 
     fun addDestination() = update { it.copy(destinations = it.destinations + Destination("", "")) }
@@ -341,14 +364,14 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     /** Swaps two car-mode cards in the stored order. */
-    fun swapDashboardCards(a: String, b: String) = update { s ->
-        val i = s.dashboardOrder.indexOf(a)
-        val j = s.dashboardOrder.indexOf(b)
-        if (i < 0 || j < 0) s else s.copy(dashboardOrder = s.dashboardOrder.toMutableList().apply { this[i] = b; this[j] = a })
+    fun swapDashboardCards(a: String, b: String) = editCarLayout { c ->
+        val i = c.order.indexOf(a)
+        val j = c.order.indexOf(b)
+        if (i < 0 || j < 0) c else c.copy(order = c.order.toMutableList().apply { this[i] = b; this[j] = a })
     }
 
-    fun setDashboardCardHidden(key: String, hidden: Boolean) = update { s ->
-        s.copy(dashboardHidden = if (hidden) s.dashboardHidden + key else s.dashboardHidden - key)
+    fun setDashboardCardHidden(key: String, hidden: Boolean) = editCarLayout { c ->
+        c.copy(hidden = if (hidden) c.hidden + key else c.hidden - key)
     }
 
     fun moveHeaderItem(key: String, by: Int) = update { s ->
@@ -357,8 +380,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         if (i < 0 || j !in s.headerOrder.indices) s else s.copy(headerOrder = s.headerOrder.toMutableList().apply { add(j, removeAt(i)) })
     }
 
-    fun setDashboardCardHalf(key: String, half: Boolean) = update { s ->
-        s.copy(dashboardHalf = if (half) s.dashboardHalf + key else s.dashboardHalf - key)
+    fun setDashboardCardHalf(key: String, half: Boolean) = editCarLayout { c ->
+        c.copy(half = if (half) c.half + key else c.half - key)
     }
 
     fun dismissUpdate(build: Int) = update { it.copy(dismissedUpdate = build) }
@@ -383,9 +406,32 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             GestureActions.DIALER -> { startExternal(android.content.Intent(android.content.Intent.ACTION_DIAL)); return }
             GestureActions.DND -> { toggleDoNotDisturb(); return }
             GestureActions.PROFILE -> { cycleProfile(); return }
+            GestureActions.NEXT, GestureActions.PREVIOUS, GestureActions.PLAY_PAUSE,
+            GestureActions.SEEK_FORWARD, GestureActions.SEEK_BACK -> { mediaAction(key); return }
             in GestureActions.needsAccessibility -> { systemAction(key); return }
         }
         repository.apps.value.firstOrNull { it.key == key }?.let { launch(it) }
+    }
+
+    /** Controls the player that is showing on the media card; does nothing (and logs it) when nothing is playing. */
+    private fun mediaAction(key: String) {
+        val media = NotificationStore.media.value
+        val controller = media?.controller
+        val controls = controller?.transportControls
+        if (controls == null) {
+            com.rubenrups.launcher.data.Diagnostics.log("gesture $key not done: no active player")
+            return
+        }
+        when (key) {
+            GestureActions.NEXT -> controls.skipToNext()
+            GestureActions.PREVIOUS -> controls.skipToPrevious()
+            GestureActions.PLAY_PAUSE -> if (media?.isPlaying == true) controls.pause() else controls.play()
+            GestureActions.SEEK_FORWARD, GestureActions.SEEK_BACK -> {
+                val position = controller.playbackState?.position ?: return
+                val step = if (key == GestureActions.SEEK_FORWARD) SEEK_STEP_MS else -SEEK_STEP_MS
+                controls.seekTo((position + step).coerceAtLeast(0L))
+            }
+        }
     }
 
     private fun startExternal(intent: android.content.Intent) {
@@ -658,6 +704,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     companion object {
+        private const val SEEK_STEP_MS = 15_000L
+
         /** Swipe-gesture target that opens the dashboard instead of an app. */
         const val ACTION_DASHBOARD = GestureActions.DASHBOARD
         private const val MAX_RECENTS = 10

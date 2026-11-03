@@ -279,7 +279,8 @@ private fun HomeContent(
                 landscapeNow && settings.twoColumnsLandscape -> (favourites.size + 1) / 2
                 else -> favourites.size
             }
-            rows.coerceIn(1, MIN_FAVOURITE_ROWS)
+            // A landscape screen is short: keep room for one row only, so the clock, notifications and media get the rest.
+            rows.coerceIn(1, if (landscapeNow) 1 else MIN_FAVOURITE_ROWS)
         }
         val bars = launcherInsets().asPaddingValues()
         val topSectionMax = (maxHeight - bars.calculateTopPadding() - bars.calculateBottomPadding() - 32.dp -
@@ -477,8 +478,9 @@ private fun HomeContent(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(24.dp),
                     ) {
+                        // Both halves get a share of the width: a clock that fills the row would leave the media card none.
                         val clock: @Composable () -> Unit = {
-                            Clock(settings, weather, nextEvent, glucoseLine)
+                            Box(Modifier.weight(1f)) { Clock(settings, weather, nextEvent, glucoseLine) }
                         }
                         val card: @Composable () -> Unit = {
                             mediaState?.let { MediaCard(it, settings, Modifier.weight(1f)) }

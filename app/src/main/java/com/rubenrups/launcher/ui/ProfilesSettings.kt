@@ -42,6 +42,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.data.ContextProfile
 import com.rubenrups.launcher.data.LauncherSettings
+import com.rubenrups.launcher.data.carLayout
+import com.rubenrups.launcher.data.gestureSet
 import com.rubenrups.launcher.data.ProfileTrigger
 import com.rubenrups.launcher.data.formatMinutes
 import java.util.Calendar
@@ -185,6 +187,27 @@ private fun ProfileEditor(
         }
         NavRow("Choose apps") { pickingHidden = true }
         Hint("Hidden from the home screen, the drawer and search while this profile is on. Nothing is uninstalled.")
+    }
+    Group("Gestures and car mode") {
+        SwitchRow(
+            "Own gestures",
+            profile.gestures != null,
+            subtitle = "Swipes, taps and hold on the home screen and in car mode. Starts as a copy of the normal ones.",
+        ) { on ->
+            change { it.copy(gestures = if (on) settings.gestureSet() else null) }
+        }
+        SwitchRow(
+            "Own car mode layout",
+            profile.car != null,
+            subtitle = "Which cards show, their order and width, and the quick-launch apps. Starts as a copy of the normal layout.",
+        ) { on ->
+            change { it.copy(car = if (on) settings.carLayout() else null) }
+        }
+        Hint(
+            "To change them, switch this profile on, then open Settings → Gestures or Settings → Car mode (or hold a car " +
+                "card): while the profile is on, those edits go to the profile. One gesture must always stay on Home menu or " +
+                "Launcher settings, in every profile."
+        )
     }
     Group("Home screen while it is on") {
         SwitchRow("Hide the clock", profile.hideClock) { v -> change { it.copy(hideClock = v) } }
