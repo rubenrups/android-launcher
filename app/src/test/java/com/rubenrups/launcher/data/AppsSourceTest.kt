@@ -28,3 +28,40 @@ class AppsSourceTest {
         assertEquals("Recent apps", AppsSource.title(AppsSource.RECENT))
     }
 }
+
+class AppSectionsTest {
+    private val settings = LauncherSettings(
+        recents = listOf("a", "b", "c"),
+        usage = mapOf(
+            "z" to AppUsage(count = 50, lastMs = 10),
+            "a" to AppUsage(count = 30, lastMs = 500),
+            "y" to AppUsage(count = 20, lastMs = 20),
+            "b" to AppUsage(count = 1, lastMs = 400),
+        ),
+    )
+
+    @Test
+    fun oneSourceGivesOneTitledRow() {
+        val sections = settings.appSections(AppsSource.RECENT, 2) { true }
+        assertEquals(listOf("Recent apps" to listOf("a", "b")), sections)
+    }
+
+    @Test
+    fun bothGivesTwoRowsWithoutRepeats() {
+        val sections = settings.appSections(AppsSource.BOTH, 2) { true }
+        assertEquals(listOf("a", "b"), sections[0].second)
+        // z and y lead the most used once a (the top one) is already in the recent row.
+        assertEquals(listOf("z", "y"), sections[1].second)
+        assertEquals("Most used apps", sections[1].first)
+    }
+
+    @Test
+    fun appsThatCannotBeShownAreSkippedBeforeCounting() {
+        val sections = settings.appSections(AppsSource.BOTH, 2) { it != "a" }
+        assertEquals(listOf("b", "c"), sections[0].second)
+        assertEquals(listOf("z", "y"), sections[1].second)
+    }
+
+    @Test
+    fun nothingToShowGivesNoRows() = assertEquals(emptyList<Pair<String, List<String>>>(), settings.appSections(AppsSource.BOTH, 3) { false })
+}
