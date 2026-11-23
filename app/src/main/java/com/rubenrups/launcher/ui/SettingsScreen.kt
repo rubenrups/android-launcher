@@ -67,6 +67,7 @@ import com.rubenrups.launcher.data.AppsSource
 import com.rubenrups.launcher.data.ContextProfile
 import com.rubenrups.launcher.data.Diagnostics
 import com.rubenrups.launcher.data.GestureSet
+import com.rubenrups.launcher.data.UsageWindow
 import com.rubenrups.launcher.data.gestureSet
 import com.rubenrups.launcher.data.withGestures
 import com.rubenrups.launcher.data.DrawerSort
@@ -107,6 +108,7 @@ private val SearchIndex = listOf(
     SettingHit("Header order and text", Page.HOME, "clock date time format 12 24 hour weight size order items"),
     SettingHit("Full screen", Page.APPEARANCE, "immersive hide status bar navigation bar clock battery"),
     SettingHit("Drawer layout", Page.DRAWER, "icons only grid columns names icon size"),
+    SettingHit("Most used window", Page.DRAWER, "last 7 30 90 days week month fading decay all time count"),
     SettingHit("Drawer order", Page.DRAWER, "sort alphabetical a-z z-a most used recently used folders position top bottom"),
     SettingHit("Search ranking", Page.DRAWER, "learn remember picks most chosen apps score forget"),
     SettingHit("Search button look", Page.HOME, "search style round pill bar position size background opacity"),
@@ -713,6 +715,17 @@ private fun DrawerPage(viewModel: LauncherViewModel, settings: LauncherSettings)
             ChoiceRow(label, selected = settings.drawerSort == key) { viewModel.update { it.copy(drawerSort = key) } }
         }
         Hint("Most used and Recently used count apps opened from the launcher. The A–Z letter strip only shows for A–Z and Z–A.")
+    }
+    Group("What counts as most used") {
+        UsageWindow.options.forEach { (key, label) ->
+            ChoiceRow(label, selected = settings.mostUsedWindow == key) { viewModel.update { it.copy(mostUsedWindow = key) } }
+        }
+        Hint(
+            "Used by every most-used list: the drawer order, and the home, drawer and car-mode recent-apps spots. " +
+                "A time window ignores older launches, and an app with none in the window drops out of the lists. " +
+                "Fading counts every launch, but one from two weeks ago counts half as much as one from today. " +
+                "The launcher only began recording days with this version, so the windowed modes fill up from now."
+        )
     }
     Group("Folders in the drawer") {
         DrawerSort.options.forEach { (key, label) ->
