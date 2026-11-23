@@ -122,7 +122,7 @@ import com.rubenrups.launcher.data.GestureActions
 import com.rubenrups.launcher.data.HeaderItems
 import com.rubenrups.launcher.data.HomeRecentsAlign
 import com.rubenrups.launcher.data.UpdateState
-import com.rubenrups.launcher.data.topAppKeys
+import com.rubenrups.launcher.data.appSections
 import com.rubenrups.launcher.data.VirtualApps
 import com.rubenrups.launcher.expandNotificationShade
 import com.rubenrups.launcher.notifications.MediaState
@@ -252,16 +252,23 @@ private fun HomeContent(
         }
     }
 
-    val homeRecents = remember(allApps, settings.recents, settings.usage, settings.showHomeRecents, settings.homeRecentsCount, settings.homeRecentsSource) {
+    // One row of icons, or two (recent and most used) when both are wanted.
+    val homeRecentRows = remember(allApps, settings.recents, settings.usage, settings.showHomeRecents, settings.homeRecentsCount, settings.homeRecentsSource) {
         if (!settings.showHomeRecents) emptyList() else {
             val byKey = allApps.associateBy { it.key }
-            settings.topAppKeys(settings.homeRecentsSource).mapNotNull { byKey[it] }.take(settings.homeRecentsCount)
+            settings.appSections(settings.homeRecentsSource, settings.homeRecentsCount) { it in byKey }
+                .map { (_, keys) -> keys.mapNotNull { byKey[it] } }
         }
     }
     // Room the icon row takes at the bottom, so the favourites and the clock section stop above it.
     // A search bar along the bottom takes the whole width, so everything else stops above it.
     val searchBarReserve = if (settings.showSearchButton && settings.searchButtonStyle == "bar") (settings.searchButtonSizeDp + 24).dp else 0.dp
-    val recentsReserve = (if (homeRecents.isEmpty()) 0.dp else homeRecentsRowHeight(settings) * homeRecentsRowCount(settings, homeRecents.size) + settings.homeRecentsBottomDp.dp) + searchBarReserve
+    val recentsReserve = (
+        if (homeRecentRows.isEmpty()) 0.dp else {
+            homeRecentRows.fold(0.dp) { total, apps -> total + homeRecentsRowHeight(settings) * homeRecentsRowCount(settings, apps.size) } +
+                settings.homeRecentsBottomDp.dp
+        }
+        ) + searchBarReserve
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // The favourites always keep room for a few rows; everything above them (clock, notifications, media,
@@ -706,16 +713,15 @@ private fun HomeContent(
             }
         }
 
-        if (homeRecents.isNotEmpty() && !editMode) {
-            HomeRecentsRow(
-                apps = homeRecents,
-                viewModel = viewModel,
-                settings = settings,
-                modifier = Modifier
+        if (homeRecentRows.isNotEmpty() && !editMode) {
+            Column(
+                Modifier
                     .align(Alignment.BottomCenter)
                     .windowInsetsPadding(launcherInsets())
                     .padding(bottom = settings.homeRecentsBottomDp.dp + searchBarReserve),
-            )
+            ) {
+                homeRecentRows.forEach { apps -> HomeRecentsRow(apps = apps, viewModel = viewModel, settings = settings) }
+            }
         }
 
         if (settings.showSearchButton && !editMode) {

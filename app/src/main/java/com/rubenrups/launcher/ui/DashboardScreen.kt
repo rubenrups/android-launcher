@@ -10,7 +10,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import com.rubenrups.launcher.data.AppsSource
+import com.rubenrups.launcher.data.appSections
 import com.rubenrups.launcher.data.CallContact
 import com.rubenrups.launcher.data.topAppKeys
 import com.rubenrups.launcher.data.DashboardModules
@@ -165,7 +165,7 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
             DashboardModules.QUICK -> QuickSettingsCard()
             DashboardModules.NOTIFICATIONS -> NotificationsCard(notifications, listenerConnected, settings.carNotificationCount, openSettingsFor(key))
             DashboardModules.CLOCK -> ClockCard()
-            DashboardModules.RECENTS -> RecentAppsCard(viewModel, settings.topAppKeys(settings.carRecentsSource), AppsSource.title(settings.carRecentsSource))
+            DashboardModules.RECENTS -> RecentAppsCard(viewModel, settings)
             DashboardModules.STATS -> StatTiles(battery, weather, nextEvent?.text)
             else -> Unit
         }
@@ -726,14 +726,18 @@ private fun QuickAppsCard(viewModel: LauncherViewModel, keys: List<String>, onOp
 
 /** The apps used most recently (newest first), as big tiles. */
 @Composable
-private fun RecentAppsCard(viewModel: LauncherViewModel, keys: List<String>, title: String) {
+private fun RecentAppsCard(viewModel: LauncherViewModel, settings: LauncherSettings) {
     val installed by viewModel.visibleApps.collectAsStateWithLifecycle()
     val byKey = remember(installed) { installed.associateBy { it.key } }
-    val apps = keys.mapNotNull { byKey[it] }.take(NAV_TILES_PER_ROW * 2)
-    if (apps.isEmpty()) return
+    val sections = settings.appSections(settings.carRecentsSource, NAV_TILES_PER_ROW * 2) { it in byKey }
+        .map { (title, keys) -> title to keys.mapNotNull { byKey[it] } }
+    if (sections.isEmpty()) return
     Card {
-        Text(title, color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
-        AppTiles(viewModel, apps)
+        sections.forEachIndexed { index, (title, apps) ->
+            if (index > 0) Spacer(Modifier.height(12.dp))
+            Text(title, color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+            AppTiles(viewModel, apps)
+        }
     }
 }
 

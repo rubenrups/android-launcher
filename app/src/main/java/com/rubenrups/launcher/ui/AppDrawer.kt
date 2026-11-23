@@ -77,7 +77,7 @@ import com.rubenrups.launcher.data.VirtualApps
 import com.rubenrups.launcher.data.DrawerSort
 import com.rubenrups.launcher.data.Entry
 import com.rubenrups.launcher.data.SearchLearning
-import com.rubenrups.launcher.data.topAppKeys
+import com.rubenrups.launcher.data.appSections
 import com.rubenrups.launcher.data.FolderEntry
 import com.rubenrups.launcher.data.WebSearchEngine
 import com.rubenrups.launcher.notifications.NotificationStore
@@ -152,16 +152,17 @@ fun AppDrawer(
     }
 
     // Rows above the entries when not searching: an optional recents row, then 'New folder'.
-    val recentApps = remember(allApps, settings.recents, settings.usage, settings.showRecents, settings.drawerRecentsSource) {
+    val recentSections = remember(allApps, settings.recents, settings.usage, settings.showRecents, settings.drawerRecentsSource) {
         if (!settings.showRecents) {
             emptyList()
         } else {
             val byKey = allApps.associateBy { it.key }
-            settings.topAppKeys(settings.drawerRecentsSource).mapNotNull { byKey[it] }.take(RECENTS_SHOWN)
+            settings.appSections(settings.drawerRecentsSource, RECENTS_SHOWN) { it in byKey }
+                .map { (title, keys) -> title to keys.mapNotNull { byKey[it] } }
         }
     }
-    val showRecentsRow = query.isBlank() && recentApps.isNotEmpty()
-    val headerRows = (if (query.isBlank()) 1 else 0) + (if (showRecentsRow) 1 else 0)
+    val showRecentsRow = query.isBlank() && recentSections.isNotEmpty()
+    val headerRows = (if (query.isBlank()) 1 else 0) + (if (showRecentsRow) recentSections.size else 0)
 
     // In the grid layout one list item is a whole row of icons.
     val grid = settings.drawerLayout == "grid"
@@ -205,7 +206,10 @@ fun AppDrawer(
                     ),
                 ) {
                     if (showRecentsRow) {
-                        item(key = "recents") { RecentsRow(recentApps, viewModel) }
+                        recentSections.forEachIndexed { index, (title, apps) ->
+                            // With two rows, say which is which.
+                            item(key = "recents-$index") { RecentsRow(apps, viewModel, title.takeIf { recentSections.size > 1 }) }
+                        }
                     }
                     if (query.isBlank()) {
                         item(key = "new-folder") { NewFolderRow(onClick = { newFolder = true }) }
@@ -600,7 +604,10 @@ internal fun AppIcon(app: AppInfo, viewModel: LauncherViewModel, size: Dp = 36.d
 
 /** The last few launched apps as a row of icons at the top of the drawer. */
 @Composable
-private fun RecentsRow(apps: List<AppInfo>, viewModel: LauncherViewModel) {
+private fun RecentsRow(apps: List<AppInfo>, viewModel: LauncherViewModel, title: String? = null) {
+    title?.let {
+        Text(it, color = Color.White.copy(alpha = 0.55f), fontSize = 12.sp, modifier = Modifier.padding(start = 16.dp, top = 6.dp))
+    }
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.SpaceEvenly,
