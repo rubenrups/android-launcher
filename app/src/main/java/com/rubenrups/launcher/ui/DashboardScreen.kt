@@ -4,9 +4,15 @@ import android.content.Context
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.net.Uri
+import android.content.ContentResolver
+import android.database.ContentObserver
+import android.media.AudioManager
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -38,6 +44,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import com.rubenrups.launcher.data.GestureActions
 import com.rubenrups.launcher.expandNotificationShade
 import kotlin.math.abs
+import kotlin.math.roundToInt
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -53,11 +60,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -94,6 +104,7 @@ private val LocalHalfCard = compositionLocalOf { false }
 private val CardWeight = mapOf(
     DashboardModules.GLUCOSE to 1.3f,
     DashboardModules.MEDIA to 2.2f,
+    DashboardModules.VOLUME to 1.2f,
     DashboardModules.NAVIGATION to 1.1f,
     DashboardModules.APPS to 1.6f,
     DashboardModules.CALLS to 1.5f,
@@ -156,6 +167,7 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
         when (key) {
             DashboardModules.GLUCOSE -> GlucoseCard(viewModel, openSettingsFor(key))
             DashboardModules.MEDIA -> CarMediaCard(media, settings)
+            DashboardModules.VOLUME -> VolumeCard(settings)
             // While a route is active: the next turn. Otherwise: one-tap destinations.
             DashboardModules.NAVIGATION ->
                 navigation?.let { NavigationCard(it, big = true) } ?: NavigateCard(settings.destinations, openSettingsFor(key))
@@ -302,6 +314,7 @@ private fun settingsTargetFor(card: String): Pair<String, String> = when (card) 
     // The weather city, battery and calendar toggles live with the home-screen header settings.
     DashboardModules.WEATHER, DashboardModules.STATS -> "HOME" to "Header"
     DashboardModules.MEDIA -> "DASHBOARD" to "Media card"
+    DashboardModules.VOLUME -> "DASHBOARD" to "Volume card"
     DashboardModules.NAVIGATION -> "DASHBOARD" to "Navigation places"
     DashboardModules.APPS -> "DASHBOARD" to "Quick launch apps"
     DashboardModules.CALLS -> "DASHBOARD" to "Call buttons"
@@ -529,6 +542,70 @@ private fun QuickSettingsCard() {
             QuickTile("🔵", "Bluetooth") { open(Settings.ACTION_BLUETOOTH_SETTINGS) }
             QuickTile("🔔", "Sound") { open(Settings.ACTION_SOUND_SETTINGS) }
             QuickTile("☀️", "Display") { open(Settings.ACTION_DISPLAY_SETTINGS) }
+        }
+    }
+}
+
+/** Media volume (and optionally the ringtone) with big minus and plus buttons, a slider, and a mute button. */
+@Composable
+private fun VolumeCard(settings: LauncherSettings) {
+    val context = LocalContext.current
+    val audio = remember { context.getSystemService(AudioManager::class.java) }
+    Card {
+        Text("Volume", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+        VolumeRow("Media", AudioManager.STREAM_MUSIC, audio, settings.carVolumeMute, context.contentResolver)
+        if (settings.carVolumeRing) {
+            Spacer(Modifier.height(4.dp))
+            VolumeRow("Ring", AudioManager.STREAM_RING, audio, showMute = false, resolver = context.contentResolver)
+        }
+    }
+}
+
+@Composable
+private fun VolumeRow(label: String, stream: Int, audio: AudioManager, showMute: Boolean, resolver: ContentResolver) {
+    val max = remember(stream) { audio.getStreamMaxVolume(stream).coerceAtLeast(1) }
+    var level by remember { mutableIntStateOf(audio.getStreamVolume(stream)) }
+    var muted by remember { mutableStateOf(audio.isStreamMute(stream)) }
+    // The volume keys and other apps change it too: follow the system's volume settings.
+    DisposableEffect(stream) {
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                level = audio.getStreamVolume(stream)
+                muted = audio.isStreamMute(stream)
+            }
+        }
+        resolver.registerContentObserver(android.provider.Settings.System.CONTENT_URI, true, observer)
+        onDispose { resolver.unregisterContentObserver(observer) }
+    }
+    fun set(value: Int) {
+        // Refused (for example the ringtone while do-not-disturb is on and not allowed): leave the level as it is.
+        runCatching { audio.setStreamVolume(stream, value.coerceIn(0, max), 0) }
+        level = audio.getStreamVolume(stream)
+        muted = audio.isStreamMute(stream)
+    }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = Color.White, fontSize = 15.sp, modifier = Modifier.width(56.dp))
+        Text("−", color = Color.White, fontSize = 30.sp, modifier = Modifier.clickable { set(level - 1) }.padding(horizontal = 14.dp, vertical = 6.dp))
+        Slider(
+            value = if (muted) 0f else level.toFloat(),
+            onValueChange = { set(it.roundToInt()) },
+            valueRange = 0f..max.toFloat(),
+            colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent, inactiveTrackColor = Color.White.copy(alpha = 0.2f)),
+            modifier = Modifier.weight(1f),
+        )
+        Text("+", color = Color.White, fontSize = 30.sp, modifier = Modifier.clickable { set(level + 1) }.padding(horizontal = 14.dp, vertical = 6.dp))
+        if (showMute) {
+            Text(
+                if (muted) "🔇" else "🔈",
+                fontSize = 24.sp,
+                modifier = Modifier
+                    .clickable {
+                        runCatching { audio.adjustStreamVolume(stream, AudioManager.ADJUST_TOGGLE_MUTE, 0) }
+                        muted = audio.isStreamMute(stream)
+                        level = audio.getStreamVolume(stream)
+                    }
+                    .padding(horizontal = 8.dp, vertical = 6.dp),
+            )
         }
     }
 }

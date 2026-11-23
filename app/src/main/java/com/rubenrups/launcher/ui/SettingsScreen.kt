@@ -895,6 +895,13 @@ private fun DashboardPage(
         )
     }
     CarAutomationGroups(viewModel, settings)
+    Group("Volume card") {
+        SwitchRow("Mute button", settings.carVolumeMute, subtitle = "On the media volume row") { v -> viewModel.update { it.copy(carVolumeMute = v) } }
+        SwitchRow("Ringtone volume too", settings.carVolumeRing, subtitle = "A second slider; may be refused while do-not-disturb is on") { v ->
+            viewModel.update { it.copy(carVolumeRing = v) }
+        }
+        Hint("The card follows the volume keys. Switch it on or off, move it and make it half width in the list further down.")
+    }
     Group("Notifications card") {
         SliderRow("Notifications shown", "${settings.carNotificationCount}", settings.carNotificationCount.toFloat(), 2f..8f) { v ->
             viewModel.update { it.copy(carNotificationCount = v.roundToInt()) }
