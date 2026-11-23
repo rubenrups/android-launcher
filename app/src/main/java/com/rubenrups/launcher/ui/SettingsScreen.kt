@@ -53,7 +53,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -934,20 +939,22 @@ private fun DashboardPage(
                     "▲",
                     color = if (index > 0) Color.White else Color.White.copy(alpha = 0.2f),
                     fontSize = 18.sp,
-                    modifier = Modifier.clickable(enabled = index > 0) { viewModel.swapDashboardCards(key, order[index - 1]) }.padding(12.dp),
+                    modifier = Modifier.accessibleButton("Move $label earlier", enabled = index > 0) { viewModel.swapDashboardCards(key, order[index - 1]) }.padding(12.dp),
                 )
                 Text(
                     "▼",
                     color = if (index < order.lastIndex) Color.White else Color.White.copy(alpha = 0.2f),
                     fontSize = 18.sp,
-                    modifier = Modifier.clickable(enabled = index < order.lastIndex) { viewModel.swapDashboardCards(key, order[index + 1]) }.padding(12.dp),
+                    modifier = Modifier.accessibleButton("Move $label later", enabled = index < order.lastIndex) { viewModel.swapDashboardCards(key, order[index + 1]) }.padding(12.dp),
                 )
                 Text(
                     if (key in settings.dashboardHalf) "½" else "1",
                     color = if (key in settings.dashboardHalf) Accent else Color.White.copy(alpha = 0.6f),
                     fontSize = 18.sp,
                     modifier = Modifier
-                        .clickable { viewModel.setDashboardCardHalf(key, key !in settings.dashboardHalf) }
+                        .accessibleButton(
+                            if (key in settings.dashboardHalf) "$label is half width: make it full width" else "$label is full width: make it half width",
+                        ) { viewModel.setDashboardCardHalf(key, key !in settings.dashboardHalf) }
                         .padding(horizontal = 12.dp, vertical = 12.dp),
                 )
                 Switch(
@@ -1301,7 +1308,7 @@ private fun Header(
                 backLabel,
                 color = Color.White,
                 fontSize = 32.sp,
-                modifier = Modifier.clickable(onClick = onBack).padding(end = 16.dp, top = 4.dp, bottom = 4.dp),
+                modifier = Modifier.accessibleButton("Back", onClick = onBack).padding(end = 16.dp, top = 4.dp, bottom = 4.dp),
             )
         }
         Text(title, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light, modifier = Modifier.weight(1f))
@@ -1372,15 +1379,16 @@ internal fun Hint(text: String) =
 
 @Composable
 internal fun SwitchRow(label: String, checked: Boolean, subtitle: String? = null, onChange: (Boolean) -> Unit) {
+    // The whole row is one switch for a screen reader (label, subtitle and state together), not a row plus a second switch.
     Row(
-        Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(horizontal = 16.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().toggleable(value = checked, role = Role.Switch, onValueChange = onChange).padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f).padding(end = 12.dp)) {
             Text(label, color = Color.White, fontSize = 16.sp)
             if (subtitle != null) Text(subtitle, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
         }
-        Switch(checked = checked, onCheckedChange = onChange)
+        Switch(checked = checked, onCheckedChange = null)
     }
 }
 
@@ -1388,19 +1396,23 @@ internal fun SwitchRow(label: String, checked: Boolean, subtitle: String? = null
 @Composable
 internal fun NavRow(label: String, value: String? = null, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
+        Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
         if (value != null) Text(value, color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, modifier = Modifier.padding(start = 12.dp))
-        Text("›", color = Color.White.copy(alpha = 0.4f), fontSize = 20.sp, modifier = Modifier.padding(start = 8.dp))
+        // Decoration only: a screen reader should not read out the arrow.
+        Text("›", color = Color.White.copy(alpha = 0.4f), fontSize = 20.sp, modifier = Modifier.padding(start = 8.dp).clearAndSetSemantics {})
     }
 }
 
 /** A read-only line: a label and its current state. */
 @Composable
 internal fun InfoRow(label: String, value: String) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}.padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text(label, color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
         Text(value, color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
     }
@@ -1419,12 +1431,13 @@ internal fun SliderRow(label: String, valueLabel: String, value: Float, range: C
 
 @Composable
 internal fun ChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    // One choice out of a group: announced as "selected" or "not selected".
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
+        Modifier.fillMaxWidth().selectable(selected = selected, role = Role.RadioButton, onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
-        if (selected) Text("✓", color = Accent, fontSize = 18.sp)
+        if (selected) Text("✓", color = Accent, fontSize = 18.sp, modifier = Modifier.clearAndSetSemantics {})
     }
 }
 
