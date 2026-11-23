@@ -42,6 +42,7 @@ object DashboardModules {
     const val GLUCOSE = "glucose"
     const val NAVIGATION = "navigation"
     const val MEDIA = "media"
+    const val VOLUME = "volume"
     const val WEATHER = "weather"
     const val QUICK = "quick"
     const val STATS = "stats"
@@ -56,6 +57,7 @@ object DashboardModules {
         CLOCK to "Clock",
         GLUCOSE to "Glucose",
         MEDIA to "Media player",
+        VOLUME to "Volume",
         NAVIGATION to "Navigation",
         NOTIFICATIONS to "Notifications",
         APPS to "Quick launch apps",
@@ -184,6 +186,9 @@ data class LauncherSettings(
     val carMediaSeekBar: Boolean = false,
     /** How many notifications the car-mode notifications card lists. */
     val carNotificationCount: Int = 4,
+    /** The volume card: a mute button on the media row, and a second slider for the ringtone volume. */
+    val carVolumeMute: Boolean = true,
+    val carVolumeRing: Boolean = false,
     /** Home-screen folders open as a see-through popup; off = they expand in place under the folder row. */
     val folderPopupOnHome: Boolean = true,
     /** App keys launched by a left / right swipe on the home screen; empty = nothing. */
@@ -506,6 +511,8 @@ class LauncherPrefs(context: Context) {
         carMediaShowExtras = prefs.getBoolean(KEY_CAR_MEDIA_EXTRAS, true),
         carMediaSeekBar = prefs.getBoolean(KEY_CAR_MEDIA_SEEK, false),
         carNotificationCount = prefs.getInt(KEY_CAR_NOTIFS, 4).coerceIn(2, 8),
+        carVolumeMute = prefs.getBoolean(KEY_CAR_VOLUME_MUTE, true),
+        carVolumeRing = prefs.getBoolean(KEY_CAR_VOLUME_RING, false),
         folderPopupOnHome = prefs.getBoolean(KEY_FOLDER_POPUP, true),
         swipeLeftApp = prefs.getString(KEY_SWIPE_LEFT, "").orEmpty(),
         swipeRightApp = prefs.getString(KEY_SWIPE_RIGHT, "").orEmpty(),
@@ -672,6 +679,8 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_CAR_MEDIA_EXTRAS, s.carMediaShowExtras)
             .putBoolean(KEY_CAR_MEDIA_SEEK, s.carMediaSeekBar)
             .putInt(KEY_CAR_NOTIFS, s.carNotificationCount)
+            .putBoolean(KEY_CAR_VOLUME_MUTE, s.carVolumeMute)
+            .putBoolean(KEY_CAR_VOLUME_RING, s.carVolumeRing)
             .putBoolean(KEY_FOLDER_POPUP, s.folderPopupOnHome)
             .putString(KEY_SWIPE_LEFT, s.swipeLeftApp)
             .putString(KEY_SWIPE_RIGHT, s.swipeRightApp)
@@ -986,6 +995,8 @@ class LauncherPrefs(context: Context) {
         const val KEY_ONBOARDING_DONE = "onboarding_done"
         const val KEY_USAGE = "app_usage"
         const val KEY_APP_LABELS = "app_labels"
+        const val KEY_CAR_VOLUME_MUTE = "car_volume_mute"
+        const val KEY_CAR_VOLUME_RING = "car_volume_ring"
         const val KEY_HOME_RECENTS_SOURCE = "home_recents_source"
         const val KEY_DRAWER_RECENTS_SOURCE = "drawer_recents_source"
         const val KEY_CAR_RECENTS_SOURCE = "car_recents_source"
