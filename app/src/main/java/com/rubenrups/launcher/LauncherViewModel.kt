@@ -147,7 +147,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             visibleApps,
             settings.map { it.folders }.distinctUntilChanged(),
             settings.map { it.usage }.distinctUntilChanged(),
-            settings.map { Triple(it.drawerSort, it.drawerFolderSort, it.drawerFoldersPosition) }.distinctUntilChanged(),
+            settings.map { listOf(it.drawerSort, it.drawerFolderSort, it.drawerFoldersPosition, it.mostUsedWindow) }.distinctUntilChanged(),
         ) { apps, folders, usage, order ->
             val byKey = apps.associateBy { it.key }
             val inFolder = folders.flatMapTo(HashSet()) { it.appKeys }
@@ -155,7 +155,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             folders.forEach { f -> all.add(f.resolve(byKey, usage)) }
             // The App drawer button can sit in a folder, but listing it loose inside the drawer itself would be silly.
             apps.filter { it.key !in inFolder && it.key != VirtualApps.drawer.key }.forEach { all.add(AppEntry(it)) }
-            DrawerSort.arrange(all, appSort = order.first, folderSort = order.second, folderPosition = order.third, usage = usage)
+            DrawerSort.arrange(all, appSort = order[0], folderSort = order[1], folderPosition = order[2], usage = usage, window = order[3])
         }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _drawerOpen = MutableStateFlow(false)
@@ -687,9 +687,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val now = System.currentTimeMillis()
         val searched = searchQuery.takeIf { it.isNotBlank() && _drawerOpen.value && settings.value.learnSearches }
         update { s ->
-            val used = (s.usage[app.key]?.count ?: 0) + 1
             // Keep the table bounded: if it grows past the limit, forget the least recently used entries.
-            val usage = (s.usage + (app.key to AppUsage(used, now))).let { all ->
+            val usage = (s.usage + (app.key to AppUsage.record(s.usage[app.key], now))).let { all ->
                 if (all.size <= MAX_USAGE) all else all.entries.sortedByDescending { it.value.lastMs }.take(MAX_USAGE).associate { it.toPair() }
             }
             s.copy(

@@ -35,6 +35,7 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 - **Tests**: CI runs unit tests (gesture rules, glucose formatting) and a report-only lint
 - **Profiles** (Settings → Profiles): contexts such as work, night or driving, each with its own favourites, apps hidden for a while, parts of the home screen switched off and optionally car mode. They switch on by a time window, charging or a Bluetooth device, or by hand (home menu, or the Switch profile gesture); editing favourites while one is on changes that profile's list
 - **Drawer order**: sort apps A–Z, Z–A, most used or recently used; folders get their own order and can sit at the top, bottom or mixed in
+- **Most used window**: choose what "most used" counts: all time, the last 7, 30 or 90 days, or fading (recent launches count more); applies to the drawer order and every most-used spot
 - **Search ranking**: the drawer learns which app you pick for each text you type and shows the most picked ones first (can be switched off or forgotten)
 - **Notifications on home**: choose where they sit (above or below the media player, below the widgets, or under the favourites), a card, compact or plain style, how many show and the panel opacity
 - **Profile gestures and car layout**: a profile can have its own swipes, taps and hold (home and car mode) and its own car-mode cards and quick-launch apps; edits made while it is on go to the profile
