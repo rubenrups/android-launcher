@@ -63,6 +63,7 @@ import kotlinx.coroutines.launch
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.LauncherViewModel
 import com.rubenrups.launcher.GestureService
+import com.rubenrups.launcher.data.AppsSource
 import com.rubenrups.launcher.data.ContextProfile
 import com.rubenrups.launcher.data.Diagnostics
 import com.rubenrups.launcher.data.GestureSet
@@ -141,7 +142,7 @@ private val SearchIndex = listOf(
     SettingHit("Attach below the home screen", Page.DRAWER, "drawer one page slide"),
     SettingHit("Drawer background", Page.DRAWER, "opacity transparency solid"),
     SettingHit("Search extras", Page.DRAWER, "calculator conversion currency units contacts system settings"),
-    SettingHit("Recent apps", Page.DRAWER, "recents"),
+    SettingHit("Recent apps", Page.DRAWER, "recents most used frequent favourite apps row home car"),
     SettingHit("Web search when typing", Page.DRAWER, "google duckduckgo engine"),
     SettingHit("Car mode background", Page.DASHBOARD, "dashboard opacity transparency solid"),
     SettingHit("Open car mode automatically", Page.DASHBOARD, "bluetooth charging auto open trigger car"),
@@ -536,6 +537,9 @@ private fun HomePage(viewModel: LauncherViewModel, settings: LauncherSettings) {
             subtitle = "Icons only, along the bottom",
         ) { v -> viewModel.update { it.copy(showHomeRecents = v) } }
         if (settings.showHomeRecents) {
+            AppsSource.options.forEach { (key, label) ->
+                ChoiceRow("Show: $label", selected = settings.homeRecentsSource == key) { viewModel.update { it.copy(homeRecentsSource = key) } }
+            }
             SliderRow("Number of apps", "${settings.homeRecentsCount}", settings.homeRecentsCount.toFloat(), 3f..10f) { v ->
                 viewModel.update { it.copy(homeRecentsCount = v.roundToInt()) }
             }
@@ -776,6 +780,11 @@ private fun DrawerPage(viewModel: LauncherViewModel, settings: LauncherSettings)
     SearchExtrasGroup(viewModel, settings)
     Group("Content") {
         SwitchRow("Recent apps", settings.showRecents) { v -> viewModel.update { it.copy(showRecents = v) } }
+        if (settings.showRecents) {
+            AppsSource.options.forEach { (key, label) ->
+                ChoiceRow("Show: $label", selected = settings.drawerRecentsSource == key) { viewModel.update { it.copy(drawerRecentsSource = key) } }
+            }
+        }
     }
     Group("Web search when typing") {
         WebSearchEngine.entries.forEach { engine ->
@@ -901,6 +910,12 @@ private fun DashboardPage(
         SwitchRow("Seek bar", settings.carMediaSeekBar, subtitle = "Progress and drag-to-seek, when the player allows it") { v ->
             viewModel.update { it.copy(carMediaSeekBar = v) }
         }
+    }
+    Group("Recent apps card") {
+        AppsSource.options.forEach { (key, label) ->
+            ChoiceRow("Show: $label", selected = settings.carRecentsSource == key) { viewModel.update { it.copy(carRecentsSource = key) } }
+        }
+        Hint("Most used counts apps opened from the launcher. The card itself is switched on or off in the list below.")
     }
     Group("Cards, in order") {
         val order = settings.dashboardOrder

@@ -140,6 +140,10 @@ data class LauncherSettings(
     val showHomeRecents: Boolean = false,
     /** How many recent apps the home row shows (the launcher remembers 10). */
     val homeRecentsCount: Int = 5,
+    /** What each recent-apps spot shows: [AppsSource.RECENT] or [AppsSource.MOST_USED]. */
+    val homeRecentsSource: String = AppsSource.RECENT,
+    val drawerRecentsSource: String = AppsSource.RECENT,
+    val carRecentsSource: String = AppsSource.RECENT,
     /** One of [HomeRecentsAlign]. */
     val homeRecentsAlign: String = HomeRecentsAlign.SPREAD,
     /** With more than 5 apps, split the row into two balanced rows. */
@@ -471,6 +475,9 @@ class LauncherPrefs(context: Context) {
         showRecents = prefs.getBoolean(KEY_SHOW_RECENTS, true),
         showHomeRecents = prefs.getBoolean(KEY_SHOW_HOME_RECENTS, false),
         homeRecentsCount = prefs.getInt(KEY_HOME_RECENTS_COUNT, 5).coerceIn(3, 10),
+        homeRecentsSource = prefs.getString(KEY_HOME_RECENTS_SOURCE, AppsSource.RECENT) ?: AppsSource.RECENT,
+        drawerRecentsSource = prefs.getString(KEY_DRAWER_RECENTS_SOURCE, AppsSource.RECENT) ?: AppsSource.RECENT,
+        carRecentsSource = prefs.getString(KEY_CAR_RECENTS_SOURCE, AppsSource.RECENT) ?: AppsSource.RECENT,
         homeRecentsTwoRows = prefs.getBoolean(KEY_HOME_RECENTS_TWO_ROWS, false),
         homeRecentsAlign = prefs.getString(KEY_HOME_RECENTS_ALIGN, HomeRecentsAlign.SPREAD).orEmpty(),
         homeRecentsIconDp = prefs.getInt(KEY_HOME_RECENTS_ICON, 40).coerceIn(28, 64),
@@ -634,6 +641,9 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_SHOW_RECENTS, s.showRecents)
             .putBoolean(KEY_SHOW_HOME_RECENTS, s.showHomeRecents)
             .putInt(KEY_HOME_RECENTS_COUNT, s.homeRecentsCount)
+            .putString(KEY_HOME_RECENTS_SOURCE, s.homeRecentsSource)
+            .putString(KEY_DRAWER_RECENTS_SOURCE, s.drawerRecentsSource)
+            .putString(KEY_CAR_RECENTS_SOURCE, s.carRecentsSource)
             .putString(KEY_HOME_RECENTS_ALIGN, s.homeRecentsAlign)
             .putBoolean(KEY_HOME_RECENTS_TWO_ROWS, s.homeRecentsTwoRows)
             .putInt(KEY_HOME_RECENTS_ICON, s.homeRecentsIconDp)
@@ -976,6 +986,9 @@ class LauncherPrefs(context: Context) {
         const val KEY_ONBOARDING_DONE = "onboarding_done"
         const val KEY_USAGE = "app_usage"
         const val KEY_APP_LABELS = "app_labels"
+        const val KEY_HOME_RECENTS_SOURCE = "home_recents_source"
+        const val KEY_DRAWER_RECENTS_SOURCE = "drawer_recents_source"
+        const val KEY_CAR_RECENTS_SOURCE = "car_recents_source"
         const val KEY_DRAWER_SORT = "drawer_sort"
         const val KEY_DRAWER_FOLDER_SORT = "drawer_folder_sort"
         const val KEY_DRAWER_FOLDERS_POSITION = "drawer_folders_position"

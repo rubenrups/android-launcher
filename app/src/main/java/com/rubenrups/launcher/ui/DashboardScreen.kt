@@ -10,7 +10,9 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import com.rubenrups.launcher.data.AppsSource
 import com.rubenrups.launcher.data.CallContact
+import com.rubenrups.launcher.data.topAppKeys
 import com.rubenrups.launcher.data.DashboardModules
 import com.rubenrups.launcher.data.LauncherSettings
 import com.rubenrups.launcher.data.Destination
@@ -137,7 +139,7 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
     val visible = settings.dashboardOrder.filter { key ->
         key !in settings.dashboardHidden && when (key) {
             DashboardModules.WEATHER -> hours.isNotEmpty()
-            DashboardModules.RECENTS -> settings.recents.isNotEmpty()
+            DashboardModules.RECENTS -> settings.topAppKeys(settings.carRecentsSource).isNotEmpty()
             // Empty and connected: nothing to show, so the card stays out of the way.
             DashboardModules.NOTIFICATIONS -> notifications.isNotEmpty() || !listenerConnected
             else -> true
@@ -163,7 +165,7 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
             DashboardModules.QUICK -> QuickSettingsCard()
             DashboardModules.NOTIFICATIONS -> NotificationsCard(notifications, listenerConnected, settings.carNotificationCount, openSettingsFor(key))
             DashboardModules.CLOCK -> ClockCard()
-            DashboardModules.RECENTS -> RecentAppsCard(viewModel, settings.recents)
+            DashboardModules.RECENTS -> RecentAppsCard(viewModel, settings.topAppKeys(settings.carRecentsSource), AppsSource.title(settings.carRecentsSource))
             DashboardModules.STATS -> StatTiles(battery, weather, nextEvent?.text)
             else -> Unit
         }
@@ -724,13 +726,13 @@ private fun QuickAppsCard(viewModel: LauncherViewModel, keys: List<String>, onOp
 
 /** The apps used most recently (newest first), as big tiles. */
 @Composable
-private fun RecentAppsCard(viewModel: LauncherViewModel, keys: List<String>) {
+private fun RecentAppsCard(viewModel: LauncherViewModel, keys: List<String>, title: String) {
     val installed by viewModel.visibleApps.collectAsStateWithLifecycle()
     val byKey = remember(installed) { installed.associateBy { it.key } }
     val apps = keys.mapNotNull { byKey[it] }.take(NAV_TILES_PER_ROW * 2)
     if (apps.isEmpty()) return
     Card {
-        Text("Recent apps", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+        Text(title, color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
         AppTiles(viewModel, apps)
     }
 }
