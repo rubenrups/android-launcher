@@ -77,6 +77,7 @@ import com.rubenrups.launcher.data.VirtualApps
 import com.rubenrups.launcher.data.DrawerSort
 import com.rubenrups.launcher.data.Entry
 import com.rubenrups.launcher.data.SearchLearning
+import com.rubenrups.launcher.data.topAppKeys
 import com.rubenrups.launcher.data.FolderEntry
 import com.rubenrups.launcher.data.WebSearchEngine
 import com.rubenrups.launcher.notifications.NotificationStore
@@ -151,12 +152,12 @@ fun AppDrawer(
     }
 
     // Rows above the entries when not searching: an optional recents row, then 'New folder'.
-    val recentApps = remember(allApps, settings.recents, settings.showRecents) {
+    val recentApps = remember(allApps, settings.recents, settings.usage, settings.showRecents, settings.drawerRecentsSource) {
         if (!settings.showRecents) {
             emptyList()
         } else {
             val byKey = allApps.associateBy { it.key }
-            settings.recents.mapNotNull { byKey[it] }.take(RECENTS_SHOWN)
+            settings.topAppKeys(settings.drawerRecentsSource).mapNotNull { byKey[it] }.take(RECENTS_SHOWN)
         }
     }
     val showRecentsRow = query.isBlank() && recentApps.isNotEmpty()

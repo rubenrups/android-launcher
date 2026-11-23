@@ -122,6 +122,7 @@ import com.rubenrups.launcher.data.GestureActions
 import com.rubenrups.launcher.data.HeaderItems
 import com.rubenrups.launcher.data.HomeRecentsAlign
 import com.rubenrups.launcher.data.UpdateState
+import com.rubenrups.launcher.data.topAppKeys
 import com.rubenrups.launcher.data.VirtualApps
 import com.rubenrups.launcher.expandNotificationShade
 import com.rubenrups.launcher.notifications.MediaState
@@ -251,10 +252,10 @@ private fun HomeContent(
         }
     }
 
-    val homeRecents = remember(allApps, settings.recents, settings.showHomeRecents, settings.homeRecentsCount) {
+    val homeRecents = remember(allApps, settings.recents, settings.usage, settings.showHomeRecents, settings.homeRecentsCount, settings.homeRecentsSource) {
         if (!settings.showHomeRecents) emptyList() else {
             val byKey = allApps.associateBy { it.key }
-            settings.recents.mapNotNull { byKey[it] }.take(settings.homeRecentsCount)
+            settings.topAppKeys(settings.homeRecentsSource).mapNotNull { byKey[it] }.take(settings.homeRecentsCount)
         }
     }
     // Room the icon row takes at the bottom, so the favourites and the clock section stop above it.
