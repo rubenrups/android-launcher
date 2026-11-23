@@ -23,9 +23,9 @@ object DrawerSort {
     /** The A-Z scrubber only makes sense when the list really runs alphabetically. */
     fun isAlphabetical(sort: String) = sort == A_Z || sort == Z_A
 
-    private fun Entry.uses(usage: Map<String, AppUsage>): Int = when (this) {
-        is AppEntry -> usage[key]?.count ?: 0
-        is FolderEntry -> folder.appKeys.sumOf { usage[it]?.count ?: 0 }
+    private fun Entry.uses(usage: Map<String, AppUsage>, window: String, nowMs: Long): Double = when (this) {
+        is AppEntry -> usage[key]?.let { UsageWindow.score(it, window, nowMs) } ?: 0.0
+        is FolderEntry -> folder.appKeys.sumOf { k -> usage[k]?.let { UsageWindow.score(it, window, nowMs) } ?: 0.0 }
     }
 
     private fun Entry.lastUsed(usage: Map<String, AppUsage>): Long = when (this) {
@@ -35,9 +35,9 @@ object DrawerSort {
 
     private val alphabetical: Comparator<Entry> = compareBy<Entry>({ it.letter }, { it.label.lowercase() })
 
-    fun comparator(sort: String, usage: Map<String, AppUsage>): Comparator<Entry> = when (sort) {
+    fun comparator(sort: String, usage: Map<String, AppUsage>, window: String = UsageWindow.ALL, nowMs: Long = System.currentTimeMillis()): Comparator<Entry> = when (sort) {
         Z_A -> alphabetical.reversed()
-        MOST_USED -> compareByDescending<Entry> { it.uses(usage) }.thenByDescending { it.lastUsed(usage) }.then(alphabetical)
+        MOST_USED -> compareByDescending<Entry> { it.uses(usage, window, nowMs) }.thenByDescending { it.lastUsed(usage) }.then(alphabetical)
         RECENT -> compareByDescending<Entry> { it.lastUsed(usage) }.then(alphabetical)
         else -> alphabetical
     }
@@ -49,13 +49,15 @@ object DrawerSort {
         folderSort: String,
         folderPosition: String,
         usage: Map<String, AppUsage>,
+        window: String = UsageWindow.ALL,
     ): List<Entry> {
+        val nowMs = System.currentTimeMillis()
         val folders = entries.filterIsInstance<FolderEntry>()
         val apps = entries.filterIsInstance<AppEntry>()
         return when (folderPosition) {
-            FOLDERS_MIXED -> entries.sortedWith(comparator(appSort, usage))
-            FOLDERS_BOTTOM -> apps.sortedWith(comparator(appSort, usage)) + folders.sortedWith(comparator(folderSort, usage))
-            else -> folders.sortedWith(comparator(folderSort, usage)) + apps.sortedWith(comparator(appSort, usage))
+            FOLDERS_MIXED -> entries.sortedWith(comparator(appSort, usage, window, nowMs))
+            FOLDERS_BOTTOM -> apps.sortedWith(comparator(appSort, usage, window, nowMs)) + folders.sortedWith(comparator(folderSort, usage, window, nowMs))
+            else -> folders.sortedWith(comparator(folderSort, usage, window, nowMs)) + apps.sortedWith(comparator(appSort, usage, window, nowMs))
         }
     }
 }

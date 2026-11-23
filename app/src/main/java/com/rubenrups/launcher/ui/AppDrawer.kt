@@ -152,7 +152,7 @@ fun AppDrawer(
     }
 
     // Rows above the entries when not searching: an optional recents row, then 'New folder'.
-    val recentSections = remember(allApps, settings.recents, settings.usage, settings.showRecents, settings.drawerRecentsSource) {
+    val recentSections = remember(allApps, settings.recents, settings.usage, settings.showRecents, settings.drawerRecentsSource, settings.mostUsedWindow) {
         if (!settings.showRecents) {
             emptyList()
         } else {

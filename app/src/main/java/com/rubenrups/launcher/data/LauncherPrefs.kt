@@ -131,6 +131,8 @@ data class LauncherSettings(
     /** Remember which app you pick for each search and show those first (see [SearchLearning]). */
     val learnSearches: Boolean = true,
     val searchPicks: Map<String, Map<String, Int>> = emptyMap(),
+    /** What "most used" counts (see [UsageWindow]): all time, the last 7 / 30 / 90 days, or fading. */
+    val mostUsedWindow: String = UsageWindow.ALL,
     val drawerIconDp: Int = 52,
     val drawerGridColumns: Int = 4,
     val drawerGridLabels: Boolean = true,
@@ -470,6 +472,7 @@ class LauncherPrefs(context: Context) {
         drawerFoldersPosition = prefs.getString(KEY_DRAWER_FOLDERS_POSITION, DrawerSort.FOLDERS_TOP) ?: DrawerSort.FOLDERS_TOP,
         learnSearches = prefs.getBoolean(KEY_LEARN_SEARCHES, true),
         searchPicks = decodePicks(prefs.getString(KEY_SEARCH_PICKS, null)),
+        mostUsedWindow = prefs.getString(KEY_MOST_USED_WINDOW, UsageWindow.ALL) ?: UsageWindow.ALL,
         drawerIconDp = prefs.getInt(KEY_DRAWER_ICON, 52).coerceIn(32, 80),
         drawerGridColumns = prefs.getInt(KEY_DRAWER_COLUMNS, 4).coerceIn(3, 7),
         drawerGridLabels = prefs.getBoolean(KEY_DRAWER_LABELS, true),
@@ -639,6 +642,7 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_DRAWER_FOLDERS_POSITION, s.drawerFoldersPosition)
             .putBoolean(KEY_LEARN_SEARCHES, s.learnSearches)
             .putString(KEY_SEARCH_PICKS, encodePicks(s.searchPicks))
+            .putString(KEY_MOST_USED_WINDOW, s.mostUsedWindow)
             .putInt(KEY_DRAWER_ICON, s.drawerIconDp)
             .putInt(KEY_DRAWER_COLUMNS, s.drawerGridColumns)
             .putBoolean(KEY_DRAWER_LABELS, s.drawerGridLabels)
@@ -827,7 +831,12 @@ class LauncherPrefs(context: Context) {
     }
 
     private fun encodeUsage(usage: Map<String, AppUsage>): String =
-        JSONObject().apply { usage.forEach { (key, u) -> put(key, JSONArray().put(u.count).put(u.lastMs)) } }.toString()
+        JSONObject().apply {
+            usage.forEach { (key, u) ->
+                val days = JSONObject().apply { u.days.forEach { (day, n) -> put(day.toString(), n) } }
+                put(key, JSONArray().put(u.count).put(u.lastMs).put(days))
+            }
+        }.toString()
 
     private fun decodeUsage(json: String?): Map<String, AppUsage> {
         if (json.isNullOrBlank()) return emptyMap()
@@ -835,7 +844,9 @@ class LauncherPrefs(context: Context) {
             val o = JSONObject(json)
             o.keys().asSequence().associateWith { key ->
                 val pair = o.getJSONArray(key)
-                AppUsage(pair.getInt(0), pair.getLong(1))
+                // Older saves have only the count and the last time; newer ones add the launches per day.
+                val days = pair.optJSONObject(2)?.let { d -> d.keys().asSequence().associate { it.toLong() to d.getInt(it) } }.orEmpty()
+                AppUsage(pair.getInt(0), pair.getLong(1), days)
             }
         }.getOrDefault(emptyMap())
     }
@@ -1005,6 +1016,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_DRAWER_FOLDERS_POSITION = "drawer_folders_position"
         const val KEY_LEARN_SEARCHES = "learn_searches"
         const val KEY_SEARCH_PICKS = "search_picks"
+        const val KEY_MOST_USED_WINDOW = "most_used_window"
         const val KEY_SEARCH_HIDDEN = "search_hidden"
         const val KEY_POPUP_GRID = "folder_popup_grid"
         const val KEY_POPUP_COLUMNS = "folder_popup_columns"

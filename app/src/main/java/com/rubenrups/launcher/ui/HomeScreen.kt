@@ -253,7 +253,7 @@ private fun HomeContent(
     }
 
     // One row of icons, or two (recent and most used) when both are wanted.
-    val homeRecentRows = remember(allApps, settings.recents, settings.usage, settings.showHomeRecents, settings.homeRecentsCount, settings.homeRecentsSource) {
+    val homeRecentRows = remember(allApps, settings.recents, settings.usage, settings.showHomeRecents, settings.homeRecentsCount, settings.homeRecentsSource, settings.mostUsedWindow) {
         if (!settings.showHomeRecents) emptyList() else {
             val byKey = allApps.associateBy { it.key }
             settings.appSections(settings.homeRecentsSource, settings.homeRecentsCount) { it in byKey }

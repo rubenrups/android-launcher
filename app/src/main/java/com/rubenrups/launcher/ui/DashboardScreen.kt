@@ -174,7 +174,7 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
             DashboardModules.WEATHER -> HourlyCard(hours, settings.weatherCity)
             DashboardModules.APPS -> QuickAppsCard(viewModel, settings.carApps, openSettingsFor(key))
             DashboardModules.CALLS -> CallsCard(settings.callContacts, settings.callDirect, openSettingsFor(key))
-            DashboardModules.QUICK -> QuickSettingsCard()
+            DashboardModules.QUICK -> QuickSettingsCard(viewModel)
             DashboardModules.NOTIFICATIONS -> NotificationsCard(notifications, listenerConnected, settings.carNotificationCount, openSettingsFor(key))
             DashboardModules.CLOCK -> ClockCard()
             DashboardModules.RECENTS -> RecentAppsCard(viewModel, settings)
@@ -507,7 +507,7 @@ private fun HourlyCard(hours: List<HourlyPoint>, city: String) {
 
 /** Shortcuts to the phone's own quick settings. Android only lets apps flip the torch directly; the rest open the right screen. */
 @Composable
-private fun QuickSettingsCard() {
+private fun QuickSettingsCard(viewModel: LauncherViewModel) {
     val context = LocalContext.current
     val camera = remember { context.getSystemService(CameraManager::class.java) }
     val torchId = remember {
@@ -542,6 +542,14 @@ private fun QuickSettingsCard() {
             QuickTile("🔵", "Bluetooth") { open(Settings.ACTION_BLUETOOTH_SETTINGS) }
             QuickTile("🔔", "Sound") { open(Settings.ACTION_SOUND_SETTINGS) }
             QuickTile("☀️", "Display") { open(Settings.ACTION_DISPLAY_SETTINGS) }
+        }
+        // Lock and the system's quick-settings panel go through the gesture accessibility service; without it they
+        // open Accessibility settings (see the Settings → Gestures page).
+        Spacer(Modifier.height(8.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            QuickTile("🔒", "Lock phone") { viewModel.launchByKey(GestureActions.LOCK) }
+            QuickTile("⚙️", "Quick panel") { viewModel.launchByKey(GestureActions.QUICK_SETTINGS) }
+            Spacer(Modifier.weight(3f))
         }
     }
 }

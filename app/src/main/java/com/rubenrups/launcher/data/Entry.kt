@@ -10,8 +10,21 @@ enum class FolderSort(val label: String) {
     MOST_USED("Most used"),
 }
 
-/** How often and how recently an app was opened from the launcher. */
-data class AppUsage(val count: Int, val lastMs: Long)
+/**
+ * How often and how recently an app was opened from the launcher. [days] counts the launches per calendar day
+ * (days since 1970) for the last [UsageWindow.KEEP_DAYS] days, which is what the "last 7 / 30 / 90 days" and
+ * "fading" most-used modes need; [count] is the all-time total, including launches from before days were kept.
+ */
+data class AppUsage(val count: Int, val lastMs: Long, val days: Map<Long, Int> = emptyMap()) {
+    companion object {
+        /** [prev] plus one launch at [nowMs]; days older than the kept span are dropped. */
+        fun record(prev: AppUsage?, nowMs: Long): AppUsage {
+            val today = UsageWindow.day(nowMs)
+            val kept = prev?.days.orEmpty().filterKeys { today - it < UsageWindow.KEEP_DAYS }
+            return AppUsage((prev?.count ?: 0) + 1, nowMs, kept + (today to ((kept[today] ?: 0) + 1)))
+        }
+    }
+}
 
 data class AppFolder(
     val id: String,
