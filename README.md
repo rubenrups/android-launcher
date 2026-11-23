@@ -16,6 +16,7 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 - **Remember car mode**: car mode stays up when you come back from another app (and after a restart), unless turned off
 - **Car mode swipes**: swipe actions inside car mode (default: down closes, left/right skip tracks), and no header or close button
 - **Car mode volume card**: media volume with big − / + buttons, a slider that follows the volume keys and an optional mute button; optionally the ringtone volume too
+- **Car mode scroll back**: car mode can return to the top by itself after being left scrolled down (3–60 seconds, Settings → Car mode → Screen)
 - **Navigate shortcuts**: when no route is active, car mode shows a button per saved place plus Maps (add as many places as you like in Settings → Car mode)
 - **Car mode extras**: hourly weather and quick-settings shortcuts; cards can be reordered (settings or hold a card), hidden, and auto-stack into two columns; the screen can stay on
 - **Car mode quick settings**: Lock phone and Quick panel tiles next to torch, internet, Bluetooth, sound and display

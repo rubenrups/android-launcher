@@ -229,6 +229,9 @@ data class LauncherSettings(
     val dashboardOrder: List<String> = DashboardModules.all.map { it.first },
     /** Keep the screen on while car mode is open. */
     val keepScreenOn: Boolean = true,
+    /** Car mode scrolls back to the top by itself after being left scrolled down for [carAutoScrollSeconds]. */
+    val carAutoScrollTop: Boolean = false,
+    val carAutoScrollSeconds: Int = 15,
     /** Theme: an accent colour key (see AccentOptions, or "wallpaper") and a font key (see FontOptions). */
     val accentColor: String = "blue",
     val fontFamily: String = "default",
@@ -540,6 +543,8 @@ class LauncherPrefs(context: Context) {
         dashboardOrder = prefs.getString(KEY_DASH_ORDER, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }
             .let { saved -> saved.filter { k -> DashboardModules.all.any { it.first == k } } + DashboardModules.all.map { it.first }.filter { it !in saved } },
         keepScreenOn = prefs.getBoolean(KEY_KEEP_SCREEN_ON, true),
+        carAutoScrollTop = prefs.getBoolean(KEY_CAR_AUTO_SCROLL, false),
+        carAutoScrollSeconds = prefs.getInt(KEY_CAR_AUTO_SCROLL_SECONDS, 15).coerceIn(3, 120),
         accentColor = prefs.getString(KEY_ACCENT, "blue").orEmpty(),
         fontFamily = prefs.getString(KEY_FONT, "default").orEmpty(),
         searchCalculator = prefs.getBoolean(KEY_SEARCH_CALC, true),
@@ -708,6 +713,8 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_DASH_HALF, s.dashboardHalf.joinToString(SEPARATOR))
             .putString(KEY_DASH_ORDER, s.dashboardOrder.joinToString(SEPARATOR))
             .putBoolean(KEY_KEEP_SCREEN_ON, s.keepScreenOn)
+            .putBoolean(KEY_CAR_AUTO_SCROLL, s.carAutoScrollTop)
+            .putInt(KEY_CAR_AUTO_SCROLL_SECONDS, s.carAutoScrollSeconds)
             .putString(KEY_ACCENT, s.accentColor)
             .putString(KEY_FONT, s.fontFamily)
             .putBoolean(KEY_SEARCH_CALC, s.searchCalculator)
@@ -976,6 +983,8 @@ class LauncherPrefs(context: Context) {
         const val KEY_DASH_HALF = "dashboard_half"
         const val KEY_DASH_ORDER = "dashboard_order"
         const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
+        const val KEY_CAR_AUTO_SCROLL = "car_auto_scroll_top"
+        const val KEY_CAR_AUTO_SCROLL_SECONDS = "car_auto_scroll_seconds"
         const val KEY_ACCENT = "accent_color"
         const val KEY_FONT = "font_family"
         const val KEY_SEARCH_CALC = "search_calculator"
