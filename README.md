@@ -43,6 +43,7 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 - **Car mode volume card**: media volume with big − / + buttons, a slider that follows the volume keys and an optional mute button; optionally the ringtone volume too
 - **Most used window**: choose what "most used" counts: all time, the last 7, 30 or 90 days, or fading (recent launches count more); applies to the drawer order and every most-used spot
 - **Car mode quick settings**: Lock phone and Quick panel tiles next to torch, internet, Bluetooth, sound and display
+- **Accessibility**: settings rows are announced as switches, radio choices and buttons; symbol-only controls (back, move up / down, volume − / +, mute, media transport, search) have spoken labels
 - **Swipe feedback**: the home screen leans after your finger during a configured swipe, ticks when it counts, and the dashboard slides in from the side you swiped
 - **Glucose on home**: FreeStyle Libre value, trend and age under the clock, via a LibreLinkUp follower account (display only; greyed out when older than 10 min)
 - **Navigation card**: the Google Maps / Waze next-turn notification shown on home

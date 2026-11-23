@@ -67,6 +67,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Slider
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -593,21 +595,21 @@ private fun VolumeRow(label: String, stream: Int, audio: AudioManager, showMute:
     }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = Color.White, fontSize = 15.sp, modifier = Modifier.width(56.dp))
-        Text("−", color = Color.White, fontSize = 30.sp, modifier = Modifier.clickable { set(level - 1) }.padding(horizontal = 14.dp, vertical = 6.dp))
+        Text("−", color = Color.White, fontSize = 30.sp, modifier = Modifier.accessibleButton("Lower $label volume") { set(level - 1) }.padding(horizontal = 14.dp, vertical = 6.dp))
         Slider(
             value = if (muted) 0f else level.toFloat(),
             onValueChange = { set(it.roundToInt()) },
             valueRange = 0f..max.toFloat(),
             colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent, inactiveTrackColor = Color.White.copy(alpha = 0.2f)),
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).semantics { contentDescription = "$label volume" },
         )
-        Text("+", color = Color.White, fontSize = 30.sp, modifier = Modifier.clickable { set(level + 1) }.padding(horizontal = 14.dp, vertical = 6.dp))
+        Text("+", color = Color.White, fontSize = 30.sp, modifier = Modifier.accessibleButton("Raise $label volume") { set(level + 1) }.padding(horizontal = 14.dp, vertical = 6.dp))
         if (showMute) {
             Text(
                 if (muted) "🔇" else "🔈",
                 fontSize = 24.sp,
                 modifier = Modifier
-                    .clickable {
+                    .accessibleButton(if (muted) "Unmute $label" else "Mute $label") {
                         runCatching { audio.adjustStreamVolume(stream, AudioManager.ADJUST_TOGGLE_MUTE, 0) }
                         muted = audio.isStreamMute(stream)
                         level = audio.getStreamVolume(stream)
@@ -663,11 +665,14 @@ private fun CarMediaCard(media: MediaState?, settings: LauncherSettings) {
         if (settings.carMediaSeekBar) MediaSeekBar(media, big = true)
         Spacer(Modifier.height(14.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            TransportButton(TransportKind.PREVIOUS, 72.dp, filled = false) { controls.skipToPrevious() }
-            TransportButton(if (media.isPlaying) TransportKind.PAUSE else TransportKind.PLAY, 96.dp, filled = true) {
+            TransportButton(TransportKind.PREVIOUS, 72.dp, filled = false, description = "Previous track") { controls.skipToPrevious() }
+            TransportButton(
+                if (media.isPlaying) TransportKind.PAUSE else TransportKind.PLAY, 96.dp, filled = true,
+                description = if (media.isPlaying) "Pause" else "Play",
+            ) {
                 if (media.isPlaying) controls.pause() else controls.play()
             }
-            TransportButton(TransportKind.NEXT, 72.dp, filled = false) { controls.skipToNext() }
+            TransportButton(TransportKind.NEXT, 72.dp, filled = false, description = "Next track") { controls.skipToNext() }
         }
         if (settings.carMediaShowExtras && media.customActions.isNotEmpty()) {
             Spacer(Modifier.height(10.dp))
@@ -685,13 +690,13 @@ private enum class TransportKind { PREVIOUS, PLAY, PAUSE, NEXT }
 
 /** A round transport button with a drawn icon, so it looks the same on every phone. */
 @Composable
-private fun TransportButton(kind: TransportKind, size: androidx.compose.ui.unit.Dp, filled: Boolean, onClick: () -> Unit) {
+private fun TransportButton(kind: TransportKind, size: androidx.compose.ui.unit.Dp, filled: Boolean, description: String, onClick: () -> Unit) {
     val ink = if (filled) Color(0xFF14181B) else Color.White
     Box(
         Modifier
             .size(size)
             .background(if (filled) Color.White else Color.White.copy(alpha = 0.12f), CircleShape)
-            .clickable(onClick = onClick),
+            .accessibleButton(description, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Canvas(Modifier.size(size * 0.42f)) {
