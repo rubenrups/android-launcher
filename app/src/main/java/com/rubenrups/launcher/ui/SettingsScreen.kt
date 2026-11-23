@@ -819,6 +819,16 @@ private fun DashboardPage(
             subtitle = "While car mode is open",
         ) { v -> viewModel.update { it.copy(keepScreenOn = v) } }
         SwitchRow(
+            "Scroll back to the top",
+            settings.carAutoScrollTop,
+            subtitle = "After you scroll down and leave it alone, car mode returns to the first cards by itself",
+        ) { v -> viewModel.update { it.copy(carAutoScrollTop = v) } }
+        if (settings.carAutoScrollTop) {
+            SliderRow("Wait", "${settings.carAutoScrollSeconds} s", settings.carAutoScrollSeconds.toFloat(), 3f..60f) { v ->
+                viewModel.update { it.copy(carAutoScrollSeconds = v.roundToInt()) }
+            }
+        }
+        SwitchRow(
             "Remember car mode",
             settings.rememberCarMode,
             subtitle = "Come back to car mode after another app, instead of the plain home screen",

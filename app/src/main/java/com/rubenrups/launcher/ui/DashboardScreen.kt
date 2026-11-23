@@ -7,6 +7,10 @@ import android.net.Uri
 import android.os.Build
 import android.provider.Settings
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -131,6 +135,17 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
     }
 
     val scroll = rememberScrollState()
+    // Scrolled down and then left alone: after a while, glide back to the top so the cards you check most are in view
+    // again. Touching or scrolling restarts the wait (collectLatest drops the pending one).
+    LaunchedEffect(settings.carAutoScrollTop, settings.carAutoScrollSeconds) {
+        if (!settings.carAutoScrollTop) return@LaunchedEffect
+        snapshotFlow { scroll.isScrollInProgress to scroll.value }.collectLatest { (scrolling, position) ->
+            if (!scrolling && position > 0) {
+                delay(settings.carAutoScrollSeconds * 1000L)
+                scroll.animateScrollTo(0)
+            }
+        }
+    }
     val context = LocalContext.current
     val haptics = LocalHapticFeedback.current
     val currentSettings by rememberUpdatedState(settings)
