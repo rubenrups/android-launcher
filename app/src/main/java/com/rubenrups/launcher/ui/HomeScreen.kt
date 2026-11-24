@@ -263,9 +263,16 @@ private fun HomeContent(
     // Room the icon row takes at the bottom, so the favourites and the clock section stop above it.
     // A search bar along the bottom takes the whole width, so everything else stops above it.
     val searchBarReserve = if (settings.showSearchButton && settings.searchButtonStyle == "bar") (settings.searchButtonSizeDp + 24).dp else 0.dp
+    val recentsSideBySide = recentRowsSideBySide(
+        settings, homeRecentRows,
+        landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE,
+        screenWidthDp = LocalConfiguration.current.screenWidthDp,
+    )
     val recentsReserve = (
         if (homeRecentRows.isEmpty()) 0.dp else {
-            homeRecentRows.fold(0.dp) { total, apps -> total + homeRecentsRowHeight(settings) * homeRecentsRowCount(settings, apps.size) } +
+            val heights = homeRecentRows.map { apps -> homeRecentsRowHeight(settings) * homeRecentsRowCount(settings, apps.size) }
+            // Side by side they share the height of the taller one; stacked they add up.
+            (if (recentsSideBySide) heights.maxOf { it.value }.dp else heights.fold(0.dp) { total, h -> total + h }) +
                 settings.homeRecentsBottomDp.dp
         }
         ) + searchBarReserve
@@ -720,7 +727,19 @@ private fun HomeContent(
                     .windowInsetsPadding(launcherInsets())
                     .padding(bottom = settings.homeRecentsBottomDp.dp + searchBarReserve),
             ) {
-                homeRecentRows.forEach { apps -> HomeRecentsRow(apps = apps, viewModel = viewModel, settings = settings) }
+                if (recentsSideBySide) {
+                    Row(Modifier.fillMaxWidth()) {
+                        homeRecentRows.forEachIndexed { index, apps ->
+                            HomeRecentsRow(
+                                apps = apps, viewModel = viewModel, settings = settings,
+                                modifier = Modifier.weight(1f),
+                                side = if (index == 0) RecentsSide.LEFT else RecentsSide.RIGHT,
+                            )
+                        }
+                    }
+                } else {
+                    homeRecentRows.forEach { apps -> HomeRecentsRow(apps = apps, viewModel = viewModel, settings = settings) }
+                }
             }
         }
 
@@ -757,13 +776,39 @@ private fun searchClearanceDp(settings: LauncherSettings): Int = when {
 private const val SEARCH_BUTTON_CLEARANCE_DP = 88
 private const val EDGE_PADDING_DP = 24
 
+/** Which part of the bottom icon area a recent-apps row is: the whole of it, or the left or right half in landscape. */
+private enum class RecentsSide { ALONE, LEFT, RIGHT }
+
+/**
+ * Whether the recent-apps rows (when there are two) go next to each other: only in landscape, when the setting is on and
+ * both rows still fit in half the width. Otherwise they stack, as in portrait.
+ */
+private fun recentRowsSideBySide(settings: LauncherSettings, rows: List<List<AppInfo>>, landscape: Boolean, screenWidthDp: Int): Boolean {
+    if (!landscape || !settings.homeRecentsSideBySide || rows.size != 2) return false
+    val half = (screenWidthDp - 2 * EDGE_PADDING_DP - searchClearanceDp(settings)) / 2
+    return rows.all { apps ->
+        val slots = when {
+            homeRecentsRowCount(settings, apps.size) == 2 -> (apps.size + 1) / 2
+            settings.homeRecentsAlign == HomeRecentsAlign.SPREAD -> settings.homeRecentsCount
+            else -> apps.size
+        }
+        slots * (settings.homeRecentsIconDp + 4) <= half
+    }
+}
+
 private fun homeRecentsRowHeight(settings: LauncherSettings) = (settings.homeRecentsIconDp + 24).dp
 
 private fun homeRecentsRowCount(settings: LauncherSettings, apps: Int) = if (settings.homeRecentsTwoRows && apps > 5) 2 else 1
 
 /** The last launched apps as bare icons along the bottom of the home screen. */
 @Composable
-private fun HomeRecentsRow(apps: List<AppInfo>, viewModel: LauncherViewModel, settings: LauncherSettings, modifier: Modifier = Modifier) {
+private fun HomeRecentsRow(
+    apps: List<AppInfo>,
+    viewModel: LauncherViewModel,
+    settings: LauncherSettings,
+    modifier: Modifier = Modifier,
+    side: RecentsSide = RecentsSide.ALONE,
+) {
     // Each icon fills its cell exactly, so the first one starts on the same left line as the favourites and the clock.
     val cell = settings.homeRecentsIconDp.dp
     // The search button floats in one bottom corner (the one opposite the favourites); keep the icons off it.
@@ -785,7 +830,13 @@ private fun HomeRecentsRow(apps: List<AppInfo>, viewModel: LauncherViewModel, se
     }
     val rows = homeRecentsRowCount(settings, apps.size)
     val chunks = if (rows == 2) apps.chunked((apps.size + 1) / 2) else listOf(apps)
-    Column(modifier.fillMaxWidth().padding(start = startPad, end = endPad)) {
+    // Side by side, the outer edges keep their padding (and the search button's clearance); the middle only gets the edge gap.
+    val (leftPad, rightPad) = when (side) {
+        RecentsSide.LEFT -> startPad to edge
+        RecentsSide.RIGHT -> edge to endPad
+        RecentsSide.ALONE -> startPad to endPad
+    }
+    Column(modifier.fillMaxWidth().padding(start = leftPad, end = rightPad)) {
         chunks.forEach { rowApps ->
             Row(
                 Modifier.fillMaxWidth().height(homeRecentsRowHeight(settings)),
