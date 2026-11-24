@@ -253,7 +253,7 @@ private fun HomeContent(
     }
 
     // One row of icons, or two (recent and most used) when both are wanted.
-    val homeRecentRows = remember(allApps, settings.recents, settings.usage, settings.showHomeRecents, settings.homeRecentsCount, settings.homeRecentsSource) {
+    val homeRecentRows = remember(allApps, settings.recents, settings.usage, settings.showHomeRecents, settings.homeRecentsCount, settings.homeRecentsSource, settings.mostUsedWindow) {
         if (!settings.showHomeRecents) emptyList() else {
             val byKey = allApps.associateBy { it.key }
             settings.appSections(settings.homeRecentsSource, settings.homeRecentsCount) { it in byKey }
@@ -819,7 +819,7 @@ private fun SearchButton(onClick: () -> Unit, style: String, sizeDp: Int, opacit
                 .fillMaxWidth()
                 .height(sizeDp.dp)
                 .background(fill, RoundedCornerShape((sizeDp / 2).dp))
-                .clickable(onClick = onClick)
+                .accessibleButton("Search apps", onClick = onClick)
                 .padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -831,7 +831,7 @@ private fun SearchButton(onClick: () -> Unit, style: String, sizeDp: Int, opacit
             modifier
                 .height(sizeDp.dp)
                 .background(fill, RoundedCornerShape((sizeDp / 2).dp))
-                .clickable(onClick = onClick)
+                .accessibleButton("Search apps", onClick = onClick)
                 .padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -843,7 +843,7 @@ private fun SearchButton(onClick: () -> Unit, style: String, sizeDp: Int, opacit
             modifier
                 .size(sizeDp.dp)
                 .background(fill, CircleShape)
-                .clickable(onClick = onClick),
+                .accessibleButton("Search apps", onClick = onClick),
             contentAlignment = Alignment.Center,
         ) { SearchGlyph(glyph) }
     }
@@ -1605,11 +1605,11 @@ internal fun MediaCard(media: MediaState, settings: LauncherSettings, modifier: 
                 CustomActionButton(media.controller.packageName, action) { controls.sendCustomAction(action, null) }
             }
         }
-        if (settings.mediaShowSkip) MediaButton("|◀", large) { controls.skipToPrevious() }
-        MediaButton(if (media.isPlaying) "❚❚" else "▶", large) {
+        if (settings.mediaShowSkip) MediaButton("|◀", large, description = "Previous track") { controls.skipToPrevious() }
+        MediaButton(if (media.isPlaying) "❚❚" else "▶", large, description = if (media.isPlaying) "Pause" else "Play") {
             if (media.isPlaying) controls.pause() else controls.play()
         }
-        if (settings.mediaShowSkip) MediaButton("▶|", large) { controls.skipToNext() }
+        if (settings.mediaShowSkip) MediaButton("▶|", large, description = "Next track") { controls.skipToNext() }
     }
     Column(
         modifier
@@ -1742,12 +1742,12 @@ private fun startSafely(context: Context, intent: Intent) {
 }
 
 @Composable
-private fun MediaButton(label: String, large: Boolean = false, onClick: () -> Unit) {
+private fun MediaButton(label: String, large: Boolean = false, description: String = label, onClick: () -> Unit) {
     Text(
         label,
         color = Color.White,
         fontSize = if (large) 24.sp else 18.sp,
-        modifier = Modifier.clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp),
+        modifier = Modifier.accessibleButton(description, onClick = onClick).padding(horizontal = 10.dp, vertical = 6.dp),
     )
 }
 

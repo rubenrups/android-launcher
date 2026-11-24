@@ -53,7 +53,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -67,6 +72,7 @@ import com.rubenrups.launcher.data.AppsSource
 import com.rubenrups.launcher.data.ContextProfile
 import com.rubenrups.launcher.data.Diagnostics
 import com.rubenrups.launcher.data.GestureSet
+import com.rubenrups.launcher.data.UsageWindow
 import com.rubenrups.launcher.data.gestureSet
 import com.rubenrups.launcher.data.withGestures
 import com.rubenrups.launcher.data.DrawerSort
@@ -107,6 +113,7 @@ private val SearchIndex = listOf(
     SettingHit("Header order and text", Page.HOME, "clock date time format 12 24 hour weight size order items"),
     SettingHit("Full screen", Page.APPEARANCE, "immersive hide status bar navigation bar clock battery"),
     SettingHit("Drawer layout", Page.DRAWER, "icons only grid columns names icon size"),
+    SettingHit("Most used window", Page.DRAWER, "last 7 30 90 days week month fading decay all time count"),
     SettingHit("Drawer order", Page.DRAWER, "sort alphabetical a-z z-a most used recently used folders position top bottom"),
     SettingHit("Search ranking", Page.DRAWER, "learn remember picks most chosen apps score forget"),
     SettingHit("Search button look", Page.HOME, "search style round pill bar position size background opacity"),
@@ -714,6 +721,17 @@ private fun DrawerPage(viewModel: LauncherViewModel, settings: LauncherSettings)
         }
         Hint("Most used and Recently used count apps opened from the launcher. The A–Z letter strip only shows for A–Z and Z–A.")
     }
+    Group("What counts as most used") {
+        UsageWindow.options.forEach { (key, label) ->
+            ChoiceRow(label, selected = settings.mostUsedWindow == key) { viewModel.update { it.copy(mostUsedWindow = key) } }
+        }
+        Hint(
+            "Used by every most-used list: the drawer order, and the home, drawer and car-mode recent-apps spots. " +
+                "A time window ignores older launches, and an app with none in the window drops out of the lists. " +
+                "Fading counts every launch, but one from two weeks ago counts half as much as one from today. " +
+                "The launcher only began recording days with this version, so the windowed modes fill up from now."
+        )
+    }
     Group("Folders in the drawer") {
         DrawerSort.options.forEach { (key, label) ->
             ChoiceRow("Order: $label", selected = settings.drawerFolderSort == key) { viewModel.update { it.copy(drawerFolderSort = key) } }
@@ -819,6 +837,16 @@ private fun DashboardPage(
             subtitle = "While car mode is open",
         ) { v -> viewModel.update { it.copy(keepScreenOn = v) } }
         SwitchRow(
+            "Scroll back to the top",
+            settings.carAutoScrollTop,
+            subtitle = "After you scroll down and leave it alone, car mode returns to the first cards by itself",
+        ) { v -> viewModel.update { it.copy(carAutoScrollTop = v) } }
+        if (settings.carAutoScrollTop) {
+            SliderRow("Wait", "${settings.carAutoScrollSeconds} s", settings.carAutoScrollSeconds.toFloat(), 3f..60f) { v ->
+                viewModel.update { it.copy(carAutoScrollSeconds = v.roundToInt()) }
+            }
+        }
+        SwitchRow(
             "Remember car mode",
             settings.rememberCarMode,
             subtitle = "Come back to car mode after another app, instead of the plain home screen",
@@ -895,6 +923,13 @@ private fun DashboardPage(
         )
     }
     CarAutomationGroups(viewModel, settings)
+    Group("Volume card") {
+        SwitchRow("Mute button", settings.carVolumeMute, subtitle = "On the media volume row") { v -> viewModel.update { it.copy(carVolumeMute = v) } }
+        SwitchRow("Ringtone volume too", settings.carVolumeRing, subtitle = "A second slider; may be refused while do-not-disturb is on") { v ->
+            viewModel.update { it.copy(carVolumeRing = v) }
+        }
+        Hint("The card follows the volume keys. Switch it on or off, move it and make it half width in the list further down.")
+    }
     Group("Notifications card") {
         SliderRow("Notifications shown", "${settings.carNotificationCount}", settings.carNotificationCount.toFloat(), 2f..8f) { v ->
             viewModel.update { it.copy(carNotificationCount = v.roundToInt()) }
@@ -927,20 +962,22 @@ private fun DashboardPage(
                     "▲",
                     color = if (index > 0) Color.White else Color.White.copy(alpha = 0.2f),
                     fontSize = 18.sp,
-                    modifier = Modifier.clickable(enabled = index > 0) { viewModel.swapDashboardCards(key, order[index - 1]) }.padding(12.dp),
+                    modifier = Modifier.accessibleButton("Move $label earlier", enabled = index > 0) { viewModel.swapDashboardCards(key, order[index - 1]) }.padding(12.dp),
                 )
                 Text(
                     "▼",
                     color = if (index < order.lastIndex) Color.White else Color.White.copy(alpha = 0.2f),
                     fontSize = 18.sp,
-                    modifier = Modifier.clickable(enabled = index < order.lastIndex) { viewModel.swapDashboardCards(key, order[index + 1]) }.padding(12.dp),
+                    modifier = Modifier.accessibleButton("Move $label later", enabled = index < order.lastIndex) { viewModel.swapDashboardCards(key, order[index + 1]) }.padding(12.dp),
                 )
                 Text(
                     if (key in settings.dashboardHalf) "½" else "1",
                     color = if (key in settings.dashboardHalf) Accent else Color.White.copy(alpha = 0.6f),
                     fontSize = 18.sp,
                     modifier = Modifier
-                        .clickable { viewModel.setDashboardCardHalf(key, key !in settings.dashboardHalf) }
+                        .accessibleButton(
+                            if (key in settings.dashboardHalf) "$label is half width: make it full width" else "$label is full width: make it half width",
+                        ) { viewModel.setDashboardCardHalf(key, key !in settings.dashboardHalf) }
                         .padding(horizontal = 12.dp, vertical = 12.dp),
                 )
                 Switch(
@@ -1294,7 +1331,7 @@ private fun Header(
                 backLabel,
                 color = Color.White,
                 fontSize = 32.sp,
-                modifier = Modifier.clickable(onClick = onBack).padding(end = 16.dp, top = 4.dp, bottom = 4.dp),
+                modifier = Modifier.accessibleButton("Back", onClick = onBack).padding(end = 16.dp, top = 4.dp, bottom = 4.dp),
             )
         }
         Text(title, color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Light, modifier = Modifier.weight(1f))
@@ -1365,15 +1402,16 @@ internal fun Hint(text: String) =
 
 @Composable
 internal fun SwitchRow(label: String, checked: Boolean, subtitle: String? = null, onChange: (Boolean) -> Unit) {
+    // The whole row is one switch for a screen reader (label, subtitle and state together), not a row plus a second switch.
     Row(
-        Modifier.fillMaxWidth().clickable { onChange(!checked) }.padding(horizontal = 16.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().toggleable(value = checked, role = Role.Switch, onValueChange = onChange).padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f).padding(end = 12.dp)) {
             Text(label, color = Color.White, fontSize = 16.sp)
             if (subtitle != null) Text(subtitle, color = Color.White.copy(alpha = 0.5f), fontSize = 12.sp)
         }
-        Switch(checked = checked, onCheckedChange = onChange)
+        Switch(checked = checked, onCheckedChange = null)
     }
 }
 
@@ -1381,19 +1419,23 @@ internal fun SwitchRow(label: String, checked: Boolean, subtitle: String? = null
 @Composable
 internal fun NavRow(label: String, value: String? = null, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
+        Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
         if (value != null) Text(value, color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp, modifier = Modifier.padding(start = 12.dp))
-        Text("›", color = Color.White.copy(alpha = 0.4f), fontSize = 20.sp, modifier = Modifier.padding(start = 8.dp))
+        // Decoration only: a screen reader should not read out the arrow.
+        Text("›", color = Color.White.copy(alpha = 0.4f), fontSize = 20.sp, modifier = Modifier.padding(start = 8.dp).clearAndSetSemantics {})
     }
 }
 
 /** A read-only line: a label and its current state. */
 @Composable
 internal fun InfoRow(label: String, value: String) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        Modifier.fillMaxWidth().semantics(mergeDescendants = true) {}.padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text(label, color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
         Text(value, color = Color.White.copy(alpha = 0.6f), fontSize = 14.sp)
     }
@@ -1412,12 +1454,13 @@ internal fun SliderRow(label: String, valueLabel: String, value: Float, range: C
 
 @Composable
 internal fun ChoiceRow(label: String, selected: Boolean, onClick: () -> Unit) {
+    // One choice out of a group: announced as "selected" or "not selected".
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
+        Modifier.fillMaxWidth().selectable(selected = selected, role = Role.RadioButton, onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(label, color = Color.White, fontSize = 16.sp, modifier = Modifier.weight(1f))
-        if (selected) Text("✓", color = Accent, fontSize = 18.sp)
+        if (selected) Text("✓", color = Accent, fontSize = 18.sp, modifier = Modifier.clearAndSetSemantics {})
     }
 }
 

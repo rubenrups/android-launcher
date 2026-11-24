@@ -42,6 +42,7 @@ object DashboardModules {
     const val GLUCOSE = "glucose"
     const val NAVIGATION = "navigation"
     const val MEDIA = "media"
+    const val VOLUME = "volume"
     const val WEATHER = "weather"
     const val QUICK = "quick"
     const val STATS = "stats"
@@ -56,6 +57,7 @@ object DashboardModules {
         CLOCK to "Clock",
         GLUCOSE to "Glucose",
         MEDIA to "Media player",
+        VOLUME to "Volume",
         NAVIGATION to "Navigation",
         NOTIFICATIONS to "Notifications",
         APPS to "Quick launch apps",
@@ -129,6 +131,8 @@ data class LauncherSettings(
     /** Remember which app you pick for each search and show those first (see [SearchLearning]). */
     val learnSearches: Boolean = true,
     val searchPicks: Map<String, Map<String, Int>> = emptyMap(),
+    /** What "most used" counts (see [UsageWindow]): all time, the last 7 / 30 / 90 days, or fading. */
+    val mostUsedWindow: String = UsageWindow.ALL,
     val drawerIconDp: Int = 52,
     val drawerGridColumns: Int = 4,
     val drawerGridLabels: Boolean = true,
@@ -184,6 +188,9 @@ data class LauncherSettings(
     val carMediaSeekBar: Boolean = false,
     /** How many notifications the car-mode notifications card lists. */
     val carNotificationCount: Int = 4,
+    /** The volume card: a mute button on the media row, and a second slider for the ringtone volume. */
+    val carVolumeMute: Boolean = true,
+    val carVolumeRing: Boolean = false,
     /** Home-screen folders open as a see-through popup; off = they expand in place under the folder row. */
     val folderPopupOnHome: Boolean = true,
     /** App keys launched by a left / right swipe on the home screen; empty = nothing. */
@@ -222,6 +229,9 @@ data class LauncherSettings(
     val dashboardOrder: List<String> = DashboardModules.all.map { it.first },
     /** Keep the screen on while car mode is open. */
     val keepScreenOn: Boolean = true,
+    /** Car mode scrolls back to the top by itself after being left scrolled down for [carAutoScrollSeconds]. */
+    val carAutoScrollTop: Boolean = false,
+    val carAutoScrollSeconds: Int = 15,
     /** Theme: an accent colour key (see AccentOptions, or "wallpaper") and a font key (see FontOptions). */
     val accentColor: String = "blue",
     val fontFamily: String = "default",
@@ -465,6 +475,7 @@ class LauncherPrefs(context: Context) {
         drawerFoldersPosition = prefs.getString(KEY_DRAWER_FOLDERS_POSITION, DrawerSort.FOLDERS_TOP) ?: DrawerSort.FOLDERS_TOP,
         learnSearches = prefs.getBoolean(KEY_LEARN_SEARCHES, true),
         searchPicks = decodePicks(prefs.getString(KEY_SEARCH_PICKS, null)),
+        mostUsedWindow = prefs.getString(KEY_MOST_USED_WINDOW, UsageWindow.ALL) ?: UsageWindow.ALL,
         drawerIconDp = prefs.getInt(KEY_DRAWER_ICON, 52).coerceIn(32, 80),
         drawerGridColumns = prefs.getInt(KEY_DRAWER_COLUMNS, 4).coerceIn(3, 7),
         drawerGridLabels = prefs.getBoolean(KEY_DRAWER_LABELS, true),
@@ -506,6 +517,8 @@ class LauncherPrefs(context: Context) {
         carMediaShowExtras = prefs.getBoolean(KEY_CAR_MEDIA_EXTRAS, true),
         carMediaSeekBar = prefs.getBoolean(KEY_CAR_MEDIA_SEEK, false),
         carNotificationCount = prefs.getInt(KEY_CAR_NOTIFS, 4).coerceIn(2, 8),
+        carVolumeMute = prefs.getBoolean(KEY_CAR_VOLUME_MUTE, true),
+        carVolumeRing = prefs.getBoolean(KEY_CAR_VOLUME_RING, false),
         folderPopupOnHome = prefs.getBoolean(KEY_FOLDER_POPUP, true),
         swipeLeftApp = prefs.getString(KEY_SWIPE_LEFT, "").orEmpty(),
         swipeRightApp = prefs.getString(KEY_SWIPE_RIGHT, "").orEmpty(),
@@ -530,6 +543,8 @@ class LauncherPrefs(context: Context) {
         dashboardOrder = prefs.getString(KEY_DASH_ORDER, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() }
             .let { saved -> saved.filter { k -> DashboardModules.all.any { it.first == k } } + DashboardModules.all.map { it.first }.filter { it !in saved } },
         keepScreenOn = prefs.getBoolean(KEY_KEEP_SCREEN_ON, true),
+        carAutoScrollTop = prefs.getBoolean(KEY_CAR_AUTO_SCROLL, false),
+        carAutoScrollSeconds = prefs.getInt(KEY_CAR_AUTO_SCROLL_SECONDS, 15).coerceIn(3, 120),
         accentColor = prefs.getString(KEY_ACCENT, "blue").orEmpty(),
         fontFamily = prefs.getString(KEY_FONT, "default").orEmpty(),
         searchCalculator = prefs.getBoolean(KEY_SEARCH_CALC, true),
@@ -632,6 +647,7 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_DRAWER_FOLDERS_POSITION, s.drawerFoldersPosition)
             .putBoolean(KEY_LEARN_SEARCHES, s.learnSearches)
             .putString(KEY_SEARCH_PICKS, encodePicks(s.searchPicks))
+            .putString(KEY_MOST_USED_WINDOW, s.mostUsedWindow)
             .putInt(KEY_DRAWER_ICON, s.drawerIconDp)
             .putInt(KEY_DRAWER_COLUMNS, s.drawerGridColumns)
             .putBoolean(KEY_DRAWER_LABELS, s.drawerGridLabels)
@@ -672,6 +688,8 @@ class LauncherPrefs(context: Context) {
             .putBoolean(KEY_CAR_MEDIA_EXTRAS, s.carMediaShowExtras)
             .putBoolean(KEY_CAR_MEDIA_SEEK, s.carMediaSeekBar)
             .putInt(KEY_CAR_NOTIFS, s.carNotificationCount)
+            .putBoolean(KEY_CAR_VOLUME_MUTE, s.carVolumeMute)
+            .putBoolean(KEY_CAR_VOLUME_RING, s.carVolumeRing)
             .putBoolean(KEY_FOLDER_POPUP, s.folderPopupOnHome)
             .putString(KEY_SWIPE_LEFT, s.swipeLeftApp)
             .putString(KEY_SWIPE_RIGHT, s.swipeRightApp)
@@ -695,6 +713,8 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_DASH_HALF, s.dashboardHalf.joinToString(SEPARATOR))
             .putString(KEY_DASH_ORDER, s.dashboardOrder.joinToString(SEPARATOR))
             .putBoolean(KEY_KEEP_SCREEN_ON, s.keepScreenOn)
+            .putBoolean(KEY_CAR_AUTO_SCROLL, s.carAutoScrollTop)
+            .putInt(KEY_CAR_AUTO_SCROLL_SECONDS, s.carAutoScrollSeconds)
             .putString(KEY_ACCENT, s.accentColor)
             .putString(KEY_FONT, s.fontFamily)
             .putBoolean(KEY_SEARCH_CALC, s.searchCalculator)
@@ -818,7 +838,12 @@ class LauncherPrefs(context: Context) {
     }
 
     private fun encodeUsage(usage: Map<String, AppUsage>): String =
-        JSONObject().apply { usage.forEach { (key, u) -> put(key, JSONArray().put(u.count).put(u.lastMs)) } }.toString()
+        JSONObject().apply {
+            usage.forEach { (key, u) ->
+                val days = JSONObject().apply { u.days.forEach { (day, n) -> put(day.toString(), n) } }
+                put(key, JSONArray().put(u.count).put(u.lastMs).put(days))
+            }
+        }.toString()
 
     private fun decodeUsage(json: String?): Map<String, AppUsage> {
         if (json.isNullOrBlank()) return emptyMap()
@@ -826,7 +851,9 @@ class LauncherPrefs(context: Context) {
             val o = JSONObject(json)
             o.keys().asSequence().associateWith { key ->
                 val pair = o.getJSONArray(key)
-                AppUsage(pair.getInt(0), pair.getLong(1))
+                // Older saves have only the count and the last time; newer ones add the launches per day.
+                val days = pair.optJSONObject(2)?.let { d -> d.keys().asSequence().associate { it.toLong() to d.getInt(it) } }.orEmpty()
+                AppUsage(pair.getInt(0), pair.getLong(1), days)
             }
         }.getOrDefault(emptyMap())
     }
@@ -956,6 +983,8 @@ class LauncherPrefs(context: Context) {
         const val KEY_DASH_HALF = "dashboard_half"
         const val KEY_DASH_ORDER = "dashboard_order"
         const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
+        const val KEY_CAR_AUTO_SCROLL = "car_auto_scroll_top"
+        const val KEY_CAR_AUTO_SCROLL_SECONDS = "car_auto_scroll_seconds"
         const val KEY_ACCENT = "accent_color"
         const val KEY_FONT = "font_family"
         const val KEY_SEARCH_CALC = "search_calculator"
@@ -986,6 +1015,8 @@ class LauncherPrefs(context: Context) {
         const val KEY_ONBOARDING_DONE = "onboarding_done"
         const val KEY_USAGE = "app_usage"
         const val KEY_APP_LABELS = "app_labels"
+        const val KEY_CAR_VOLUME_MUTE = "car_volume_mute"
+        const val KEY_CAR_VOLUME_RING = "car_volume_ring"
         const val KEY_HOME_RECENTS_SOURCE = "home_recents_source"
         const val KEY_DRAWER_RECENTS_SOURCE = "drawer_recents_source"
         const val KEY_CAR_RECENTS_SOURCE = "car_recents_source"
@@ -994,6 +1025,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_DRAWER_FOLDERS_POSITION = "drawer_folders_position"
         const val KEY_LEARN_SEARCHES = "learn_searches"
         const val KEY_SEARCH_PICKS = "search_picks"
+        const val KEY_MOST_USED_WINDOW = "most_used_window"
         const val KEY_SEARCH_HIDDEN = "search_hidden"
         const val KEY_POPUP_GRID = "folder_popup_grid"
         const val KEY_POPUP_COLUMNS = "folder_popup_columns"

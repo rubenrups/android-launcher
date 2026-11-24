@@ -275,7 +275,11 @@ object ProfileCodec {
                     },
                     car = o.optJSONObject("car")?.let { c ->
                         fun list(name: String) = c.optJSONArray(name)?.let { a -> (0 until a.length()).map { a.getString(it) } }.orEmpty()
-                        CarLayout(list("order"), list("hidden").toSet(), list("half").toSet(), list("apps"))
+                        // Cards added since the profile was saved go at the end, as they do for the normal layout.
+                        val saved = list("order")
+                        val order = saved.filter { k -> DashboardModules.all.any { it.first == k } } +
+                            DashboardModules.all.map { it.first }.filter { it !in saved }
+                        CarLayout(order, list("hidden").toSet(), list("half").toSet(), list("apps"))
                     },
                 )
             }

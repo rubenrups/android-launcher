@@ -15,8 +15,11 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 - **Quick launch apps** card in car mode: big buttons for the apps you choose
 - **Remember car mode**: car mode stays up when you come back from another app (and after a restart), unless turned off
 - **Car mode swipes**: swipe actions inside car mode (default: down closes, left/right skip tracks), and no header or close button
+- **Car mode volume card**: media volume with big − / + buttons, a slider that follows the volume keys and an optional mute button; optionally the ringtone volume too
+- **Car mode scroll back**: car mode can return to the top by itself after being left scrolled down (3–60 seconds, Settings → Car mode → Screen)
 - **Navigate shortcuts**: when no route is active, car mode shows a button per saved place plus Maps (add as many places as you like in Settings → Car mode)
 - **Car mode extras**: hourly weather and quick-settings shortcuts; cards can be reordered (settings or hold a card), hidden, and auto-stack into two columns; the screen can stay on
+- **Car mode quick settings**: Lock phone and Quick panel tiles next to torch, internet, Bluetooth, sound and display
 - **Car mode clock and recent apps**: two more optional cards, a big clock and your most recently used apps as tiles
 - **Half-width cards**: tap 1/½ per card in Settings → Car mode (or hold a card) so two cards share a row, e.g. clock and glucose side by side
 - **Launch animation** (optional) and **settings search**; the drawer and dashboard buttons can also live in folders and the drawer
@@ -35,11 +38,13 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 - **Tests**: CI runs unit tests (gesture rules, glucose formatting) and a report-only lint
 - **Profiles** (Settings → Profiles): contexts such as work, night or driving, each with its own favourites, apps hidden for a while, parts of the home screen switched off and optionally car mode. They switch on by a time window, charging or a Bluetooth device, or by hand (home menu, or the Switch profile gesture); editing favourites while one is on changes that profile's list
 - **Drawer order**: sort apps A–Z, Z–A, most used or recently used; folders get their own order and can sit at the top, bottom or mixed in
+- **Most used window**: choose what "most used" counts: all time, the last 7, 30 or 90 days, or fading (recent launches count more); applies to the drawer order and every most-used spot
 - **Search ranking**: the drawer learns which app you pick for each text you type and shows the most picked ones first (can be switched off or forgotten)
 - **Notifications on home**: choose where they sit (above or below the media player, below the widgets, or under the favourites), a card, compact or plain style, how many show and the panel opacity
 - **Profile gestures and car layout**: a profile can have its own swipes, taps and hold (home and car mode) and its own car-mode cards and quick-launch apps; edits made while it is on go to the profile
 - **Media gestures**: next / previous track, play / pause and skip ±15 s are available for every gesture, on the home screen and in car mode
 - **Most used apps**: every recent-apps spot (home row, drawer row, car-mode card) can show the apps opened last or the ones opened most, or both at once (one row each, the most-used row skipping apps already shown above)
+- **Accessibility**: settings rows are announced as switches, radio choices and buttons; symbol-only controls (back, move up / down, volume − / +, mute, media transport, search) have spoken labels
 - **Swipe feedback**: the home screen leans after your finger during a configured swipe, ticks when it counts, and the dashboard slides in from the side you swiped
 - **Glucose on home**: FreeStyle Libre value, trend and age under the clock, via a LibreLinkUp follower account (display only; greyed out when older than 10 min)
 - **Navigation card**: the Google Maps / Waze next-turn notification shown on home
