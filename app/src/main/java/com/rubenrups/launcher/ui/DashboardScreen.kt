@@ -16,7 +16,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -149,13 +150,25 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
 
     val scroll = rememberScrollState()
     // Scrolled down and then left alone: after a while, glide back to the top so the cards you check most are in view
-    // again. Touching or scrolling restarts the wait (collectLatest drops the pending one).
+    // again. Touching or scrolling restarts the wait. The glide itself must not restart it: it makes the scroll state
+    // "in progress" too, which used to cancel the glide after its first frame, so it never got anywhere.
     LaunchedEffect(settings.carAutoScrollTop, settings.carAutoScrollSeconds) {
         if (!settings.carAutoScrollTop) return@LaunchedEffect
-        snapshotFlow { scroll.isScrollInProgress to scroll.value }.collectLatest { (scrolling, position) ->
+        var timer: Job? = null
+        var returning = false
+        snapshotFlow { scroll.isScrollInProgress to scroll.value }.collect { (scrolling, position) ->
+            if (returning) return@collect
+            timer?.cancel()
             if (!scrolling && position > 0) {
-                delay(settings.carAutoScrollSeconds * 1000L)
-                scroll.animateScrollTo(0)
+                timer = launch {
+                    delay(settings.carAutoScrollSeconds * 1000L)
+                    returning = true
+                    try {
+                        scroll.animateScrollTo(0)
+                    } finally {
+                        returning = false
+                    }
+                }
             }
         }
     }
