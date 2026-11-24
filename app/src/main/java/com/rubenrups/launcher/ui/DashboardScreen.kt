@@ -214,24 +214,32 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
             CompositionLocalProvider(LocalHalfCard provides (key in settings.dashboardHalf)) { content(key) }
         }
     }
-    // Neighbouring half-width cards share a row; everything else is a row of its own.
+    // Half-width cards that follow each other form a group, and the group flows into two columns (each card goes under
+    // whichever column is shorter) so a short card never leaves a hole beside a tall one. Everything else is a row of its
+    // own. On wide screens the whole dashboard is already stacked into two columns, so there a group is just a pair.
     val units = ArrayList<List<String>>()
     run {
         var i = 0
         while (i < visible.size) {
             val key = visible[i]
-            if (key in settings.dashboardHalf && i + 1 < visible.size && visible[i + 1] in settings.dashboardHalf) {
-                units.add(listOf(key, visible[i + 1])); i += 2
+            if (key in settings.dashboardHalf) {
+                val group = ArrayList<String>()
+                while (i < visible.size && visible[i] in settings.dashboardHalf && (!wide || group.size < 2)) {
+                    group.add(visible[i]); i++
+                }
+                units.add(group)
             } else {
                 units.add(listOf(key)); i += 1
             }
         }
     }
     val unit: @Composable (List<String>) -> Unit = { keys ->
-        if (keys.size == 2 || keys[0] in settings.dashboardHalf) {
+        if (keys.size >= 2) {
+            TwoColumnFlow(gap = 14.dp) { keys.forEach { k -> key(k) { Box { slot(k) } } } }
+        } else if (keys[0] in settings.dashboardHalf) {
             Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                keys.forEach { k -> Box(Modifier.weight(1f)) { key(k) { slot(k) } } }
-                if (keys.size == 1) Spacer(Modifier.weight(1f))
+                Box(Modifier.weight(1f)) { key(keys[0]) { slot(keys[0]) } }
+                Spacer(Modifier.weight(1f))
             }
         } else {
             key(keys[0]) { slot(keys[0]) }
@@ -379,6 +387,36 @@ private fun Card(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, c
             }
             .padding(if (LocalHalfCard.current) 12.dp else 16.dp),
     ) { content() }
+}
+
+/**
+ * Lays its children out in two equal columns, in order: each child goes under whichever column is currently shorter, using
+ * the real measured heights. Half-width cards use it so the space beside a short card is filled by the next card instead of
+ * staying empty.
+ */
+@Composable
+private fun TwoColumnFlow(gap: androidx.compose.ui.unit.Dp, modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    androidx.compose.ui.layout.Layout(content = content, modifier = modifier) { measurables, constraints ->
+        val gapPx = gap.roundToPx()
+        val columnWidth = ((constraints.maxWidth - gapPx) / 2).coerceAtLeast(0)
+        val childConstraints = androidx.compose.ui.unit.Constraints(minWidth = columnWidth, maxWidth = columnWidth)
+        val placeables = measurables.map { it.measure(childConstraints) }
+        val bottoms = intArrayOf(0, 0)
+        val columns = IntArray(placeables.size)
+        val tops = IntArray(placeables.size)
+        placeables.forEachIndexed { index, placeable ->
+            val column = if (bottoms[0] <= bottoms[1]) 0 else 1
+            columns[index] = column
+            tops[index] = bottoms[column]
+            bottoms[column] += placeable.height + gapPx
+        }
+        val height = (maxOf(bottoms[0], bottoms[1]) - gapPx).coerceAtLeast(0)
+        layout(constraints.maxWidth, height) {
+            placeables.forEachIndexed { index, placeable ->
+                placeable.placeRelative(columns[index] * (columnWidth + gapPx), tops[index])
+            }
+        }
+    }
 }
 
 /** Tiles per row inside a card: fewer when the card is half width, so each tile keeps a usable size. */
