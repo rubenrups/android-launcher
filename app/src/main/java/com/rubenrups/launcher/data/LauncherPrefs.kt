@@ -152,6 +152,8 @@ data class LauncherSettings(
     val homeRecentsAlign: String = HomeRecentsAlign.SPREAD,
     /** With more than 5 apps, split the row into two balanced rows. */
     val homeRecentsTwoRows: Boolean = false,
+    /** In landscape, two recent-apps rows (recent and most used) sit next to each other when they fit, instead of stacked. */
+    val homeRecentsSideBySide: Boolean = true,
     val homeRecentsIconDp: Int = 40,
     /** Space between icons; unused while spread evenly. */
     val homeRecentsGapDp: Int = 16,
@@ -490,6 +492,7 @@ class LauncherPrefs(context: Context) {
         drawerRecentsSource = prefs.getString(KEY_DRAWER_RECENTS_SOURCE, AppsSource.RECENT) ?: AppsSource.RECENT,
         carRecentsSource = prefs.getString(KEY_CAR_RECENTS_SOURCE, AppsSource.RECENT) ?: AppsSource.RECENT,
         homeRecentsTwoRows = prefs.getBoolean(KEY_HOME_RECENTS_TWO_ROWS, false),
+        homeRecentsSideBySide = prefs.getBoolean(KEY_HOME_RECENTS_SIDE_BY_SIDE, true),
         homeRecentsAlign = prefs.getString(KEY_HOME_RECENTS_ALIGN, HomeRecentsAlign.SPREAD).orEmpty(),
         homeRecentsIconDp = prefs.getInt(KEY_HOME_RECENTS_ICON, 40).coerceIn(28, 64),
         homeRecentsGapDp = prefs.getInt(KEY_HOME_RECENTS_GAP, 16).coerceIn(0, 40),
@@ -662,6 +665,7 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_CAR_RECENTS_SOURCE, s.carRecentsSource)
             .putString(KEY_HOME_RECENTS_ALIGN, s.homeRecentsAlign)
             .putBoolean(KEY_HOME_RECENTS_TWO_ROWS, s.homeRecentsTwoRows)
+            .putBoolean(KEY_HOME_RECENTS_SIDE_BY_SIDE, s.homeRecentsSideBySide)
             .putInt(KEY_HOME_RECENTS_ICON, s.homeRecentsIconDp)
             .putInt(KEY_HOME_RECENTS_GAP, s.homeRecentsGapDp)
             .putInt(KEY_HOME_RECENTS_BOTTOM, s.homeRecentsBottomDp)
@@ -1015,6 +1019,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_ONBOARDING_DONE = "onboarding_done"
         const val KEY_USAGE = "app_usage"
         const val KEY_APP_LABELS = "app_labels"
+        const val KEY_HOME_RECENTS_SIDE_BY_SIDE = "home_recents_side_by_side"
         const val KEY_CAR_VOLUME_MUTE = "car_volume_mute"
         const val KEY_CAR_VOLUME_RING = "car_volume_ring"
         const val KEY_HOME_RECENTS_SOURCE = "home_recents_source"

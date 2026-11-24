@@ -547,6 +547,13 @@ private fun HomePage(viewModel: LauncherViewModel, settings: LauncherSettings) {
             AppsSource.options.forEach { (key, label) ->
                 ChoiceRow("Show: $label", selected = settings.homeRecentsSource == key) { viewModel.update { it.copy(homeRecentsSource = key) } }
             }
+            if (settings.homeRecentsSource == AppsSource.BOTH) {
+                SwitchRow(
+                    "Side by side in landscape",
+                    settings.homeRecentsSideBySide,
+                    subtitle = "Put the recent and most-used rows next to each other when they fit, to save height",
+                ) { v -> viewModel.update { it.copy(homeRecentsSideBySide = v) } }
+            }
             SliderRow("Number of apps", "${settings.homeRecentsCount}", settings.homeRecentsCount.toFloat(), 3f..10f) { v ->
                 viewModel.update { it.copy(homeRecentsCount = v.roundToInt()) }
             }
