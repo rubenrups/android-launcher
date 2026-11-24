@@ -377,9 +377,13 @@ private fun Card(modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, c
             .let {
                 if (onClick != null) it.clickable(onClick = onClick) else it.pointerInput(Unit) { detectTapGestures { } }
             }
-            .padding(16.dp),
+            .padding(if (LocalHalfCard.current) 12.dp else 16.dp),
     ) { content() }
 }
+
+/** Tiles per row inside a card: fewer when the card is half width, so each tile keeps a usable size. */
+@Composable
+private fun tilesPerRow(): Int = if (LocalHalfCard.current) HALF_TILES_PER_ROW else NAV_TILES_PER_ROW
 
 @Composable
 private fun GlucoseCard(viewModel: LauncherViewModel, onOpenSettings: () -> Unit) {
@@ -429,6 +433,14 @@ private fun GlucoseCard(viewModel: LauncherViewModel, onOpenSettings: () -> Unit
 }
 
 @Composable
+private fun StatLine(label: String, value: String) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = Color.White.copy(alpha = 0.55f), fontSize = 13.sp, modifier = Modifier.weight(1f))
+        Text(value, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+@Composable
 private fun Stat(label: String, value: String, size: androidx.compose.ui.unit.TextUnit = 16.sp) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(value, color = Color.White, fontSize = size, fontWeight = FontWeight.Medium)
@@ -440,6 +452,7 @@ private fun Stat(label: String, value: String, size: androidx.compose.ui.unit.Te
 @Composable
 internal fun NavigationCard(nav: NavigationState, modifier: Modifier = Modifier, big: Boolean = false) {
     val context = LocalContext.current
+    val half = LocalHalfCard.current
     Card(
         modifier,
         onClick = {
@@ -459,14 +472,14 @@ internal fun NavigationCard(nav: NavigationState, modifier: Modifier = Modifier,
                 androidx.compose.foundation.Image(
                     bitmap = image,
                     contentDescription = null,
-                    modifier = Modifier.padding(end = 14.dp, top = 6.dp).size(if (big) 88.dp else 48.dp),
+                    modifier = Modifier.padding(end = 14.dp, top = 6.dp).size(if (!big) 48.dp else if (half) 56.dp else 88.dp),
                 )
             }
             Column(Modifier.weight(1f)) {
                 val headline = listOf(nav.title, nav.text).filter { it.isNotBlank() }.joinToString(" · ")
-                Text(headline, color = Color.White, fontSize = if (big) 26.sp else 17.sp, fontWeight = FontWeight.Medium, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                Text(headline, color = Color.White, fontSize = if (!big) 17.sp else if (half) 18.sp else 26.sp, fontWeight = FontWeight.Medium, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 if (nav.summary.isNotBlank()) {
-                    Text(nav.summary, color = Color.White.copy(alpha = 0.75f), fontSize = if (big) 18.sp else 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(nav.summary, color = Color.White.copy(alpha = 0.75f), fontSize = if (!big) 14.sp else if (half) 14.sp else 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -477,14 +490,27 @@ internal fun NavigationCard(nav: NavigationState, modifier: Modifier = Modifier,
 private fun StatTiles(battery: Int, weather: String?, event: String?) {
     val context = LocalContext.current
     val free = remember { freeStorage(context) }
+    val half = LocalHalfCard.current
     Card {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            if (battery >= 0) Stat("Battery", "$battery%", 24.sp)
-            weather?.let { Stat("Weather", it, 24.sp) }
-            free?.let { Stat("Free space", it, 24.sp) }
+        if (half) {
+            // Too narrow for three columns: one line per fact, label left and value right.
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                if (battery >= 0) StatLine("Battery", "$battery%")
+                weather?.let { StatLine("Weather", it) }
+                free?.let { StatLine("Free space", it) }
+            }
+        } else {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                if (battery >= 0) Stat("Battery", "$battery%", 24.sp)
+                weather?.let { Stat("Weather", it, 24.sp) }
+                free?.let { Stat("Free space", it, 24.sp) }
+            }
         }
         event?.let {
-            Text("📅 $it", color = Color.White, fontSize = 18.sp, modifier = Modifier.padding(top = 12.dp), maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(
+                "📅 $it", color = Color.White, fontSize = if (half) 15.sp else 18.sp,
+                modifier = Modifier.padding(top = if (half) 8.dp else 12.dp), maxLines = 2, overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
@@ -510,12 +536,17 @@ private fun HourlyCard(hours: List<HourlyPoint>, city: String) {
     ) {
         Text("Weather · $city", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
         Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            hours.forEach { point ->
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(point.time, color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
-                    Text(point.emoji, fontSize = 26.sp)
-                    Text("${point.temp}°", color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Medium)
+        // Half width fits three hours across, so the twelve hours wrap onto a second line instead of being squeezed.
+        val half = LocalHalfCard.current
+        (if (half) hours.chunked(HALF_HOURS_PER_ROW) else listOf(hours)).forEachIndexed { index, rowHours ->
+            if (index > 0) Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = if (half) Arrangement.SpaceEvenly else Arrangement.SpaceBetween) {
+                rowHours.forEach { point ->
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(point.time, color = Color.White.copy(alpha = 0.6f), fontSize = if (half) 12.sp else 13.sp)
+                        Text(point.emoji, fontSize = if (half) 22.sp else 26.sp)
+                        Text("${point.temp}°", color = Color.White, fontSize = if (half) 17.sp else 20.sp, fontWeight = FontWeight.Medium)
+                    }
                 }
             }
         }
@@ -546,27 +577,29 @@ private fun QuickSettingsCard(viewModel: LauncherViewModel) {
         runCatching { context.startActivity(Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
     }
 
+    // Lock and the system's quick-settings panel go through the gesture accessibility service; without it they
+    // open Accessibility settings (see the Settings → Gestures page).
+    val tiles = buildList<QuickTileSpec> {
+        if (torchId != null) add(QuickTileSpec("🔦", "Torch", torchOn) { runCatching { camera.setTorchMode(torchId, !torchOn) } })
+        add(QuickTileSpec("📶", "Internet") {
+            open(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) Settings.Panel.ACTION_INTERNET_CONNECTIVITY else Settings.ACTION_WIFI_SETTINGS)
+        })
+        add(QuickTileSpec("🔵", "Bluetooth") { open(Settings.ACTION_BLUETOOTH_SETTINGS) })
+        add(QuickTileSpec("🔔", "Sound") { open(Settings.ACTION_SOUND_SETTINGS) })
+        add(QuickTileSpec("☀️", "Display") { open(Settings.ACTION_DISPLAY_SETTINGS) })
+        add(QuickTileSpec("🔒", "Lock phone") { viewModel.launchByKey(GestureActions.LOCK) })
+        add(QuickTileSpec("⚙️", "Quick panel") { viewModel.launchByKey(GestureActions.QUICK_SETTINGS) })
+    }
+    // Half width fits three tiles across; full width five.
+    val perRow = if (LocalHalfCard.current) HALF_QUICK_TILES_PER_ROW else QUICK_TILES_PER_ROW
     Card {
         Text("Quick settings", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (torchId != null) {
-                QuickTile("🔦", "Torch", active = torchOn) { runCatching { camera.setTorchMode(torchId, !torchOn) } }
+        tiles.chunked(perRow).forEach { rowTiles ->
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                rowTiles.forEach { QuickTile(it.icon, it.label, it.active, it.onClick) }
+                repeat(perRow - rowTiles.size) { Spacer(Modifier.weight(1f)) }
             }
-            QuickTile("📶", "Internet") {
-                open(if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) Settings.Panel.ACTION_INTERNET_CONNECTIVITY else Settings.ACTION_WIFI_SETTINGS)
-            }
-            QuickTile("🔵", "Bluetooth") { open(Settings.ACTION_BLUETOOTH_SETTINGS) }
-            QuickTile("🔔", "Sound") { open(Settings.ACTION_SOUND_SETTINGS) }
-            QuickTile("☀️", "Display") { open(Settings.ACTION_DISPLAY_SETTINGS) }
-        }
-        // Lock and the system's quick-settings panel go through the gesture accessibility service; without it they
-        // open Accessibility settings (see the Settings → Gestures page).
-        Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            QuickTile("🔒", "Lock phone") { viewModel.launchByKey(GestureActions.LOCK) }
-            QuickTile("⚙️", "Quick panel") { viewModel.launchByKey(GestureActions.QUICK_SETTINGS) }
-            Spacer(Modifier.weight(3f))
         }
     }
 }
@@ -588,6 +621,7 @@ private fun VolumeCard(settings: LauncherSettings) {
 
 @Composable
 private fun VolumeRow(label: String, stream: Int, audio: AudioManager, showMute: Boolean, resolver: ContentResolver) {
+    val half = LocalHalfCard.current
     val max = remember(stream) { audio.getStreamMaxVolume(stream).coerceAtLeast(1) }
     var level by remember { mutableIntStateOf(audio.getStreamVolume(stream)) }
     var muted by remember { mutableStateOf(audio.isStreamMute(stream)) }
@@ -608,9 +642,11 @@ private fun VolumeRow(label: String, stream: Int, audio: AudioManager, showMute:
         level = audio.getStreamVolume(stream)
         muted = audio.isStreamMute(stream)
     }
+    // Half width: the name goes on its own line and the buttons and mute are smaller, so the slider keeps some length.
+    if (half) Text(label, color = Color.White, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = Color.White, fontSize = 15.sp, modifier = Modifier.width(56.dp))
-        Text("−", color = Color.White, fontSize = 30.sp, modifier = Modifier.accessibleButton("Lower $label volume") { set(level - 1) }.padding(horizontal = 14.dp, vertical = 6.dp))
+        if (!half) Text(label, color = Color.White, fontSize = 15.sp, modifier = Modifier.width(56.dp))
+        Text("−", color = Color.White, fontSize = if (half) 24.sp else 30.sp, modifier = Modifier.accessibleButton("Lower $label volume") { set(level - 1) }.padding(horizontal = if (half) 8.dp else 14.dp, vertical = 6.dp))
         Slider(
             value = if (muted) 0f else level.toFloat(),
             onValueChange = { set(it.roundToInt()) },
@@ -618,11 +654,11 @@ private fun VolumeRow(label: String, stream: Int, audio: AudioManager, showMute:
             colors = SliderDefaults.colors(thumbColor = Accent, activeTrackColor = Accent, inactiveTrackColor = Color.White.copy(alpha = 0.2f)),
             modifier = Modifier.weight(1f).semantics { contentDescription = "$label volume" },
         )
-        Text("+", color = Color.White, fontSize = 30.sp, modifier = Modifier.accessibleButton("Raise $label volume") { set(level + 1) }.padding(horizontal = 14.dp, vertical = 6.dp))
+        Text("+", color = Color.White, fontSize = if (half) 24.sp else 30.sp, modifier = Modifier.accessibleButton("Raise $label volume") { set(level + 1) }.padding(horizontal = if (half) 8.dp else 14.dp, vertical = 6.dp))
         if (showMute) {
             Text(
                 if (muted) "🔇" else "🔈",
-                fontSize = 24.sp,
+                fontSize = if (half) 20.sp else 24.sp,
                 modifier = Modifier
                     .accessibleButton(if (muted) "Unmute $label" else "Mute $label") {
                         runCatching { audio.adjustStreamVolume(stream, AudioManager.ADJUST_TOGGLE_MUTE, 0) }
@@ -635,18 +671,21 @@ private fun VolumeRow(label: String, stream: Int, audio: AudioManager, showMute:
     }
 }
 
+private class QuickTileSpec(val icon: String, val label: String, val active: Boolean = false, val onClick: () -> Unit)
+
 @Composable
 private fun RowScope.QuickTile(icon: String, label: String, active: Boolean = false, onClick: () -> Unit) {
+    val half = LocalHalfCard.current
     Column(
         Modifier
             .weight(1f)
             .background(if (active) Color.White.copy(alpha = 0.28f) else Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 4.dp, vertical = 14.dp),
+            .padding(horizontal = 2.dp, vertical = if (half) 10.dp else 14.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(icon, fontSize = 28.sp)
-        Text(label, color = Color.White.copy(alpha = 0.8f), fontSize = 12.sp, maxLines = 1)
+        Text(icon, fontSize = if (half) 22.sp else 28.sp)
+        Text(label, color = Color.White.copy(alpha = 0.8f), fontSize = if (half) 11.sp else 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -659,6 +698,8 @@ private fun CarMediaCard(media: MediaState?, settings: LauncherSettings) {
     }
     val context = LocalContext.current
     val controls = media.controller.transportControls
+    // Half width: a smaller picture and text and smaller transport buttons; every control stays reachable.
+    val half = LocalHalfCard.current
     Card(onClick = { openMediaApp(context, media.controller) }) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             media.art?.takeIf { settings.carMediaShowArt }?.let { art ->
@@ -667,34 +708,34 @@ private fun CarMediaCard(media: MediaState?, settings: LauncherSettings) {
                     bitmap = picture,
                     contentDescription = null,
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                    modifier = Modifier.padding(end = 16.dp).size(96.dp).clip(RoundedCornerShape(12.dp)),
+                    modifier = Modifier.padding(end = if (half) 10.dp else 16.dp).size(if (half) 56.dp else 96.dp).clip(RoundedCornerShape(if (half) 8.dp else 12.dp)),
                 )
             }
             Column(Modifier.weight(1f)) {
-                Text(media.title, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(media.title, color = Color.White, fontSize = if (half) 17.sp else 24.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (settings.carMediaShowArtist && media.artist.isNotBlank()) {
-                    Text(media.artist, color = Color.White.copy(alpha = 0.75f), fontSize = 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(media.artist, color = Color.White.copy(alpha = 0.75f), fontSize = if (half) 13.sp else 18.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
-        if (settings.carMediaSeekBar) MediaSeekBar(media, big = true)
-        Spacer(Modifier.height(14.dp))
+        if (settings.carMediaSeekBar) MediaSeekBar(media, big = !half)
+        Spacer(Modifier.height(if (half) 8.dp else 14.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-            TransportButton(TransportKind.PREVIOUS, 72.dp, filled = false, description = "Previous track") { controls.skipToPrevious() }
+            TransportButton(TransportKind.PREVIOUS, if (half) 44.dp else 72.dp, filled = false, description = "Previous track") { controls.skipToPrevious() }
             TransportButton(
-                if (media.isPlaying) TransportKind.PAUSE else TransportKind.PLAY, 96.dp, filled = true,
+                if (media.isPlaying) TransportKind.PAUSE else TransportKind.PLAY, if (half) 60.dp else 96.dp, filled = true,
                 description = if (media.isPlaying) "Pause" else "Play",
             ) {
                 if (media.isPlaying) controls.pause() else controls.play()
             }
-            TransportButton(TransportKind.NEXT, 72.dp, filled = false, description = "Next track") { controls.skipToNext() }
+            TransportButton(TransportKind.NEXT, if (half) 44.dp else 72.dp, filled = false, description = "Next track") { controls.skipToNext() }
         }
         if (settings.carMediaShowExtras && media.customActions.isNotEmpty()) {
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(if (half) 6.dp else 10.dp))
             // The player's own extras (Spotify: shuffle, add to liked songs…), kept smaller than the main controls.
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly, verticalAlignment = Alignment.CenterVertically) {
-                media.customActions.take(3).forEach { action ->
-                    CustomActionButton(media.controller.packageName, action, size = 48.dp) { controls.sendCustomAction(action, null) }
+                media.customActions.take(if (half) 2 else 3).forEach { action ->
+                    CustomActionButton(media.controller.packageName, action, size = if (half) 36.dp else 48.dp) { controls.sendCustomAction(action, null) }
                 }
             }
         }
@@ -767,12 +808,13 @@ private fun NavigateCard(destinations: List<Destination>, onOpenSettings: () -> 
 
     Card {
         Text("🧭 Navigate", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
-        tiles.chunked(NAV_TILES_PER_ROW).forEach { rowTiles ->
+        val perRow = tilesPerRow()
+        tiles.chunked(perRow).forEach { rowTiles ->
             Spacer(Modifier.height(10.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 rowTiles.forEach { (icon, label, action) -> NavTile(icon, label, action) }
                 // Keep tiles in a short last row the same width as the others.
-                repeat(NAV_TILES_PER_ROW - rowTiles.size) { Spacer(Modifier.weight(1f)) }
+                repeat(perRow - rowTiles.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
@@ -780,20 +822,25 @@ private fun NavigateCard(destinations: List<Destination>, onOpenSettings: () -> 
 
 @Composable
 private fun RowScope.NavTile(icon: String, label: String, onClick: () -> Unit) {
+    val half = LocalHalfCard.current
     Column(
         Modifier
             .weight(1f)
             .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 4.dp, vertical = 18.dp),
+            .padding(horizontal = 4.dp, vertical = if (half) 12.dp else 18.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Text(icon, fontSize = 34.sp)
-        Text(label, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(icon, fontSize = if (half) 26.sp else 34.sp)
+        Text(label, color = Color.White, fontSize = if (half) 15.sp else 18.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 
 private const val NAV_TILES_PER_ROW = 3
+private const val HALF_TILES_PER_ROW = 2
+private const val HALF_HOURS_PER_ROW = 3
+private const val QUICK_TILES_PER_ROW = 5
+private const val HALF_QUICK_TILES_PER_ROW = 3
 private const val MAPS_PACKAGE = "com.google.android.apps.maps"
 
 /** Runs a car-mode swipe: close, a media key, a launcher function, or an app. */
@@ -834,7 +881,7 @@ private fun QuickAppsCard(viewModel: LauncherViewModel, keys: List<String>, onOp
 private fun RecentAppsCard(viewModel: LauncherViewModel, settings: LauncherSettings) {
     val installed by viewModel.visibleApps.collectAsStateWithLifecycle()
     val byKey = remember(installed) { installed.associateBy { it.key } }
-    val sections = settings.appSections(settings.carRecentsSource, NAV_TILES_PER_ROW * 2) { it in byKey }
+    val sections = settings.appSections(settings.carRecentsSource, tilesPerRow() * 2) { it in byKey }
         .map { (title, keys) -> title to keys.mapNotNull { byKey[it] } }
     if (sections.isEmpty()) return
     Card {
@@ -848,7 +895,9 @@ private fun RecentAppsCard(viewModel: LauncherViewModel, settings: LauncherSetti
 
 @Composable
 private fun AppTiles(viewModel: LauncherViewModel, apps: List<AppInfo>) {
-    apps.chunked(NAV_TILES_PER_ROW).forEach { rowApps ->
+    val half = LocalHalfCard.current
+    val perRow = tilesPerRow()
+    apps.chunked(perRow).forEach { rowApps ->
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             rowApps.forEach { app ->
@@ -857,15 +906,15 @@ private fun AppTiles(viewModel: LauncherViewModel, apps: List<AppInfo>) {
                         .weight(1f)
                         .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
                         .clickable { viewModel.launch(app) }
-                        .padding(horizontal = 4.dp, vertical = 14.dp),
+                        .padding(horizontal = 4.dp, vertical = if (half) 10.dp else 14.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    AppIcon(app, viewModel, 56.dp)
+                    AppIcon(app, viewModel, if (half) 44.dp else 56.dp)
                     Spacer(Modifier.height(6.dp))
-                    Text(app.label, color = Color.White, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(app.label, color = Color.White, fontSize = if (half) 13.sp else 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            repeat(NAV_TILES_PER_ROW - rowApps.size) { Spacer(Modifier.weight(1f)) }
+            repeat(perRow - rowApps.size) { Spacer(Modifier.weight(1f)) }
         }
     }
 }
@@ -908,7 +957,9 @@ private fun CallsCard(contacts: List<CallContact>, direct: Boolean, onOpenSettin
                 modifier = Modifier.clickable(onClick = onOpenSettings).padding(vertical = 14.dp),
             )
         }
-        contacts.chunked(NAV_TILES_PER_ROW).forEach { rowContacts ->
+        val half = LocalHalfCard.current
+        val perRow = tilesPerRow()
+        contacts.chunked(perRow).forEach { rowContacts ->
             Spacer(Modifier.height(10.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 rowContacts.forEach { contact ->
@@ -917,22 +968,22 @@ private fun CallsCard(contacts: List<CallContact>, direct: Boolean, onOpenSettin
                             .weight(1f)
                             .background(Color.White.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
                             .clickable { call(contact) }
-                            .padding(horizontal = 4.dp, vertical = 14.dp),
+                            .padding(horizontal = 4.dp, vertical = if (half) 10.dp else 14.dp),
                         horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Box(Modifier.size(56.dp).background(Color(0xFF2E7D4F), CircleShape), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(if (half) 44.dp else 56.dp).background(Color(0xFF2E7D4F), CircleShape), contentAlignment = Alignment.Center) {
                             Text(
                                 contact.name.firstOrNull { it.isLetterOrDigit() }?.uppercase() ?: "📞",
                                 color = Color.White,
-                                fontSize = 26.sp,
+                                fontSize = if (half) 20.sp else 26.sp,
                                 fontWeight = FontWeight.Medium,
                             )
                         }
                         Spacer(Modifier.height(6.dp))
-                        Text(contact.name, color = Color.White, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(contact.name, color = Color.White, fontSize = if (half) 13.sp else 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                repeat(NAV_TILES_PER_ROW - rowContacts.size) { Spacer(Modifier.weight(1f)) }
+                repeat(perRow - rowContacts.size) { Spacer(Modifier.weight(1f)) }
             }
         }
     }
@@ -943,6 +994,7 @@ private fun CallsCard(contacts: List<CallContact>, direct: Boolean, onOpenSettin
 @Composable
 private fun NotificationsCard(items: List<NotificationItem>, connected: Boolean, count: Int, onOpenSettings: () -> Unit) {
     val context = LocalContext.current
+    val half = LocalHalfCard.current
     Card {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
@@ -955,7 +1007,7 @@ private fun NotificationsCard(items: List<NotificationItem>, connected: Boolean,
                 Text(
                     "Clear all",
                     color = Accent,
-                    fontSize = 15.sp,
+                    fontSize = if (half) 13.sp else 15.sp,
                     modifier = Modifier.clickable { items.forEach { NotificationStore.dismiss(it.key) } }.padding(8.dp),
                 )
             }
@@ -978,17 +1030,17 @@ private fun NotificationsCard(items: List<NotificationItem>, connected: Boolean,
                 ) {
                     Column(Modifier.weight(1f)) {
                         if (item.title.isNotBlank()) {
-                            Text(item.title, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(item.title, color = Color.White, fontSize = if (half) 16.sp else 20.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         if (item.text.isNotBlank()) {
-                            Text(item.text, color = Color.White.copy(alpha = 0.75f), fontSize = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            Text(item.text, color = Color.White.copy(alpha = 0.75f), fontSize = if (half) 13.sp else 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
                     }
                     Text(
                         "✕",
                         color = Color.White.copy(alpha = 0.7f),
-                        fontSize = 20.sp,
-                        modifier = Modifier.clickable { NotificationStore.dismiss(item.key) }.padding(14.dp),
+                        fontSize = if (half) 16.sp else 20.sp,
+                        modifier = Modifier.clickable { NotificationStore.dismiss(item.key) }.padding(if (half) 10.dp else 14.dp),
                     )
                 }
             }

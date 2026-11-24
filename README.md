@@ -22,6 +22,7 @@ A minimalist Android home-screen launcher built with Kotlin and Jetpack Compose.
 - **Car mode quick settings**: Lock phone and Quick panel tiles next to torch, internet, Bluetooth, sound and display
 - **Car mode clock and recent apps**: two more optional cards, a big clock and your most recently used apps as tiles
 - **Half-width cards**: tap 1/½ per card in Settings → Car mode (or hold a card) so two cards share a row, e.g. clock and glucose side by side
+- **Half-width cards scale properly**: every car-mode card adapts when set to half width (smaller media art and buttons, volume label above its slider, quick-settings tiles three to a row, app and call tiles two to a row, weather hours on two lines, battery / weather / storage as a list, smaller notification text and card padding)
 - **Launch animation** (optional) and **settings search**; the drawer and dashboard buttons can also live in folders and the drawer
 - **Settings redesign**: a front page of categories (Home screen, Appearance, Gestures, App drawer, Dashboard & glucose, Notifications & media, Apps & widgets, Backup & updates), each with grouped cards
 - **Backgrounds and buttons**: adjustable background opacity for the drawer and dashboard, and "App drawer" / "Dashboard" buttons you can add to the favourites list
