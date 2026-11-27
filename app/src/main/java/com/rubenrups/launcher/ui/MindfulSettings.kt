@@ -41,7 +41,7 @@ internal fun MindfulGroup(viewModel: LauncherViewModel, settings: LauncherSettin
         }
         NavRow("Add an app") { adding = true }
         Hint(
-            "Before one of these apps opens, a pause screen asks if you really want to, and \\"Open anyway\\" only works after " +
+            "Before one of these apps opens, a pause screen asks if you really want to, and \"Open anyway\" only works after " +
                 "the wait. A daily limit says when you are over it; with strict on, the app stays closed for the rest of the day. " +
                 "Counts only cover opens from this launcher, since this version began recording days."
         )
