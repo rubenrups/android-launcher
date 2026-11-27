@@ -112,7 +112,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rubenrups.launcher.DashboardEdge
 import com.rubenrups.launcher.LauncherViewModel
+import com.rubenrups.launcher.data.AgendaEvent
 import com.rubenrups.launcher.data.AppEntry
+import com.rubenrups.launcher.data.CalendarReader
 import com.rubenrups.launcher.data.AppInfo
 import com.rubenrups.launcher.data.Entry
 import com.rubenrups.launcher.data.FolderEntry
@@ -224,6 +226,7 @@ private fun HomeContent(
     val favouriteKeys = remember(favourites) { favourites.mapTo(HashSet()) { it.key } }
     val weather = rememberWeather(settings.showWeather, settings.weatherCity, settings.weatherFahrenheit)
     val nextEvent = rememberNextEvent(settings.showCalendar)
+    val agenda = rememberAgenda(settings.showAgenda, settings.agendaCount, settings.agendaAllDay)
     var showWidgetPicker by remember { mutableStateOf(false) }
     var notesFor by remember { mutableStateOf<UpdateInfo?>(null) }
 
@@ -507,6 +510,10 @@ private fun HomeContent(
                     Box(SidePadding) { Clock(settings, weather, nextEvent, glucoseLine) }
                 }
                 Spacer(Modifier.height(16.dp))
+            }
+            if (settings.showAgenda && agenda.isNotEmpty()) {
+                AgendaList(agenda, SidePadding)
+                Spacer(Modifier.height(12.dp))
             }
             if (settings.showNavigation) {
                 navigation?.let { Box(SidePadding.fillMaxWidth()) { NavigationCard(it) }; Spacer(Modifier.height(8.dp)) }
@@ -1570,6 +1577,28 @@ private fun EnableNotificationsPrompt() {
 
 private fun openNotificationAccessSettings(context: Context) {
     context.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+}
+
+/** The next few events, one line each ("10:00  Dentist"), tap to open one. Plain text, like the header. */
+@Composable
+private fun AgendaList(events: List<AgendaEvent>, modifier: Modifier = Modifier) {
+    val context = LocalContext.current
+    val format = remember { java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT) }
+    val ink = LocalHomeInk.current
+    Column(modifier) {
+        events.forEach { event ->
+            Row(
+                Modifier.clickable { startSafely(context, CalendarReader.viewIntent(event.eventId, event.begin, event.end)) }.padding(vertical = 3.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    if (event.allDay) "All day" else format.format(java.util.Date(event.begin)),
+                    color = ink.copy(alpha = 0.7f), fontSize = 15.sp, style = HomeTextStyle,
+                )
+                Text(event.title, color = ink, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis, style = HomeTextStyle)
+            }
+        }
+    }
 }
 
 @Composable

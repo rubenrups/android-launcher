@@ -51,6 +51,7 @@ object DashboardModules {
     const val CLOCK = "clock"
     const val RECENTS = "recents"
     const val NOTIFICATIONS = "notifications"
+    const val AGENDA = "agenda"
 
     /** Default order, and the names shown in settings. */
     val all: List<Pair<String, String>> = listOf(
@@ -60,6 +61,7 @@ object DashboardModules {
         VOLUME to "Volume",
         NAVIGATION to "Navigation",
         NOTIFICATIONS to "Notifications",
+        AGENDA to "Agenda",
         APPS to "Quick launch apps",
         RECENTS to "Recent apps",
         CALLS to "Call buttons",
@@ -100,6 +102,10 @@ data class LauncherSettings(
     val iconPack: String? = null,
     val folders: List<AppFolder> = emptyList(),
     val showCalendar: Boolean = false,
+    /** The agenda (the next few events) on the home screen, and in car mode as a card; the count and all-day apply to both. */
+    val showAgenda: Boolean = false,
+    val agendaCount: Int = 3,
+    val agendaAllDay: Boolean = false,
     val showWeather: Boolean = false,
     /** "stacked", "side" (a column beside the time), "wrap" (details wrapped beside the time) or "inline" (one wrapping row). */
     val headerLayout: String = "stacked",
@@ -456,6 +462,9 @@ class LauncherPrefs(context: Context) {
         iconPack = prefs.getString(KEY_ICON_PACK, null),
         folders = decodeFolders(prefs.getString(KEY_FOLDERS, null)),
         showCalendar = prefs.getBoolean(KEY_SHOW_CALENDAR, false),
+        showAgenda = prefs.getBoolean(KEY_SHOW_AGENDA, false),
+        agendaCount = prefs.getInt(KEY_AGENDA_COUNT, 3).coerceIn(1, 6),
+        agendaAllDay = prefs.getBoolean(KEY_AGENDA_ALL_DAY, false),
         showWeather = prefs.getBoolean(KEY_SHOW_WEATHER, false),
         headerLayout = prefs.getString(KEY_HEADER_LAYOUT, "stacked") ?: "stacked",
         headerShowDate = prefs.getBoolean(KEY_HEADER_DATE, true),
@@ -630,6 +639,9 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_ICON_PACK, s.iconPack)
             .putString(KEY_FOLDERS, encodeFolders(s.folders))
             .putBoolean(KEY_SHOW_CALENDAR, s.showCalendar)
+            .putBoolean(KEY_SHOW_AGENDA, s.showAgenda)
+            .putInt(KEY_AGENDA_COUNT, s.agendaCount)
+            .putBoolean(KEY_AGENDA_ALL_DAY, s.agendaAllDay)
             .putBoolean(KEY_SHOW_WEATHER, s.showWeather)
             .putString(KEY_HEADER_LAYOUT, s.headerLayout)
             .putBoolean(KEY_HEADER_DATE, s.headerShowDate)
@@ -1019,6 +1031,9 @@ class LauncherPrefs(context: Context) {
         const val KEY_ONBOARDING_DONE = "onboarding_done"
         const val KEY_USAGE = "app_usage"
         const val KEY_APP_LABELS = "app_labels"
+        const val KEY_SHOW_AGENDA = "show_agenda"
+        const val KEY_AGENDA_COUNT = "agenda_count"
+        const val KEY_AGENDA_ALL_DAY = "agenda_all_day"
         const val KEY_HOME_RECENTS_SIDE_BY_SIDE = "home_recents_side_by_side"
         const val KEY_CAR_VOLUME_MUTE = "car_volume_mute"
         const val KEY_CAR_VOLUME_RING = "car_volume_ring"

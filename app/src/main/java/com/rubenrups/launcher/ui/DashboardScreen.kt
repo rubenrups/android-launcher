@@ -22,6 +22,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import com.rubenrups.launcher.data.appSections
+import com.rubenrups.launcher.data.CalendarReader
 import com.rubenrups.launcher.data.CallContact
 import com.rubenrups.launcher.data.topAppKeys
 import com.rubenrups.launcher.data.DashboardModules
@@ -165,6 +166,8 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
         key !in settings.dashboardHidden && when (key) {
             DashboardModules.WEATHER -> hours.isNotEmpty()
             DashboardModules.RECENTS -> settings.topAppKeys(settings.carRecentsSource).isNotEmpty()
+            // The calendar permission is asked for with the agenda or next-event switch in the home settings.
+            DashboardModules.AGENDA -> CalendarReader.hasPermission(context)
             // Empty and connected: nothing to show, so the card stays out of the way.
             DashboardModules.NOTIFICATIONS -> notifications.isNotEmpty() || !listenerConnected
             else -> true
@@ -193,6 +196,7 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
             DashboardModules.CLOCK -> ClockCard()
             DashboardModules.RECENTS -> RecentAppsCard(viewModel, settings)
             DashboardModules.STATS -> StatTiles(battery, weather, nextEvent?.text)
+            DashboardModules.AGENDA -> AgendaCard(settings)
             else -> Unit
         }
     }
@@ -293,6 +297,7 @@ private fun settingsTargetFor(card: String): Pair<String, String> = when (card) 
     DashboardModules.WEATHER, DashboardModules.STATS -> "HOME" to "Header"
     DashboardModules.MEDIA -> "DASHBOARD" to "Media card"
     DashboardModules.VOLUME -> "DASHBOARD" to "Volume card"
+    DashboardModules.AGENDA -> "HOME" to "Agenda"
     DashboardModules.NAVIGATION -> "DASHBOARD" to "Navigation places"
     DashboardModules.APPS -> "DASHBOARD" to "Quick launch apps"
     DashboardModules.CALLS -> "DASHBOARD" to "Call buttons"
@@ -592,6 +597,37 @@ private fun QuickSettingsCard(viewModel: LauncherViewModel) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 rowTiles.forEach { QuickTile(it.icon, it.label, it.active, it.onClick) }
                 repeat(perRow - rowTiles.size) { Spacer(Modifier.weight(1f)) }
+            }
+        }
+    }
+}
+
+/** The next few calendar events, big enough to read at a glance; tap one to open it. */
+@Composable
+private fun AgendaCard(settings: LauncherSettings) {
+    val context = LocalContext.current
+    val events = rememberAgenda(true, settings.agendaCount, settings.agendaAllDay)
+    val format = remember { java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT) }
+    val half = LocalHalfCard.current
+    Card {
+        Text("📅 Agenda", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+        if (events.isEmpty()) {
+            Text("Nothing coming up", color = Color.White.copy(alpha = 0.6f), fontSize = if (half) 15.sp else 18.sp, modifier = Modifier.padding(vertical = 10.dp))
+        }
+        events.forEach { event ->
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clickable { runCatching { context.startActivity(CalendarReader.viewIntent(event.eventId, event.begin, event.end).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
+                    .padding(vertical = if (half) 6.dp else 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    if (event.allDay) "All day" else format.format(java.util.Date(event.begin)),
+                    color = Color.White.copy(alpha = 0.65f), fontSize = if (half) 13.sp else 16.sp,
+                    modifier = Modifier.width(if (half) 54.dp else 78.dp),
+                )
+                Text(event.title, color = Color.White, fontSize = if (half) 15.sp else 20.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
     }
