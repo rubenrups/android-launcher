@@ -133,6 +133,8 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
     }
 
     val scroll = rememberScrollState()
+    // While car mode is up, follow the position so the last fix before you leave the car is where it was parked.
+    TrackLocation(enabled = settings.carParkedOn) { viewModel.recordFix(it.toFix()) }
     // Scrolled down and then left alone: after a while, glide back to the top so the cards you check most are in view
     // again. Touching or scrolling restarts the wait. The glide itself must not restart it: it makes the scroll state
     // "in progress" too, which used to cancel the glide after its first frame, so it never got anywhere.
@@ -165,6 +167,8 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
         key !in settings.dashboardHidden && when (key) {
             DashboardModules.WEATHER -> hours.isNotEmpty()
             DashboardModules.RECENTS -> settings.topAppKeys(settings.carRecentsSource).isNotEmpty()
+            // Only once it has been switched on in settings (that also asks for the location permission).
+            DashboardModules.PARKED -> settings.carParkedOn
             // Empty and connected: nothing to show, so the card stays out of the way.
             DashboardModules.NOTIFICATIONS -> notifications.isNotEmpty() || !listenerConnected
             else -> true
@@ -193,6 +197,7 @@ fun DashboardScreen(viewModel: LauncherViewModel, onClose: () -> Unit, onOpenSet
             DashboardModules.CLOCK -> ClockCard()
             DashboardModules.RECENTS -> RecentAppsCard(viewModel, settings)
             DashboardModules.STATS -> StatTiles(battery, weather, nextEvent?.text)
+            DashboardModules.PARKED -> ParkedCard(viewModel, settings)
             else -> Unit
         }
     }
@@ -293,6 +298,7 @@ private fun settingsTargetFor(card: String): Pair<String, String> = when (card) 
     DashboardModules.WEATHER, DashboardModules.STATS -> "HOME" to "Header"
     DashboardModules.MEDIA -> "DASHBOARD" to "Media card"
     DashboardModules.VOLUME -> "DASHBOARD" to "Volume card"
+    DashboardModules.PARKED -> "DASHBOARD" to "Parked car card"
     DashboardModules.NAVIGATION -> "DASHBOARD" to "Navigation places"
     DashboardModules.APPS -> "DASHBOARD" to "Quick launch apps"
     DashboardModules.CALLS -> "DASHBOARD" to "Call buttons"
@@ -595,6 +601,75 @@ private fun QuickSettingsCard(viewModel: LauncherViewModel) {
             }
         }
     }
+}
+
+/** Where the car was left: the saved spot with a walking route back, or how to get one saved. */
+@Composable
+private fun ParkedCard(viewModel: LauncherViewModel, settings: LauncherSettings) {
+    val context = LocalContext.current
+    val spot = settings.parkedSpot
+    val permitted = remember(settings.carParkedOn) { hasLocationPermission(context) }
+    val ask = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) { }
+    val timeFormat = remember { java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT) }
+    val half = LocalHalfCard.current
+    Card {
+        Text("🅿️ Parked car", color = Color.White.copy(alpha = 0.6f), fontSize = 13.sp)
+        when {
+            !permitted -> Text(
+                "＋ Allow location to remember where you park",
+                color = Accent, fontSize = if (half) 15.sp else 18.sp,
+                modifier = Modifier.clickable { ask.launch(android.Manifest.permission.ACCESS_FINE_LOCATION) }.padding(vertical = 10.dp),
+            )
+            spot == null -> {
+                Text(
+                    "No spot saved yet",
+                    color = Color.White, fontSize = if (half) 17.sp else 22.sp, modifier = Modifier.padding(top = 6.dp),
+                )
+                Text(
+                    "It is saved when your car's Bluetooth disconnects after a drive with car mode open.",
+                    color = Color.White.copy(alpha = 0.6f), fontSize = if (half) 12.sp else 14.sp,
+                )
+                ParkedButton("📍 Park here now") {
+                    val saved = viewModel.parkHere()
+                    android.widget.Toast.makeText(
+                        context, if (saved) "Parking spot saved" else "Waiting for a location fix, try again in a moment", android.widget.Toast.LENGTH_SHORT,
+                    ).show()
+                }
+            }
+            else -> {
+                Text(
+                    "Parked " + timeFormat.format(java.util.Date(spot.timeMs)),
+                    color = Color.White, fontSize = if (half) 20.sp else 28.sp, fontWeight = FontWeight.Light, modifier = Modifier.padding(top = 4.dp),
+                )
+                Text(agoText(System.currentTimeMillis() - spot.timeMs), color = Color.White.copy(alpha = 0.7f), fontSize = if (half) 13.sp else 16.sp)
+                ParkedButton("🚶 Walk back") {
+                    val uri = Uri.parse("google.navigation:q=${spot.lat},${spot.lng}&mode=w")
+                    val viaMaps = Intent(Intent.ACTION_VIEW, uri).setPackage(MAPS_PACKAGE).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    if (runCatching { context.startActivity(viaMaps) }.isFailure) {
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    }
+                }
+                Text(
+                    "Clear",
+                    color = Accent, fontSize = 14.sp,
+                    modifier = Modifier.clickable { viewModel.clearParked() }.padding(top = 6.dp, bottom = 2.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ParkedButton(label: String, onClick: () -> Unit) {
+    Text(
+        label,
+        color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Medium,
+        modifier = Modifier
+            .padding(top = 10.dp)
+            .background(Color.White.copy(alpha = 0.12f), RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+    )
 }
 
 /** Media volume (and optionally the ringtone) with big minus and plus buttons, a slider, and a mute button. */

@@ -820,6 +820,36 @@ private fun DrawerPage(viewModel: LauncherViewModel, settings: LauncherSettings)
     }
 }
 
+/** Switch for the parked-car card: asks for the location permission, which is only used while the launcher is on screen. */
+@Composable
+private fun ParkedCardGroup(viewModel: LauncherViewModel, settings: LauncherSettings) {
+    val context = LocalContext.current
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) viewModel.update { it.copy(carParkedOn = true) }
+    }
+    Group("Parked car card") {
+        SwitchRow(
+            "Remember where I parked",
+            settings.carParkedOn,
+            subtitle = "Shows a card with the spot and a walking route back",
+        ) { on ->
+            when {
+                !on -> viewModel.update { it.copy(carParkedOn = false) }
+                com.rubenrups.launcher.ui.hasLocationPermission(context) -> viewModel.update { it.copy(carParkedOn = true) }
+                else -> ask.launch(android.Manifest.permission.ACCESS_FINE_LOCATION)
+            }
+        }
+        if (settings.carParkedOn) {
+            NavRow("Forget the saved spot", if (settings.parkedSpot != null) "saved" else "none") { viewModel.clearParked() }
+        }
+        Hint(
+            "While car mode is open the launcher follows your position (location permission \"while using the app\"). " +
+                "When one of your car Bluetooth devices disconnects, the last position becomes the parked spot. " +
+                "It is kept on this phone only, and is not in backups. Choose the car devices under Car mode automation."
+        )
+    }
+}
+
 @Composable
 private fun DashboardPage(
     viewModel: LauncherViewModel,
@@ -930,6 +960,7 @@ private fun DashboardPage(
         )
     }
     CarAutomationGroups(viewModel, settings)
+    ParkedCardGroup(viewModel, settings)
     Group("Volume card") {
         SwitchRow("Mute button", settings.carVolumeMute, subtitle = "On the media volume row") { v -> viewModel.update { it.copy(carVolumeMute = v) } }
         SwitchRow("Ringtone volume too", settings.carVolumeRing, subtitle = "A second slider; may be refused while do-not-disturb is on") { v ->

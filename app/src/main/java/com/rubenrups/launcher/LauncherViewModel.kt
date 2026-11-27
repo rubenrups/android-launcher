@@ -337,6 +337,18 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    /** Follows the drive: the newest position, kept so it can become the parked spot when the car's Bluetooth lets go. */
+    fun recordFix(fix: com.rubenrups.launcher.data.GeoFix) = update { it.copy(lastFix = fix) }
+
+    /** Saves the newest position as the parked spot; false when there is none recent enough (a few minutes) to trust. */
+    fun parkHere(): Boolean {
+        val fix = settings.value.lastFix?.takeIf { System.currentTimeMillis() - it.timeMs < PARK_FIX_MAX_AGE_MS } ?: return false
+        update { it.copy(parkedSpot = fix) }
+        return true
+    }
+
+    fun clearParked() = update { it.copy(parkedSpot = null) }
+
     fun addCarApp(key: String) = editCarLayout { c -> if (key.isBlank() || key in c.apps) c else c.copy(apps = c.apps + key) }
 
     fun removeCarApp(index: Int) = editCarLayout { c -> c.copy(apps = c.apps.filterIndexed { i, _ -> i != index }) }
@@ -704,6 +716,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     companion object {
         private const val SEEK_STEP_MS = 15_000L
+        private const val PARK_FIX_MAX_AGE_MS = 5 * 60_000L
 
         /** Swipe-gesture target that opens the dashboard instead of an app. */
         const val ACTION_DASHBOARD = GestureActions.DASHBOARD
