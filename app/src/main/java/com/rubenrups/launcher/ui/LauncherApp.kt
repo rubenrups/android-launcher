@@ -213,6 +213,10 @@ fun LauncherApp(viewModel: LauncherViewModel) {
             SettingsScreen(viewModel, onClose = { viewModel.setSettingsOpen(false) })
         }
 
+        // The pause screen of a mindful app sits above the launcher screens, below the setup guide.
+        val mindful by viewModel.mindful.collectAsStateWithLifecycle()
+        mindful?.let { MindfulScreen(viewModel, it) }
+
         // The first-run setup guide sits on top of everything.
         if (onboardingOpen) OnboardingScreen(viewModel, onFinish = { viewModel.finishOnboarding() })
     }

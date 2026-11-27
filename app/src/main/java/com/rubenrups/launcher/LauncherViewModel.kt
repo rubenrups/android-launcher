@@ -25,6 +25,8 @@ import com.rubenrups.launcher.data.BackupScheduler
 import com.rubenrups.launcher.data.GestureActions
 import com.rubenrups.launcher.data.CarLayout
 import com.rubenrups.launcher.data.ContextProfile
+import com.rubenrups.launcher.data.MindfulRule
+import com.rubenrups.launcher.data.opensOnDayOf
 import com.rubenrups.launcher.notifications.NotificationStore
 import com.rubenrups.launcher.data.GestureSet
 import com.rubenrups.launcher.data.carLayout
@@ -61,6 +63,9 @@ import java.util.UUID
 
 /** Which screen edge the dashboard slides in from (and back out to); NONE = fade and scale. */
 enum class DashboardEdge { NONE, LEFT, RIGHT, TOP, BOTTOM }
+
+/** What the pause screen shows: the app, its rule, and how often it was opened today. */
+data class MindfulPrompt(val app: AppInfo, val rule: MindfulRule, val opensToday: Int)
 
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -674,7 +679,36 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         closeDrawer()
     }
 
+    /** The pause screen that is up right now, or null. */
+    private val _mindful = MutableStateFlow<MindfulPrompt?>(null)
+    val mindful: StateFlow<MindfulPrompt?> = _mindful.asStateFlow()
+
+    fun dismissMindful() { _mindful.value = null }
+
+    /** The pause screen was passed: open the app for real. */
+    fun confirmMindful() {
+        val prompt = _mindful.value ?: return
+        _mindful.value = null
+        launchNow(prompt.app)
+    }
+
+    /** Sets (or, with null, removes) the pause rule of an app. */
+    fun setMindfulRule(app: AppInfo, rule: MindfulRule?) = update { s ->
+        s.copy(mindful = if (rule == null) s.mindful - app.key else s.mindful + (app.key to rule))
+    }
+
+    /** Opens an app, or first shows its pause screen when it has a mindful rule. */
     fun launch(app: AppInfo) {
+        val rule = settings.value.mindful[app.key]
+        if (rule != null && !VirtualApps.isVirtual(app)) {
+            val opensToday = settings.value.usage[app.key].opensOnDayOf(System.currentTimeMillis())
+            _mindful.value = MindfulPrompt(app, rule, opensToday)
+            return
+        }
+        launchNow(app)
+    }
+
+    private fun launchNow(app: AppInfo) {
         if (VirtualApps.isVirtual(app)) {
             // A launcher function in the favourites list rather than a real app: run it, record nothing.
             when (app.key) {

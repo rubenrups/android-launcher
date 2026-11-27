@@ -131,6 +131,8 @@ data class LauncherSettings(
     /** Remember which app you pick for each search and show those first (see [SearchLearning]). */
     val learnSearches: Boolean = true,
     val searchPicks: Map<String, Map<String, Int>> = emptyMap(),
+    /** Apps that get a pause screen (and maybe a daily limit) before they open, by app key. */
+    val mindful: Map<String, MindfulRule> = emptyMap(),
     /** What "most used" counts (see [UsageWindow]): all time, the last 7 / 30 / 90 days, or fading. */
     val mostUsedWindow: String = UsageWindow.ALL,
     val drawerIconDp: Int = 52,
@@ -477,6 +479,7 @@ class LauncherPrefs(context: Context) {
         drawerFoldersPosition = prefs.getString(KEY_DRAWER_FOLDERS_POSITION, DrawerSort.FOLDERS_TOP) ?: DrawerSort.FOLDERS_TOP,
         learnSearches = prefs.getBoolean(KEY_LEARN_SEARCHES, true),
         searchPicks = decodePicks(prefs.getString(KEY_SEARCH_PICKS, null)),
+        mindful = MindfulCodec.decode(prefs.getString(KEY_MINDFUL, null)),
         mostUsedWindow = prefs.getString(KEY_MOST_USED_WINDOW, UsageWindow.ALL) ?: UsageWindow.ALL,
         drawerIconDp = prefs.getInt(KEY_DRAWER_ICON, 52).coerceIn(32, 80),
         drawerGridColumns = prefs.getInt(KEY_DRAWER_COLUMNS, 4).coerceIn(3, 7),
@@ -650,6 +653,7 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_DRAWER_FOLDERS_POSITION, s.drawerFoldersPosition)
             .putBoolean(KEY_LEARN_SEARCHES, s.learnSearches)
             .putString(KEY_SEARCH_PICKS, encodePicks(s.searchPicks))
+            .putString(KEY_MINDFUL, MindfulCodec.encode(s.mindful))
             .putString(KEY_MOST_USED_WINDOW, s.mostUsedWindow)
             .putInt(KEY_DRAWER_ICON, s.drawerIconDp)
             .putInt(KEY_DRAWER_COLUMNS, s.drawerGridColumns)
@@ -1030,6 +1034,7 @@ class LauncherPrefs(context: Context) {
         const val KEY_DRAWER_FOLDERS_POSITION = "drawer_folders_position"
         const val KEY_LEARN_SEARCHES = "learn_searches"
         const val KEY_SEARCH_PICKS = "search_picks"
+        const val KEY_MINDFUL = "mindful_apps"
         const val KEY_MOST_USED_WINDOW = "most_used_window"
         const val KEY_SEARCH_HIDDEN = "search_hidden"
         const val KEY_POPUP_GRID = "folder_popup_grid"
