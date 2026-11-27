@@ -51,6 +51,7 @@ object DashboardModules {
     const val CLOCK = "clock"
     const val RECENTS = "recents"
     const val NOTIFICATIONS = "notifications"
+    const val PARKED = "parked"
 
     /** Default order, and the names shown in settings. */
     val all: List<Pair<String, String>> = listOf(
@@ -59,6 +60,7 @@ object DashboardModules {
         MEDIA to "Media player",
         VOLUME to "Volume",
         NAVIGATION to "Navigation",
+        PARKED to "Parked car",
         NOTIFICATIONS to "Notifications",
         APPS to "Quick launch apps",
         RECENTS to "Recent apps",
@@ -303,6 +305,10 @@ data class LauncherSettings(
     val rememberCarMode: Boolean = true,
     /** Whether car mode was open when we last changed it; restored after the launcher restarts. Not backed up. */
     val carModeWasOpen: Boolean = false,
+    /** The parked-car card: remember where the car was left. [lastFix] follows the drive; [parkedSpot] is the saved spot. */
+    val carParkedOn: Boolean = false,
+    val lastFix: GeoFix? = null,
+    val parkedSpot: GeoFix? = null,
     /** Swipes inside car mode: a [GestureActions] key or an app key; empty = nothing. */
     val carSwipeUp: String = GestureActions.NONE,
     val carSwipeDown: String = GestureActions.CLOSE,
@@ -592,6 +598,9 @@ class LauncherPrefs(context: Context) {
         carApps = prefs.getString(KEY_CAR_APPS, "").orEmpty().split(SEPARATOR).filter { it.isNotBlank() },
         rememberCarMode = prefs.getBoolean(KEY_REMEMBER_CAR, true),
         carModeWasOpen = prefs.getBoolean(KEY_CAR_WAS_OPEN, false),
+        carParkedOn = prefs.getBoolean(KEY_CAR_PARKED_ON, false),
+        lastFix = GeoFix.decode(prefs.getString(KEY_LAST_FIX, null)),
+        parkedSpot = GeoFix.decode(prefs.getString(KEY_PARKED_SPOT, null)),
         carSwipeUp = prefs.getString(KEY_CAR_UP, GestureActions.NONE).orEmpty(),
         carSwipeDown = prefs.getString(KEY_CAR_DOWN, GestureActions.CLOSE).orEmpty(),
         carSwipeLeft = prefs.getString(KEY_CAR_LEFT, GestureActions.NEXT).orEmpty(),
@@ -763,6 +772,9 @@ class LauncherPrefs(context: Context) {
             .putString(KEY_CAR_APPS, s.carApps.joinToString(SEPARATOR))
             .putBoolean(KEY_REMEMBER_CAR, s.rememberCarMode)
             .putBoolean(KEY_CAR_WAS_OPEN, s.carModeWasOpen)
+            .putBoolean(KEY_CAR_PARKED_ON, s.carParkedOn)
+            .putString(KEY_LAST_FIX, s.lastFix?.encode())
+            .putString(KEY_PARKED_SPOT, s.parkedSpot?.encode())
             .putString(KEY_CAR_UP, s.carSwipeUp)
             .putString(KEY_CAR_DOWN, s.carSwipeDown)
             .putString(KEY_CAR_LEFT, s.carSwipeLeft)
@@ -1045,6 +1057,9 @@ class LauncherPrefs(context: Context) {
         const val KEY_CAR_APPS = "car_apps"
         const val KEY_REMEMBER_CAR = "remember_car_mode"
         const val KEY_CAR_WAS_OPEN = "car_mode_was_open"
+        const val KEY_CAR_PARKED_ON = "car_parked_on"
+        const val KEY_LAST_FIX = "last_fix"
+        const val KEY_PARKED_SPOT = "parked_spot"
         const val KEY_CAR_UP = "car_swipe_up"
         const val KEY_CAR_DOWN = "car_swipe_down"
         const val KEY_CAR_LEFT = "car_swipe_left"
@@ -1060,7 +1075,7 @@ class LauncherPrefs(context: Context) {
         private val CREDENTIAL_KEYS = setOf(KEY_UPDATE_TOKEN, KEY_GLUCOSE_EMAIL, KEY_GLUCOSE_PASSWORD, KEY_BACKUP_PASSWORD)
 
         /** State that only makes sense on this phone right now, so a backup leaves it out. */
-        private val DEVICE_KEYS = setOf(KEY_CAR_WAS_OPEN, KEY_AUTO_BACKUP_FOLDER, KEY_LAST_BACKUP, KEY_FOCUS_SNOOZE)
+        private val DEVICE_KEYS = setOf(KEY_CAR_WAS_OPEN, KEY_AUTO_BACKUP_FOLDER, KEY_LAST_BACKUP, KEY_FOCUS_SNOOZE, KEY_LAST_FIX, KEY_PARKED_SPOT)
 
         /** Personal places and people: in a backup unless the user switched that off. */
         private val PERSONAL_KEYS = setOf(KEY_DESTINATIONS, KEY_HOME_ADDRESS, KEY_WORK_ADDRESS, KEY_CALL_CONTACTS, KEY_CAR_BT_DEVICES, KEY_SEARCH_PICKS)

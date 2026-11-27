@@ -24,6 +24,13 @@ class CarTriggerReceiver : BroadcastReceiver() {
                 }
                 // Context profiles follow every device, whether or not car mode cares about it.
                 device?.address?.let { ProfileSignals.onBluetooth(context, it, intent.action == BluetoothDevice.ACTION_ACL_CONNECTED) }
+                // Leaving the car: the last position seen while car mode was open (and recent enough) is where it was parked.
+                if (intent.action == BluetoothDevice.ACTION_ACL_DISCONNECTED && settings.carParkedOn &&
+                    device?.address in settings.carBluetoothDevices
+                ) {
+                    val fix = settings.lastFix?.takeIf { System.currentTimeMillis() - it.timeMs < 10 * 60_000L }
+                    if (fix != null) LauncherPrefsHolder.get(context).update { it.copy(parkedSpot = fix) }
+                }
                 if (!settings.carAutoBluetooth) return
                 if (device?.address !in settings.carBluetoothDevices) return
                 if (intent.action == BluetoothDevice.ACTION_ACL_CONNECTED) {
