@@ -347,6 +347,25 @@ fun SettingsScreen(viewModel: LauncherViewModel, onClose: () -> Unit) {
 // Pages
 // ---------------------------------------------------------------------------------------------
 
+/** The agenda: the next few calendar events on the home screen and as a car-mode card. */
+@Composable
+private fun AgendaGroup(viewModel: LauncherViewModel, settings: LauncherSettings) {
+    val context = LocalContext.current
+    val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        if (granted) viewModel.update { it.copy(showAgenda = true) }
+    }
+    Group("Agenda") {
+        SwitchRow("Agenda on the home screen", settings.showAgenda, subtitle = "The next few events under the clock") { on ->
+            if (on && !CalendarReader.hasPermission(context)) ask.launch(Manifest.permission.READ_CALENDAR) else viewModel.update { it.copy(showAgenda = on) }
+        }
+        SliderRow("Events shown", "${settings.agendaCount}", settings.agendaCount.toFloat(), 1f..6f) { v ->
+            viewModel.update { it.copy(agendaCount = v.roundToInt()) }
+        }
+        SwitchRow("Include all-day events", settings.agendaAllDay) { v -> viewModel.update { it.copy(agendaAllDay = v) } }
+        Hint("The same list is the Agenda card in car mode, which shows once calendar access is allowed. Events within the next 36 hours; tap one to open it.")
+    }
+}
+
 @Composable
 private fun HomePage(viewModel: LauncherViewModel, settings: LauncherSettings) {
     val context = LocalContext.current
@@ -537,6 +556,7 @@ private fun HomePage(viewModel: LauncherViewModel, settings: LauncherSettings) {
             ) { on -> if (on) viewModel.addFavourite(button) else viewModel.removeFavourite(button) }
         }
     }
+    AgendaGroup(viewModel, settings)
     Group("Recent apps row") {
         SwitchRow(
             "Recent apps on the home screen",
