@@ -101,6 +101,8 @@ internal fun FocusPage(viewModel: LauncherViewModel, settings: LauncherSettings)
         }
     }
 
+    MindfulGroup(viewModel, settings)
+
     if (picking) {
         Dialog(onDismissRequest = { picking = false }) {
             Surface(shape = RoundedCornerShape(24.dp), color = Color(0xF21A1A1A)) {
