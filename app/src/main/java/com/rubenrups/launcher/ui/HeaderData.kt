@@ -14,6 +14,7 @@ import androidx.core.graphics.ColorUtils
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.platform.LocalContext
+import com.rubenrups.launcher.data.AgendaEvent
 import com.rubenrups.launcher.data.CalendarReader
 import com.rubenrups.launcher.data.HourlyPoint
 import com.rubenrups.launcher.data.NextEvent
@@ -34,6 +35,20 @@ fun rememberNextEvent(enabled: Boolean): NextEvent? {
         }
     }
     return event
+}
+
+/** The next few events for the agenda, refreshed every few minutes while it is on screen; empty when off or no permission. */
+@Composable
+fun rememberAgenda(enabled: Boolean, count: Int, includeAllDay: Boolean): List<AgendaEvent> {
+    val context = LocalContext.current
+    val events by produceState<List<AgendaEvent>>(emptyList(), enabled, count, includeAllDay) {
+        value = emptyList()
+        while (enabled) {
+            value = withContext(Dispatchers.IO) { CalendarReader.upcoming(context, count, includeAllDay) }
+            delay(5 * 60_000L)
+        }
+    }
+    return events
 }
 
 /** "⛅ 22°". Typing a city restarts this effect on every keystroke, so the first delay doubles as a debounce. */
